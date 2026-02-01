@@ -1,0 +1,128 @@
+import { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useUserStore } from '@/stores/user-store';
+import { useBackButton } from '@/hooks/use-back-button';
+import { getMyStats } from '@/lib/api';
+import type { UserStats } from '@/types/api';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
+import { BackButton } from '@/components/ui/back-button';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { Fire02Icon, Target02Icon, GameController01Icon, Award01Icon, Sun01Icon, Moon02Icon, ComputerIcon } from '@hugeicons/core-free-icons';
+import { useThemeStore } from '@/stores/theme-store';
+import { cn } from '@/lib/utils';
+
+function xpForLevel(level: number) {
+  return (level - 1) * (level - 1) * 100;
+}
+
+export function Profile() {
+  const navigate = useNavigate();
+  const user = useUserStore((s) => s.user);
+  const theme = useThemeStore((s) => s.theme);
+  const setTheme = useThemeStore((s) => s.setTheme);
+  const [stats, setStats] = useState<UserStats | null>(null);
+
+  useBackButton(useCallback(() => navigate('/'), [navigate]));
+
+  useEffect(() => {
+    getMyStats().then(setStats).catch(() => {});
+  }, []);
+
+  if (!user) return null;
+
+  const currentLevelXp = xpForLevel(user.level);
+  const nextLevelXp = xpForLevel(user.level + 1);
+  const progressPercent = ((user.xp - currentLevelXp) / (nextLevelXp - currentLevelXp)) * 100;
+
+  return (
+    <div className="flex min-h-screen flex-col px-4 pt-6 pb-8">
+      {/* Back */}
+      <div className="mb-4">
+        <BackButton to="/" />
+      </div>
+
+      {/* Avatar + Name */}
+      <div className="flex flex-col items-center">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[var(--brand-9)] text-2xl font-bold text-white">
+          {user.firstName.charAt(0)}
+        </div>
+        <h1 className="mt-3 text-xl font-bold">{user.firstName}</h1>
+        {user.username && (
+          <span className="text-sm text-[var(--gray-11)]">@{user.username}</span>
+        )}
+      </div>
+
+      {/* Level + XP */}
+      <Card className="mt-6">
+        <div className="flex items-center justify-between">
+          <Badge>Уровень {user.level}</Badge>
+          <span className="text-sm font-medium">{user.xp} XP</span>
+        </div>
+        <Progress value={progressPercent} className="mt-3" />
+        <div className="mt-1 flex justify-between text-xs text-[var(--gray-11)]">
+          <span>{currentLevelXp} XP</span>
+          <span>{nextLevelXp} XP</span>
+        </div>
+      </Card>
+
+      {/* Theme */}
+      <Card className="mt-4">
+        <span className="text-sm text-[var(--gray-11)]">Тема</span>
+        <div className="mt-3 flex gap-2">
+          {([
+            { value: 'light' as const, icon: Sun01Icon, label: 'Светлая' },
+            { value: 'dark' as const, icon: Moon02Icon, label: 'Тёмная' },
+            { value: 'system' as const, icon: ComputerIcon, label: 'Система' },
+          ]).map((item) => (
+            <Button
+              key={item.value}
+              variant={theme === item.value ? 'default' : 'secondary'}
+              size="sm"
+              onClick={() => setTheme(item.value)}
+              className={cn('flex-1 flex-col gap-1.5 text-xs')}
+            >
+              <HugeiconsIcon icon={item.icon} size={18} />
+              {item.label}
+            </Button>
+          ))}
+        </div>
+      </Card>
+
+      {/* Stats */}
+      {stats ? (
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <Card className="flex flex-col items-center">
+            <HugeiconsIcon icon={GameController01Icon} size={20} className="text-[var(--gray-11)]" />
+            <span className="mt-2 text-xl font-bold">{stats.totalGames}</span>
+            <span className="text-xs text-[var(--gray-11)]">Игр</span>
+          </Card>
+          <Card className="flex flex-col items-center">
+            <HugeiconsIcon icon={Target02Icon} size={20} className="text-[var(--gray-11)]" />
+            <span className="mt-2 text-xl font-bold">{stats.correctPercent}%</span>
+            <span className="text-xs text-[var(--gray-11)]">Точность</span>
+          </Card>
+          <Card className="flex flex-col items-center">
+            <HugeiconsIcon icon={Award01Icon} size={20} className="text-[var(--gray-11)]" />
+            <span className="mt-2 text-xl font-bold">{stats.totalCorrect}</span>
+            <span className="text-xs text-[var(--gray-11)]">Правильных</span>
+          </Card>
+          <Card className="flex flex-col items-center">
+            <HugeiconsIcon icon={Fire02Icon} size={20} className="text-[var(--gray-11)]" />
+            <span className="mt-2 text-xl font-bold">{stats.bestStreak}</span>
+            <span className="text-xs text-[var(--gray-11)]">Лучшая серия</span>
+          </Card>
+        </div>
+      ) : (
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full rounded-2xl" />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

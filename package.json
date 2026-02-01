@@ -1,0 +1,9 @@
+{
+  "name": "wordy",
+  "private": true,
+  "workspaces": ["client", "server"],
+  "scripts": {
+    "lint": "npm run lint --workspaces",
+    "typecheck": "npm run typecheck --workspaces"
+  }
+}
