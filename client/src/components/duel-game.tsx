@@ -146,7 +146,7 @@ export function DuelGame() {
   if (phase === 'waiting_opponent') {
     return (
       <div className="flex min-h-full flex-col items-center justify-center px-4 pt-6 pb-8">
-        <HugeiconsIcon icon={Loading03Icon} size={32} className="animate-spin text-[var(--brand-9)]" />
+        <HugeiconsIcon strokeWidth={2} icon={Loading03Icon} size={32} className="animate-spin text-[var(--brand-9)]" />
         <h2 className="mt-4 text-xl font-bold">Ожидание оппонента</h2>
         <p className="mt-2 text-center text-[var(--gray-11)]">
           {opponentName} ещё отвечает на вопросы...

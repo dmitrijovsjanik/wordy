@@ -186,6 +186,111 @@ h1, h2, h3, h4, h5, h6 {
   animation: xp-float 1.4s ease-out both;
 }
 
+/* Duel card — lava blob background */
+.duel-card {
+  background: #1a0a00;
+}
+
+.duel-lava-wrap {
+  filter: url(#duel-goo) blur(14px);
+  opacity: 0.7;
+}
+
+.duel-blob {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform;
+}
+
+.duel-blob--1 {
+  width: 40%;
+  height: 100%;
+  left: -5%;
+  top: -10%;
+  background: #ff4500;
+  animation: duel-b1 6s ease-in-out infinite;
+}
+
+.duel-blob--2 {
+  width: 35%;
+  height: 80%;
+  right: 0%;
+  top: 0%;
+  background: #ff6a00;
+  animation: duel-b2 7s ease-in-out infinite;
+}
+
+.duel-blob--3 {
+  width: 30%;
+  height: 70%;
+  left: 35%;
+  bottom: -20%;
+  background: #e63946;
+  animation: duel-b3 5s ease-in-out infinite;
+}
+
+.duel-blob--4 {
+  width: 25%;
+  height: 60%;
+  right: 20%;
+  top: -30%;
+  background: #ff8c00;
+  animation: duel-b4 8s ease-in-out infinite;
+}
+
+@keyframes duel-b1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(15%, 10%) scale(1.1); }
+  66% { transform: translate(-5%, -8%) scale(0.95); }
+}
+
+@keyframes duel-b2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(-12%, 8%) scale(0.9); }
+  66% { transform: translate(8%, -12%) scale(1.05); }
+}
+
+@keyframes duel-b3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-10%, -15%) scale(1.15); }
+}
+
+@keyframes duel-b4 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  40% { transform: translate(10%, 20%) scale(1.1); }
+  70% { transform: translate(-8%, 5%) scale(0.9); }
+}
+
+.duel-glow-border {
+  /* white-hot core → orange mid → red outer — like heated metal edge */
+  box-shadow:
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.25),
+    inset 0 0 4px 0 rgba(255, 200, 120, 0.3),
+    0 0 4px 0.5px rgba(255, 180, 80, 0.4),
+    0 0 12px 2px rgba(255, 100, 20, 0.3),
+    0 0 24px 4px rgba(255, 60, 0, 0.15);
+  animation: duel-pulse 3s ease-in-out infinite;
+}
+
+@keyframes duel-pulse {
+  0%, 100% {
+    box-shadow:
+      inset 0 0 0 0.5px rgba(255, 255, 255, 0.2),
+      inset 0 0 3px 0 rgba(255, 200, 120, 0.25),
+      0 0 3px 0.5px rgba(255, 180, 80, 0.35),
+      0 0 10px 2px rgba(255, 100, 20, 0.25),
+      0 0 20px 4px rgba(255, 60, 0, 0.1);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 0.5px rgba(255, 255, 255, 0.4),
+      inset 0 0 6px 0 rgba(255, 210, 140, 0.4),
+      0 0 6px 1px rgba(255, 180, 80, 0.5),
+      0 0 16px 3px rgba(255, 100, 20, 0.4),
+      0 0 32px 6px rgba(255, 60, 0, 0.2);
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

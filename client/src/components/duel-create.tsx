@@ -70,7 +70,7 @@ export function DuelCreate() {
         <h1 className="text-xl font-bold">Дуэль создана</h1>
 
         <Card className="mt-6 flex w-full flex-col items-center gap-4 p-6">
-          <HugeiconsIcon icon={Loading03Icon} size={32} className="animate-spin text-[var(--brand-9)]" />
+          <HugeiconsIcon strokeWidth={2} icon={Loading03Icon} size={32} className="animate-spin text-[var(--brand-9)]" />
           <p className="text-center text-[var(--gray-11)]">
             Ожидание оппонента...
           </p>
@@ -82,7 +82,7 @@ export function DuelCreate() {
 
       <div className="mt-auto w-full">
         <Button className="w-full" onClick={shareDuelLink}>
-          <HugeiconsIcon icon={Share01Icon} size={20} />
+          <HugeiconsIcon strokeWidth={2} icon={Share01Icon} size={20} />
           Поделиться ссылкой
         </Button>
       </div>

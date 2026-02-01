@@ -125,7 +125,7 @@ export function Quiz() {
 
       {/* Listen button */}
       <Button variant="ghost" size="sm" className="mb-6" disabled>
-        <HugeiconsIcon icon={VolumeHighIcon} size={18} />
+        <HugeiconsIcon strokeWidth={2} icon={VolumeHighIcon} size={20} />
         Прослушать
       </Button>
 

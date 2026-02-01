@@ -39,10 +39,10 @@ export function BottomTabs() {
   if (pathname.startsWith('/duel')) return null;
 
   return (
-    <nav className="shrink-0 border-t border-[var(--gray-6)] bg-[var(--gray-1)]"
+    <nav className="shrink-0 bg-[var(--gray-1)]"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
-      <div className="flex h-14 items-center justify-around">
+      <div className="flex h-14 items-center justify-around mt-2 mb-2">
         {tabs.map((tab) => {
           const isActive = tab.match(pathname);
           return (
@@ -54,7 +54,7 @@ export function BottomTabs() {
                 isActive ? 'text-[var(--accent-9)]' : 'text-[var(--gray-11)]',
               )}
             >
-              <HugeiconsIcon icon={tab.icon} size={22} />
+              <HugeiconsIcon strokeWidth={2} icon={tab.icon} size={20} />
               <span className="text-[10px] font-medium">{tab.label}</span>
             </button>
           );

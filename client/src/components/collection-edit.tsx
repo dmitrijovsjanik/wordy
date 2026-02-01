@@ -179,7 +179,7 @@ export function CollectionEdit() {
                 disabled={!isFilled}
                 className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-[var(--red-9)] transition-opacity duration-200 ${isFilled ? 'opacity-100 animate-fade-in' : 'opacity-0 pointer-events-none'}`}
               >
-                <HugeiconsIcon icon={Delete02Icon} size={18} />
+                <HugeiconsIcon strokeWidth={2} icon={Delete02Icon} size={20} />
               </button>
             </div>
           );

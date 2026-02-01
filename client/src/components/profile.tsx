@@ -85,7 +85,7 @@ export function Profile() {
               onClick={() => setTheme(item.value)}
               className={cn('flex-1 flex-col gap-1.5 text-xs')}
             >
-              <HugeiconsIcon icon={item.icon} size={18} />
+              <HugeiconsIcon strokeWidth={2} icon={item.icon} size={20} />
               {item.label}
             </Button>
           ))}
@@ -96,22 +96,22 @@ export function Profile() {
       {stats ? (
         <div className="mt-4 grid grid-cols-2 gap-3">
           <Card className="flex flex-col items-center">
-            <HugeiconsIcon icon={GameController01Icon} size={20} className="text-[var(--gray-11)]" />
+            <HugeiconsIcon strokeWidth={2} icon={GameController01Icon} size={20} className="text-[var(--gray-11)]" />
             <span className="mt-2 text-xl font-bold">{stats.totalGames}</span>
             <span className="text-xs text-[var(--gray-11)]">Игр</span>
           </Card>
           <Card className="flex flex-col items-center">
-            <HugeiconsIcon icon={Target02Icon} size={20} className="text-[var(--gray-11)]" />
+            <HugeiconsIcon strokeWidth={2} icon={Target02Icon} size={20} className="text-[var(--gray-11)]" />
             <span className="mt-2 text-xl font-bold">{stats.correctPercent}%</span>
             <span className="text-xs text-[var(--gray-11)]">Точность</span>
           </Card>
           <Card className="flex flex-col items-center">
-            <HugeiconsIcon icon={Award01Icon} size={20} className="text-[var(--gray-11)]" />
+            <HugeiconsIcon strokeWidth={2} icon={Award01Icon} size={20} className="text-[var(--gray-11)]" />
             <span className="mt-2 text-xl font-bold">{stats.totalCorrect}</span>
             <span className="text-xs text-[var(--gray-11)]">Правильных</span>
           </Card>
           <Card className="flex flex-col items-center">
-            <HugeiconsIcon icon={Fire02Icon} size={20} className="text-[var(--gray-11)]" />
+            <HugeiconsIcon strokeWidth={2} icon={Fire02Icon} size={20} className="text-[var(--gray-11)]" />
             <span className="mt-2 text-xl font-bold">{stats.bestStreak}</span>
             <span className="text-xs text-[var(--gray-11)]">Лучшая серия</span>
           </Card>

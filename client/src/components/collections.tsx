@@ -166,7 +166,7 @@ export function Collections() {
               className="w-full gap-2"
               onClick={() => navigate('/collections/create')}
             >
-              <HugeiconsIcon icon={Add01Icon} size={18} />
+              <HugeiconsIcon strokeWidth={2} icon={Add01Icon} size={20} />
               Создать коллекцию
             </Button>
           </div>

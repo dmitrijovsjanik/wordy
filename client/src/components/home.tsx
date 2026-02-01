@@ -106,7 +106,7 @@ export function Home() {
           <Badge>Ур. {user.level}</Badge>
           {user.streakDays > 0 && (
             <Badge>
-              <HugeiconsIcon icon={Fire02Icon} size={14} />
+              <HugeiconsIcon strokeWidth={2} icon={Fire02Icon} size={14} />
               {user.streakDays} дн.
             </Badge>
           )}
@@ -123,8 +123,49 @@ export function Home() {
         </div>
       </div>
 
+      {/* Duel card + ambient light spill */}
+      <div className="relative mt-4">
+        {/* Light spill under the card */}
+        <div
+          className="pointer-events-none absolute -bottom-3 left-[10%] right-[10%] h-8 rounded-[50%] opacity-50 blur-xl"
+          style={{ background: 'radial-gradient(ellipse at center, rgba(255,100,20,0.6), rgba(255,60,0,0.3) 50%, transparent 80%)' }}
+        />
+      <button
+        onClick={() => navigate('/duel/create')}
+        className="duel-card relative flex w-full items-center gap-3 overflow-hidden rounded-2xl px-4 py-3 text-left text-white"
+      >
+        {/* SVG goo filter */}
+        <svg className="absolute" width="0" height="0" aria-hidden="true">
+          <defs>
+            <filter id="duel-goo">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" />
+              <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7" result="goo" />
+              <feBlend in="SourceGraphic" in2="goo" />
+            </filter>
+          </defs>
+        </svg>
+        {/* Animated lava blobs */}
+        <div className="pointer-events-none absolute inset-[-10px] overflow-hidden duel-lava-wrap">
+          <div className="duel-blob duel-blob--1" />
+          <div className="duel-blob duel-blob--2" />
+          <div className="duel-blob duel-blob--3" />
+          <div className="duel-blob duel-blob--4" />
+        </div>
+        {/* Pulsing glow border */}
+        <div className="pointer-events-none absolute inset-0 rounded-2xl duel-glow-border" />
+        <HugeiconsIcon strokeWidth={2} icon={Sword01Icon} size={20} className="relative z-10" />
+        <div className="relative z-10 flex flex-1 flex-col">
+          <span className="text-sm font-semibold">Дуэль</span>
+          <span className="text-xs opacity-80">Сразись с другом</span>
+        </div>
+        <Button variant="secondary" size="compact" className="relative z-10 shrink-0 bg-white/20 text-white hover:bg-white/30" tabIndex={-1}>
+          Бросить вызов
+        </Button>
+      </button>
+      </div>
+
       {/* Quiz Card */}
-      <div className="mt-6 flex flex-1 flex-col">
+      <div className="mt-4 flex flex-1 flex-col">
         {!currentQuestion && !feedback && isLoading && (
           <div className="flex flex-1 flex-col items-center justify-center">
             <Skeleton className="h-10 w-40" />
@@ -223,15 +264,6 @@ export function Home() {
         )}
       </div>
 
-      {/* Duel button */}
-      <Button
-        variant="secondary"
-        onClick={() => navigate('/duel/create')}
-        className="mt-4"
-      >
-        <HugeiconsIcon icon={Sword01Icon} size={18} />
-        Дуэль
-      </Button>
     </div>
   );
 }

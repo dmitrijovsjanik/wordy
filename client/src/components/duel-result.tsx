@@ -62,14 +62,14 @@ export function DuelResult() {
         {/* Result icon */}
         {isWinner ? (
           <>
-            <HugeiconsIcon icon={Award01Icon} size={48} className="text-[var(--amber-9)]" />
+            <HugeiconsIcon strokeWidth={2} icon={Award01Icon} size={48} className="text-[var(--amber-9)]" />
             <h1 className="mt-3 text-2xl font-bold">Победа!</h1>
           </>
         ) : isDraw ? (
           <h1 className="text-2xl font-bold">Ничья</h1>
         ) : (
           <>
-            <HugeiconsIcon icon={Cancel01Icon} size={48} className="text-[var(--red-9)]" />
+            <HugeiconsIcon strokeWidth={2} icon={Cancel01Icon} size={48} className="text-[var(--red-9)]" />
             <h1 className="mt-3 text-2xl font-bold">Поражение</h1>
           </>
         )}

@@ -54,13 +54,13 @@ export function QuizResult() {
 
         <div className="mt-6 grid w-full grid-cols-2 gap-3">
           <Card className="flex flex-col items-center">
-            <HugeiconsIcon icon={Target02Icon} size={24} className="text-[var(--brand-9)]" />
+            <HugeiconsIcon strokeWidth={2} icon={Target02Icon} size={20} className="text-[var(--brand-9)]" />
             <span className="mt-2 text-2xl font-bold">{result.correctCount}/{result.totalCount}</span>
             <span className="text-sm text-[var(--gray-11)]">Правильных</span>
           </Card>
 
           <Card className="flex flex-col items-center">
-            <HugeiconsIcon icon={Award01Icon} size={24} className="text-[var(--amber-9)]" />
+            <HugeiconsIcon strokeWidth={2} icon={Award01Icon} size={20} className="text-[var(--amber-9)]" />
             <span className="mt-2 text-2xl font-bold">{accuracy}%</span>
             <span className="text-sm text-[var(--gray-11)]">Точность</span>
           </Card>
@@ -75,7 +75,7 @@ export function QuizResult() {
           <Card className="mt-3 flex w-full items-center justify-between">
             <span className="text-[var(--gray-11)]">Серия</span>
             <Badge>
-              <HugeiconsIcon icon={Fire02Icon} size={16} />
+              <HugeiconsIcon strokeWidth={2} icon={Fire02Icon} size={16} />
               {result.streak} дн.
             </Badge>
           </Card>

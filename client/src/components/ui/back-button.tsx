@@ -23,7 +23,7 @@ export function BackButton({ to, onClick }: BackButtonProps) {
 
   return (
     <Button variant="secondary" size="icon" onClick={handleClick}>
-      <HugeiconsIcon icon={ArrowLeft02Icon} size={20} />
+      <HugeiconsIcon strokeWidth={2} icon={ArrowLeft02Icon} size={20} />
     </Button>
   );
 }
