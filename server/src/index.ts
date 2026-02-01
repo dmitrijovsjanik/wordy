@@ -5,6 +5,7 @@ import authRoutes from './routes/auth.js';
 import quizRoutes from './routes/quiz.js';
 import userRoutes from './routes/users.js';
 import duelRoutes from './routes/duels.js';
+import collectionRoutes from './routes/collections.js';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -24,6 +25,7 @@ await app.register(authRoutes);
 await app.register(quizRoutes);
 await app.register(userRoutes);
 await app.register(duelRoutes);
+await app.register(collectionRoutes);
 
 const port = Number(process.env.PORT) || 3000;
 

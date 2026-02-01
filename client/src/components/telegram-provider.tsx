@@ -18,7 +18,7 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-full items-center justify-center">
         <div className="text-center">
           <div className="text-lg font-medium">Wordy</div>
           <div className="mt-2 text-sm text-muted-foreground">Загрузка...</div>
@@ -29,7 +29,7 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="flex min-h-full items-center justify-center p-4">
         <div className="text-center">
           <div className="text-lg font-medium text-destructive">{error}</div>
           <button

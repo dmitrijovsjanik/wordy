@@ -7,6 +7,8 @@ import {
   boolean,
   timestamp,
   pgEnum,
+  uniqueIndex,
+  index,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -27,6 +29,12 @@ export const duelStatusEnum = pgEnum('duel_status', [
   'active',
   'finished',
   'cancelled',
+]);
+
+export const collectionTypeEnum = pgEnum('collection_type', [
+  'system',
+  'user',
+  'auto',
 ]);
 
 // ─── Users ───────────────────────────────────────────────────────────────────
@@ -132,6 +140,113 @@ export const duels = pgTable('duels', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
+// ─── Collections ────────────────────────────────────────────────────────────
+
+export const collections = pgTable('collections', {
+  id: serial('id').primaryKey(),
+  type: collectionTypeEnum('type').notNull(),
+  creatorId: integer('creator_id').references(() => users.id, { onDelete: 'cascade' }),
+  title: varchar('title', { length: 255 }).notNull(),
+  description: varchar('description', { length: 1000 }),
+  iconName: varchar('icon_name', { length: 100 }),
+  price: integer('price'),
+  isPublished: boolean('is_published').default(false).notNull(),
+  totalWords: integer('total_words').default(0).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  deletedAt: timestamp('deleted_at'),
+});
+
+// ─── Collection Words ───────────────────────────────────────────────────────
+
+export const collectionWords = pgTable(
+  'collection_words',
+  {
+    id: serial('id').primaryKey(),
+    collectionId: integer('collection_id')
+      .references(() => collections.id, { onDelete: 'cascade' })
+      .notNull(),
+    meaningId: integer('meaning_id')
+      .references(() => wordMeanings.id, { onDelete: 'cascade' })
+      .notNull(),
+    order: integer('order').default(0).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('collection_word_uniq').on(table.collectionId, table.meaningId),
+    index('collection_words_collection_idx').on(table.collectionId),
+  ],
+);
+
+// ─── User Collections ───────────────────────────────────────────────────────
+
+export const userCollections = pgTable(
+  'user_collections',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    collectionId: integer('collection_id')
+      .references(() => collections.id, { onDelete: 'cascade' })
+      .notNull(),
+    isActive: boolean('is_active').default(true).notNull(),
+    addedAt: timestamp('added_at').defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('user_collection_uniq').on(table.userId, table.collectionId),
+    index('user_collections_user_idx').on(table.userId),
+  ],
+);
+
+// ─── User Word Progress ─────────────────────────────────────────────────────
+
+export const userWordProgress = pgTable(
+  'user_word_progress',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    meaningId: integer('meaning_id')
+      .references(() => wordMeanings.id, { onDelete: 'cascade' })
+      .notNull(),
+    correctCount: integer('correct_count').default(0).notNull(),
+    incorrectCount: integer('incorrect_count').default(0).notNull(),
+    lastSeenAt: timestamp('last_seen_at').defaultNow().notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('user_word_progress_uniq').on(table.userId, table.meaningId),
+    index('user_word_progress_user_idx').on(table.userId),
+  ],
+);
+
+// ─── User Custom Words ──────────────────────────────────────────────────────
+
+export const userCustomWords = pgTable(
+  'user_custom_words',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    collectionId: integer('collection_id')
+      .references(() => collections.id, { onDelete: 'cascade' })
+      .notNull(),
+    wordText: varchar('word_text', { length: 255 }).notNull(),
+    translation: varchar('translation', { length: 255 }).notNull(),
+    partOfSpeech: partOfSpeechEnum('part_of_speech').default('noun').notNull(),
+    contextExample: varchar('context_example', { length: 500 }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('user_custom_words_collection_idx').on(table.collectionId),
+  ],
+);
+
 // ─── Relations ──────────────────────────────────────────────────────────────
 
 export const wordsRelations = relations(words, ({ many }) => ({
@@ -163,4 +278,31 @@ export const duelsRelations = relations(duels, ({ one }) => ({
   opponent: one(users, { fields: [duels.opponentId], references: [users.id], relationName: 'duelOpponent' }),
   challengerSession: one(quizSessions, { fields: [duels.challengerSessionId], references: [quizSessions.id] }),
   opponentSession: one(quizSessions, { fields: [duels.opponentSessionId], references: [quizSessions.id] }),
+}));
+
+export const collectionsRelations = relations(collections, ({ one, many }) => ({
+  creator: one(users, { fields: [collections.creatorId], references: [users.id] }),
+  words: many(collectionWords),
+  customWords: many(userCustomWords),
+  subscribers: many(userCollections),
+}));
+
+export const collectionWordsRelations = relations(collectionWords, ({ one }) => ({
+  collection: one(collections, { fields: [collectionWords.collectionId], references: [collections.id] }),
+  meaning: one(wordMeanings, { fields: [collectionWords.meaningId], references: [wordMeanings.id] }),
+}));
+
+export const userCollectionsRelations = relations(userCollections, ({ one }) => ({
+  user: one(users, { fields: [userCollections.userId], references: [users.id] }),
+  collection: one(collections, { fields: [userCollections.collectionId], references: [collections.id] }),
+}));
+
+export const userWordProgressRelations = relations(userWordProgress, ({ one }) => ({
+  user: one(users, { fields: [userWordProgress.userId], references: [users.id] }),
+  meaning: one(wordMeanings, { fields: [userWordProgress.meaningId], references: [wordMeanings.id] }),
+}));
+
+export const userCustomWordsRelations = relations(userCustomWords, ({ one }) => ({
+  user: one(users, { fields: [userCustomWords.userId], references: [users.id] }),
+  collection: one(collections, { fields: [userCustomWords.collectionId], references: [collections.id] }),
 }));

@@ -2,7 +2,7 @@
 @import "@radix-ui/colors/gray.css";
 @import "@radix-ui/colors/gray-dark.css";
 /* Custom brand accent palette (light): base hsla(216, 100%, 54%, 1) */
-/* Custom brand accent palette (dark): base hsla(220, 100%, 50%, 1) */
+/* Custom brand accent palette (dark): base hsla(206, 100%, 50%, 1) */
 @import "@radix-ui/colors/red.css";
 @import "@radix-ui/colors/red-dark.css";
 @import "@radix-ui/colors/green.css";
@@ -33,20 +33,20 @@
   --brand-12: hsl(216, 100%, 18%);
 }
 
-/* Brand accent — dark theme (base: hsl(220, 100%, 50%)) */
+/* Brand accent — dark theme (base: hsl(206, 100%, 50%)) */
 .dark {
-  --brand-1: hsl(220, 50%, 9.5%);
-  --brand-2: hsl(220, 60%, 12%);
-  --brand-3: hsl(220, 80%, 17%);
-  --brand-4: hsl(220, 90%, 21%);
-  --brand-5: hsl(220, 95%, 25.5%);
-  --brand-6: hsl(220, 100%, 31%);
-  --brand-7: hsl(220, 100%, 38%);
-  --brand-8: hsl(220, 100%, 46%);
-  --brand-9: hsl(220, 100%, 50%);
-  --brand-10: hsl(220, 100%, 56%);
-  --brand-11: hsl(220, 100%, 72%);
-  --brand-12: hsl(220, 100%, 93%);
+  --brand-1: hsl(206, 50%, 9.5%);
+  --brand-2: hsl(206, 60%, 12%);
+  --brand-3: hsl(206, 80%, 17%);
+  --brand-4: hsl(206, 90%, 21%);
+  --brand-5: hsl(206, 95%, 25.5%);
+  --brand-6: hsl(206, 100%, 31%);
+  --brand-7: hsl(206, 100%, 38%);
+  --brand-8: hsl(206, 100%, 46%);
+  --brand-9: hsl(206, 100%, 50%);
+  --brand-10: hsl(206, 100%, 56%);
+  --brand-11: hsl(206, 100%, 72%);
+  --brand-12: hsl(206, 100%, 93%);
 }
 
 :root {
@@ -85,6 +85,10 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Unbounded', system-ui, sans-serif;
+}
+
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -111,6 +115,75 @@ body {
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+}
+
+@keyframes slide-down-in {
+  from {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    max-height: 80px;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-up-out {
+  from {
+    opacity: 1;
+    max-height: 80px;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-8px);
+    margin-bottom: -8px;
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-slide-down-in {
+  animation: slide-down-in 0.25s ease-out both;
+  overflow: hidden;
+}
+
+.animate-slide-up-out {
+  animation: slide-up-out 0.25s ease-in both;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out both;
+}
+
+@keyframes xp-float {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.6);
+  }
+  10% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.12);
+  }
+  18% {
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-36px) scale(0.9);
+  }
+}
+
+.animate-xp-float {
+  animation: xp-float 1.4s ease-out both;
 }
 
 @layer base {

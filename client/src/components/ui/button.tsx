@@ -18,11 +18,11 @@ const buttonVariants = cva(
         error: "bg-[var(--pink-9)] text-white",
       },
       size: {
-        default: "h-14 rounded-full px-6 text-base",
-        sm: "h-10 rounded-full px-4 text-sm",
-        xs: "h-8 rounded-full px-3 text-xs",
-        icon: "h-10 w-10 rounded-full",
-        "icon-sm": "h-8 w-8 rounded-full",
+        default: "h-14 rounded-full px-6 text-sm",
+        sm: "h-14 rounded-full px-5 text-sm",
+        xs: "h-14 rounded-full px-4 text-xs",
+        icon: "h-14 w-14 rounded-full",
+        "icon-sm": "h-14 w-14 rounded-full",
       },
     },
     defaultVariants: {

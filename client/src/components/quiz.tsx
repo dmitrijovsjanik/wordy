@@ -89,7 +89,7 @@ export function Quiz() {
 
   if (!currentQuestion && !answerFeedback) {
     return (
-      <div className="flex min-h-screen flex-col items-center p-4">
+      <div className="flex min-h-full flex-col items-center p-4">
         <Skeleton className="mt-6 h-7 w-48" />
         <Skeleton className="mt-24 h-10 w-56" />
         <Skeleton className="mt-3 h-5 w-28" />
@@ -106,7 +106,7 @@ export function Quiz() {
   const question = currentQuestion;
 
   return (
-    <div className="flex min-h-screen flex-col items-center px-4 pt-6 pb-8">
+    <div className="flex min-h-full flex-col items-center px-4 pt-6 pb-8">
       {/* Back */}
       <div className="w-full">
         <BackButton onClick={() => { reset(); navigate('/'); }} />
@@ -136,7 +136,6 @@ export function Quiz() {
           const showResult = answerFeedback !== null;
           const isCorrectOption = option === answerFeedback?.correctTranslation;
           const isWrongSelected = isSelected && !isCorrectOption;
-          const isOther = showResult && !isSelected && !isCorrectOption;
 
           return (
             <Button

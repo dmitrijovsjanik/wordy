@@ -1,6 +1,7 @@
-import { eq, ne, and, sql } from 'drizzle-orm';
+import { eq, ne, and, sql, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { wordMeanings, quizSessions, quizAnswers, users } from '../db/schema.js';
+import { wordMeanings, quizSessions, quizAnswers, users, userWordProgress } from '../db/schema.js';
+import { getActiveMeaningIds } from './collection-service.js';
 
 const QUESTIONS_PER_SESSION = 10;
 const XP_PER_CORRECT = 10;
@@ -198,4 +199,157 @@ export async function getAnsweredMeaningIds(sessionId: number): Promise<number[]
     columns: { meaningId: true },
   });
   return answers.map(a => a.meaningId);
+}
+
+// ─── Infinite Quiz ──────────────────────────────────────────────────────────
+
+export async function generateQuestionFromPool(
+  userId: number,
+  excludeMeaningIds: number[] = [],
+): Promise<Question | null> {
+  const poolMeaningIds = await getActiveMeaningIds(userId);
+
+  if (poolMeaningIds.length === 0) {
+    // Нет активных коллекций — показываем из всей базы
+    return generateQuestion(excludeMeaningIds);
+  }
+
+  // Исключаем недавно показанные
+  const availableIds = poolMeaningIds.filter((id) => !excludeMeaningIds.includes(id));
+
+  // Если всё исчерпано — сбрасываем exclude
+  const idsToUse = availableIds.length > 0 ? availableIds : poolMeaningIds;
+
+  const candidates = await db.query.wordMeanings.findMany({
+    where: inArray(wordMeanings.id, idsToUse),
+    with: { word: true },
+    limit: 1,
+    orderBy: sql`RANDOM()`,
+  });
+
+  if (candidates.length === 0) return null;
+
+  const correct = candidates[0]!;
+
+  // 3 неправильных варианта
+  const wrongOptions = await db.query.wordMeanings.findMany({
+    where: and(
+      ne(wordMeanings.id, correct.id),
+      eq(wordMeanings.difficulty, correct.difficulty),
+      ne(wordMeanings.translation, correct.translation),
+    ),
+    limit: 3,
+    orderBy: sql`RANDOM()`,
+  });
+
+  if (wrongOptions.length < 3) {
+    const moreOptions = await db.query.wordMeanings.findMany({
+      where: and(
+        ne(wordMeanings.id, correct.id),
+        ne(wordMeanings.translation, correct.translation),
+        wrongOptions.length > 0
+          ? sql`${wordMeanings.id} NOT IN (${sql.join(wrongOptions.map(o => sql`${o.id}`), sql`, `)})`
+          : undefined,
+      ),
+      limit: 3 - wrongOptions.length,
+      orderBy: sql`RANDOM()`,
+    });
+    wrongOptions.push(...moreOptions);
+  }
+
+  const options = [correct.translation, ...wrongOptions.map(o => o.translation)];
+  for (let i = options.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [options[i], options[j]] = [options[j]!, options[i]!];
+  }
+
+  return {
+    meaningId: correct.id,
+    word: correct.word.text,
+    correctTranslation: correct.translation,
+    options,
+  };
+}
+
+export async function recordInfiniteAnswer(
+  userId: number,
+  meaningId: number,
+  selectedMeaningId: number | null,
+) {
+  const correctMeaning = await db.query.wordMeanings.findFirst({
+    where: eq(wordMeanings.id, meaningId),
+  });
+
+  let isCorrect = false;
+  if (selectedMeaningId !== null && correctMeaning) {
+    const selected = await db.query.wordMeanings.findFirst({
+      where: eq(wordMeanings.id, selectedMeaningId),
+    });
+    isCorrect = selected?.translation === correctMeaning.translation;
+  }
+
+  // Обновляем user_word_progress
+  const [existing] = await db
+    .select()
+    .from(userWordProgress)
+    .where(and(eq(userWordProgress.userId, userId), eq(userWordProgress.meaningId, meaningId)))
+    .limit(1);
+
+  if (existing) {
+    await db
+      .update(userWordProgress)
+      .set({
+        correctCount: isCorrect ? sql`${userWordProgress.correctCount} + 1` : userWordProgress.correctCount,
+        incorrectCount: isCorrect ? userWordProgress.incorrectCount : sql`${userWordProgress.incorrectCount} + 1`,
+        lastSeenAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(userWordProgress.id, existing.id));
+  } else {
+    await db.insert(userWordProgress).values({
+      userId,
+      meaningId,
+      correctCount: isCorrect ? 1 : 0,
+      incorrectCount: isCorrect ? 0 : 1,
+    });
+  }
+
+  // Начисляем XP сразу
+  let xpEarned = 0;
+  if (isCorrect) {
+    xpEarned = XP_PER_CORRECT;
+    const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+    if (!user) throw new Error('Пользователь не найден');
+
+    const newXp = user.xp + xpEarned;
+    const newLevel = Math.floor(Math.sqrt(newXp / 100)) + 1;
+
+    await db
+      .update(users)
+      .set({
+        xp: newXp,
+        level: newLevel,
+        lastActivityAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+
+    return {
+      isCorrect,
+      correctTranslation: correctMeaning?.translation ?? '',
+      xpEarned,
+      totalXp: newXp,
+      level: newLevel,
+      levelUp: newLevel > user.level ? newLevel : undefined,
+    };
+  }
+
+  return {
+    isCorrect,
+    correctTranslation: correctMeaning?.translation ?? '',
+    xpEarned: 0,
+    totalXp: undefined,
+    level: undefined,
+    levelUp: undefined,
+  };
 }

@@ -52,7 +52,7 @@ export function DuelResult() {
   const opponentSession = duel.opponentSession;
 
   return (
-    <div className="flex min-h-screen flex-col items-center px-4 pt-6 pb-8">
+    <div className="flex min-h-full flex-col items-center px-4 pt-6 pb-8">
       {/* Back */}
       <div className="w-full">
         <BackButton onClick={goHome} />

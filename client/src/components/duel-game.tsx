@@ -145,7 +145,7 @@ export function DuelGame() {
   // Waiting for opponent screen
   if (phase === 'waiting_opponent') {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center px-4 pt-6 pb-8">
+      <div className="flex min-h-full flex-col items-center justify-center px-4 pt-6 pb-8">
         <HugeiconsIcon icon={Loading03Icon} size={32} className="animate-spin text-[var(--brand-9)]" />
         <h2 className="mt-4 text-xl font-bold">Ожидание оппонента</h2>
         <p className="mt-2 text-center text-[var(--gray-11)]">
@@ -172,7 +172,7 @@ export function DuelGame() {
 
   if (!initialized || (!currentQuestion && !answerFeedback)) {
     return (
-      <div className="flex min-h-screen flex-col gap-4 px-4 pt-6">
+      <div className="flex min-h-full flex-col gap-4 px-4 pt-6">
         <Skeleton className="h-4 w-full" />
         <Skeleton className="mt-8 h-20 w-full rounded-2xl" />
         <div className="mt-6 grid grid-cols-2 gap-3">
@@ -185,7 +185,7 @@ export function DuelGame() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col px-4 pt-6 pb-8">
+    <div className="flex min-h-full flex-col px-4 pt-6 pb-8">
       {/* Back */}
       <div className="mb-4">
         <BackButton onClick={() => { reset(); navigate('/'); }} />

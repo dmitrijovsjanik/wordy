@@ -128,7 +128,6 @@ export const useDuelStore = create<DuelState>()((set, get) => ({
 
     // Poll until opponent finishes, then auto-finish
     const pollingId = setInterval(async () => {
-      const { duel } = get();
       await get().fetchDuel(duelId);
       const updatedDuel = get().duel;
 

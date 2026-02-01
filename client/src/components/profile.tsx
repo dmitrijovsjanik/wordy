@@ -39,7 +39,7 @@ export function Profile() {
   const progressPercent = ((user.xp - currentLevelXp) / (nextLevelXp - currentLevelXp)) * 100;
 
   return (
-    <div className="flex min-h-screen flex-col px-4 pt-6 pb-8">
+    <div className="flex flex-col px-4 pt-6 pb-4">
       {/* Back */}
       <div className="mb-4">
         <BackButton to="/" />

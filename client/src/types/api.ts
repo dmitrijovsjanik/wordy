@@ -113,3 +113,62 @@ export type ApiError = {
   error: string;
   code: string;
 };
+
+// ─── Collections ────────────────────────────────────────────────────────────
+
+export type Collection = {
+  id: number;
+  type: 'system' | 'user' | 'auto';
+  title: string;
+  description: string | null;
+  iconName: string | null;
+  totalWords: number;
+  price: number | null;
+};
+
+export type MarketplaceCollection = Collection & {
+  isInLibrary: boolean;
+};
+
+export type LibraryCollection = Collection & {
+  isActive: boolean;
+  addedAt: string | null;
+};
+
+export type CollectionWord = {
+  id: number;
+  word: string;
+  translation: string;
+  partOfSpeech: string;
+};
+
+export type CollectionDetail = {
+  collection: Collection & { isInLibrary: boolean; isActive: boolean };
+  words: CollectionWord[];
+};
+
+export type DifficultWordsResponse = {
+  totalWords: number;
+  words: {
+    meaningId: number;
+    correctCount: number;
+    incorrectCount: number;
+    word: string;
+    translation: string;
+  }[];
+};
+
+export type AllWordsResponse = {
+  words: { word: string; translation: string }[];
+};
+
+// ─── Infinite Quiz ──────────────────────────────────────────────────────────
+
+export type InfiniteAnswerResponse = {
+  isCorrect: boolean;
+  correctTranslation: string;
+  xpEarned: number;
+  totalXp?: number;
+  level?: number;
+  levelUp?: number;
+};

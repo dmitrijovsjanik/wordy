@@ -52,7 +52,7 @@ export function DuelCreate() {
 
   if (isLoading && !duel) {
     return (
-      <div className="flex min-h-screen flex-col gap-4 px-4 pt-6">
+      <div className="flex min-h-full flex-col gap-4 px-4 pt-6">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="mt-8 h-40 w-full rounded-2xl" />
       </div>
@@ -60,7 +60,7 @@ export function DuelCreate() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center px-4 pt-6 pb-8">
+    <div className="flex min-h-full flex-col items-center px-4 pt-6 pb-8">
       {/* Back */}
       <div className="w-full">
         <BackButton onClick={goHome} />

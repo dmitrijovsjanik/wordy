@@ -11,7 +11,7 @@ const badgeVariants = cva(
       variant: {
         default: "bg-[var(--gray-3)] text-[var(--gray-12)]",
         primary: "bg-[var(--brand-9)] text-white",
-        success: "bg-[var(--green-9)] text-white",
+        success: "bg-[var(--green-3)] text-[var(--green-11)]",
         error: "bg-[var(--pink-9)] text-white",
         secondary: "bg-[var(--gray-2)] text-[var(--gray-11)]",
       },

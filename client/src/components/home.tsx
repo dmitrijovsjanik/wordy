@@ -1,11 +1,15 @@
+import { useEffect, useCallback, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUserStore } from '@/stores/user-store';
+import { useHomeStore } from '@/stores/home-store';
+import { useTelegram } from '@/hooks/use-telegram';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { BookOpen02Icon, Sword01Icon, UserIcon, Fire02Icon } from '@hugeicons/core-free-icons';
+import { Sword01Icon, Fire02Icon } from '@hugeicons/core-free-icons';
+import { cn } from '@/lib/utils';
 
 function xpForLevel(level: number) {
   return (level - 1) * (level - 1) * 100;
@@ -13,7 +17,80 @@ function xpForLevel(level: number) {
 
 export function Home() {
   const navigate = useNavigate();
+  const { hapticImpact, hapticNotification } = useTelegram();
   const user = useUserStore((s) => s.user);
+  const refreshProfile = useUserStore((s) => s.refreshProfile);
+
+  const {
+    currentQuestion,
+    feedback,
+    isLoading,
+    error,
+    fetchNext,
+    submitAnswer,
+    skip,
+  } = useHomeStore();
+
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [xpDisplay, setXpDisplay] = useState<{ xp: number; levelUp?: number; key: number } | null>(null);
+  const xpKeyRef = useRef(0);
+
+  useEffect(() => {
+    if (!currentQuestion && !feedback) {
+      fetchNext();
+    }
+  }, []);
+
+  // Сброс выбора при новом вопросе
+  useEffect(() => {
+    if (currentQuestion) {
+      setSelectedOption(null);
+    }
+  }, [currentQuestion]);
+
+  // Хаптик при фидбеке
+  useEffect(() => {
+    if (feedback) {
+      if (feedback.isCorrect) {
+        hapticNotification('success');
+      } else {
+        hapticNotification('error');
+      }
+      // Обновляем профиль если XP изменился
+      if (feedback.xpEarned > 0) {
+        refreshProfile();
+      }
+    }
+  }, [feedback, hapticNotification, refreshProfile]);
+
+  // XP display с автоочисткой после анимации
+  useEffect(() => {
+    if (!feedback || feedback.xpEarned <= 0) return;
+
+    xpKeyRef.current += 1;
+    setXpDisplay({ xp: feedback.xpEarned, levelUp: feedback.levelUp, key: xpKeyRef.current });
+
+    // Очищаем после завершения анимации (1.4s)
+    const clearTimer = setTimeout(() => setXpDisplay(null), 1400);
+
+    return () => clearTimeout(clearTimer);
+  }, [feedback]);
+
+  const handleAnswer = useCallback((option: string) => {
+    if (feedback || isLoading || !currentQuestion) return;
+    hapticImpact('light');
+    setSelectedOption(option);
+
+    const isCorrectGuess = option === currentQuestion.correctTranslation;
+    submitAnswer(isCorrectGuess ? currentQuestion.meaningId : null);
+  }, [feedback, isLoading, currentQuestion, hapticImpact, submitAnswer]);
+
+  const handleSkip = useCallback(() => {
+    if (feedback || isLoading || !currentQuestion) return;
+    hapticImpact('light');
+    setSelectedOption(null);
+    skip();
+  }, [feedback, isLoading, currentQuestion, hapticImpact, skip]);
 
   if (!user) return null;
 
@@ -22,50 +99,139 @@ export function Home() {
   const progressPercent = ((user.xp - currentLevelXp) / (nextLevelXp - currentLevelXp)) * 100;
 
   return (
-    <div className="flex min-h-screen flex-col px-4 pt-6 pb-8">
-      {/* Header */}
+    <div className="flex min-h-full flex-col px-4 pt-4 pb-4">
+      {/* Header — compact stats */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold">Привет, {user.firstName}!</h1>
-          <div className="mt-1 flex items-center gap-2">
-            <Badge>Уровень {user.level}</Badge>
-            {user.streakDays > 0 && (
-              <Badge>
-                <HugeiconsIcon icon={Fire02Icon} size={14} />
-                {user.streakDays} дн.
-              </Badge>
-            )}
-          </div>
+        <div className="flex items-center gap-2">
+          <Badge>Ур. {user.level}</Badge>
+          {user.streakDays > 0 && (
+            <Badge>
+              <HugeiconsIcon icon={Fire02Icon} size={14} />
+              {user.streakDays} дн.
+            </Badge>
+          )}
         </div>
-        <Button variant="secondary" size="icon" onClick={() => navigate('/profile')}>
-          <HugeiconsIcon icon={UserIcon} size={20} />
-        </Button>
+        <span className="text-sm font-medium text-[var(--gray-11)]">{user.xp} XP</span>
       </div>
 
       {/* XP Progress */}
-      <Card className="mt-6">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-[var(--gray-11)]">Опыт</span>
-          <span className="font-medium">{user.xp} XP</span>
-        </div>
-        <Progress value={progressPercent} className="mt-2" />
-        <div className="mt-1 flex justify-between text-xs text-[var(--gray-11)]">
+      <div className="mt-2">
+        <Progress value={progressPercent} />
+        <div className="mt-0.5 flex justify-between text-[10px] text-[var(--gray-11)]">
           <span>Ур. {user.level}</span>
           <span>Ур. {user.level + 1}</span>
         </div>
-      </Card>
-
-      {/* Actions — pushed to thumb zone */}
-      <div className="mt-auto flex flex-col gap-3">
-        <Button onClick={() => navigate('/quiz')}>
-          <HugeiconsIcon icon={BookOpen02Icon} size={20} />
-          Начать квиз
-        </Button>
-        <Button variant="secondary" onClick={() => navigate('/duel/create')}>
-          <HugeiconsIcon icon={Sword01Icon} size={20} />
-          Дуэль
-        </Button>
       </div>
+
+      {/* Quiz Card */}
+      <div className="mt-6 flex flex-1 flex-col">
+        {!currentQuestion && !feedback && isLoading && (
+          <div className="flex flex-1 flex-col items-center justify-center">
+            <Skeleton className="h-10 w-40" />
+            <div className="mt-10 grid w-full grid-cols-2 gap-3">
+              <Skeleton className="h-14 rounded-lg" />
+              <Skeleton className="h-14 rounded-lg" />
+              <Skeleton className="h-14 rounded-lg" />
+              <Skeleton className="h-14 rounded-lg" />
+            </div>
+          </div>
+        )}
+
+        {!currentQuestion && !feedback && !isLoading && error && (
+          <div className="flex flex-1 flex-col items-center justify-center gap-4">
+            <p className="text-center text-[var(--gray-11)]">{error}</p>
+            <Button variant="secondary" onClick={() => fetchNext()}>
+              Попробовать снова
+            </Button>
+          </div>
+        )}
+
+        {!currentQuestion && !feedback && !isLoading && !error && (
+          <div className="flex flex-1 flex-col items-center justify-center gap-4">
+            <p className="text-center text-[var(--gray-11)]">
+              Нет доступных слов. Добавьте коллекцию!
+            </p>
+            <Button variant="secondary" onClick={() => navigate('/collections')}>
+              Перейти к коллекциям
+            </Button>
+          </div>
+        )}
+
+        {currentQuestion && (
+          <>
+            {/* Word */}
+            <div className="relative flex flex-1 flex-col items-center justify-center">
+              <h2 className="text-4xl font-bold">{currentQuestion.word}</h2>
+
+              {/* XP feedback — absolute so it doesn't shift the word */}
+              {xpDisplay && (
+                <div key={xpDisplay.key} className="absolute bottom-0 left-1/2 flex -translate-x-1/2 -translate-y-4 flex-col items-center">
+                  <span className="animate-xp-float text-sm font-semibold text-[var(--green-11)]">
+                    +{xpDisplay.xp} XP
+                  </span>
+                  {xpDisplay.levelUp && (
+                    <span className="animate-xp-float text-sm font-bold text-[var(--accent-9)]">
+                      Уровень {xpDisplay.levelUp}!
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Options 2x2 */}
+            <div className="grid w-full grid-cols-2 gap-3">
+              {currentQuestion.options.map((option) => {
+                const isSelected = selectedOption === option;
+                const showResult = feedback !== null;
+                const isCorrectOption = option === feedback?.correctTranslation;
+                const isWrongSelected = isSelected && !isCorrectOption;
+
+                return (
+                  <Button
+                    key={`${currentQuestion.meaningId}-${option}`}
+                    variant="secondary"
+                    disabled={showResult && !isSelected && !isCorrectOption}
+                    onClick={() => handleAnswer(option)}
+                    className={cn(
+                      'h-14 px-4 text-center text-sm',
+                      showResult && 'pointer-events-none',
+                      showResult && isCorrectOption && feedback?.isCorrect && 'bg-[var(--green-9)] text-white',
+                      showResult && isCorrectOption && !feedback?.isCorrect && 'bg-[var(--green-3)] text-[var(--green-12)]',
+                      showResult && isWrongSelected && 'bg-[var(--red-9)] text-white',
+                    )}
+                  >
+                    {option}
+                  </Button>
+                );
+              })}
+            </div>
+
+            {/* Skip */}
+            <Button
+              variant="link"
+              size="sm"
+              disabled={feedback !== null || isLoading}
+              onClick={handleSkip}
+              className={cn(
+                'mt-4',
+                (feedback !== null || isLoading) && 'opacity-40',
+              )}
+            >
+              Не знаю
+            </Button>
+          </>
+        )}
+      </div>
+
+      {/* Duel button */}
+      <Button
+        variant="secondary"
+        onClick={() => navigate('/duel/create')}
+        className="mt-4"
+      >
+        <HugeiconsIcon icon={Sword01Icon} size={18} />
+        Дуэль
+      </Button>
     </div>
   );
 }

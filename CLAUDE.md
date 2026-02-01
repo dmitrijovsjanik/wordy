@@ -17,6 +17,7 @@
 
 ## Critical Rules
 
+- **ALWAYS use shadcn/ui components** — never write raw HTML inputs, buttons, or other interactive elements. If a shadcn component exists in `client/src/components/ui/` (Button, Input, Card, Skeleton, Badge, Progress, etc.), use it. If a needed component doesn't exist yet — create it in `client/src/components/ui/` following shadcn conventions before using it. No inline-styled `<input>`, `<button>`, or `<select>` elements.
 - TypeScript strict mode everywhere
 - Functional components with hooks only
 - **NO class components**

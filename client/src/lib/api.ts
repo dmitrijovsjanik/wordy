@@ -9,6 +9,13 @@ import type {
   DuelFinishResponse,
   User,
   UserStats,
+  MarketplaceCollection,
+  LibraryCollection,
+  CollectionDetail,
+  DifficultWordsResponse,
+  AllWordsResponse,
+  QuizQuestion,
+  InfiniteAnswerResponse,
 } from '@/types/api';
 
 const TOKEN_KEY = 'wordy_token';
@@ -111,4 +118,70 @@ export function getMe() {
 
 export function getMyStats() {
   return fetchApi<UserStats>('GET', '/api/users/me/stats');
+}
+
+// Collections
+export function getMarketplace() {
+  return fetchApi<{ collections: MarketplaceCollection[] }>('GET', '/api/collections/marketplace');
+}
+
+export function getLibrary() {
+  return fetchApi<{ collections: LibraryCollection[] }>('GET', '/api/collections/library');
+}
+
+export function getCollectionDetail(id: number) {
+  return fetchApi<CollectionDetail>('GET', `/api/collections/${id}`);
+}
+
+export function subscribeCollection(id: number) {
+  return fetchApi<{ success: boolean }>('POST', `/api/collections/${id}/subscribe`);
+}
+
+export function unsubscribeCollection(id: number) {
+  return fetchApi<{ success: boolean }>('DELETE', `/api/collections/${id}/unsubscribe`);
+}
+
+export function toggleCollection(id: number, isActive: boolean) {
+  return fetchApi<{ success: boolean }>('PATCH', `/api/collections/${id}/toggle`, { isActive });
+}
+
+export function createCollection(data: {
+  title: string;
+  description?: string;
+  words?: { wordText: string; translation: string; partOfSpeech?: string }[];
+}) {
+  return fetchApi<{ collectionId: number }>('POST', '/api/collections', data);
+}
+
+export function updateCollection(id: number, data: {
+  title?: string;
+  description?: string;
+  words?: { wordText: string; translation: string; partOfSpeech?: string }[];
+}) {
+  return fetchApi<{ success: boolean }>('PATCH', `/api/collections/${id}`, data);
+}
+
+export function deleteCollection(id: number) {
+  return fetchApi<{ success: boolean }>('DELETE', `/api/collections/${id}`);
+}
+
+export function getDifficultWords() {
+  return fetchApi<DifficultWordsResponse>('GET', '/api/collections/difficult');
+}
+
+export function getAllWords() {
+  return fetchApi<AllWordsResponse>('GET', '/api/collections/words');
+}
+
+// Infinite Quiz
+export function quizNext(excludeIds: number[] = []) {
+  const query = excludeIds.length > 0 ? `?exclude=${excludeIds.join(',')}` : '';
+  return fetchApi<{ question: QuizQuestion | null }>('GET', `/api/quiz/next${query}`);
+}
+
+export function quizAnswerInfinite(meaningId: number, selectedMeaningId: number | null) {
+  return fetchApi<InfiniteAnswerResponse>('POST', '/api/quiz/answer-infinite', {
+    meaningId,
+    selectedMeaningId,
+  });
 }

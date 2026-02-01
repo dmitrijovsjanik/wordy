@@ -5,6 +5,8 @@ import {
   recordAnswer,
   finishSession,
   getAnsweredMeaningIds,
+  generateQuestionFromPool,
+  recordInfiniteAnswer,
 } from '../services/quiz-service.js';
 
 export default async function quizRoutes(app: FastifyInstance) {
@@ -36,6 +38,30 @@ export default async function quizRoutes(app: FastifyInstance) {
   app.post<{ Body: { sessionId: number } }>('/api/quiz/finish', async (request) => {
     const { sessionId } = request.body;
     const result = await finishSession(sessionId, request.user.id);
+    return result;
+  });
+
+  // ─── Infinite Quiz ──────────────────────────────────────────────────────
+
+  app.get<{ Querystring: { exclude?: string } }>('/api/quiz/next', async (request) => {
+    const excludeStr = request.query.exclude ?? '';
+    const excludeIds = excludeStr
+      ? excludeStr.split(',').map(Number).filter((n) => !Number.isNaN(n))
+      : [];
+
+    const question = await generateQuestionFromPool(request.user.id, excludeIds);
+    return { question };
+  });
+
+  app.post<{
+    Body: { meaningId: number; selectedMeaningId: number | null };
+  }>('/api/quiz/answer-infinite', async (request) => {
+    const { meaningId, selectedMeaningId } = request.body;
+    const result = await recordInfiniteAnswer(
+      request.user.id,
+      meaningId,
+      selectedMeaningId,
+    );
     return result;
   });
 }
