@@ -22,6 +22,8 @@ export const partOfSpeechEnum = pgEnum('part_of_speech', [
 
 export const difficultyEnum = pgEnum('difficulty', ['easy', 'medium', 'hard']);
 
+export const cefrLevelEnum = pgEnum('cefr_level', ['a1', 'a2', 'b1', 'b2', 'c1']);
+
 export const quizTypeEnum = pgEnum('quiz_type', ['solo', 'duel']);
 
 export const duelStatusEnum = pgEnum('duel_status', [
@@ -48,6 +50,8 @@ export const users = pgTable('users', {
   xp: integer('xp').default(0).notNull(),
   level: integer('level').default(1).notNull(),
   streakDays: integer('streak_days').default(0).notNull(),
+  nativeLanguage: varchar('native_language', { length: 10 }).default('ru').notNull(),
+  learningLanguage: varchar('learning_language', { length: 10 }).default('en').notNull(),
   lastActivityAt: timestamp('last_activity_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -59,6 +63,7 @@ export const words = pgTable('words', {
   id: serial('id').primaryKey(),
   text: varchar('text', { length: 255 }).notNull(),
   language: varchar('language', { length: 10 }).default('en').notNull(),
+  frequencyRank: integer('frequency_rank'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -71,9 +76,11 @@ export const wordMeanings = pgTable('word_meanings', {
     .references(() => words.id, { onDelete: 'cascade' })
     .notNull(),
   translation: varchar('translation', { length: 255 }).notNull(),
+  translationLanguage: varchar('translation_language', { length: 10 }).default('ru').notNull(),
   partOfSpeech: partOfSpeechEnum('part_of_speech').notNull(),
   contextExample: varchar('context_example', { length: 500 }),
   difficulty: difficultyEnum('difficulty').notNull(),
+  cefr: cefrLevelEnum('cefr'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -236,7 +243,9 @@ export const userCustomWords = pgTable(
       .references(() => collections.id, { onDelete: 'cascade' })
       .notNull(),
     wordText: varchar('word_text', { length: 255 }).notNull(),
+    language: varchar('language', { length: 10 }).default('en').notNull(),
     translation: varchar('translation', { length: 255 }).notNull(),
+    translationLanguage: varchar('translation_language', { length: 10 }).default('ru').notNull(),
     partOfSpeech: partOfSpeechEnum('part_of_speech').default('noun').notNull(),
     contextExample: varchar('context_example', { length: 500 }),
     createdAt: timestamp('created_at').defaultNow().notNull(),

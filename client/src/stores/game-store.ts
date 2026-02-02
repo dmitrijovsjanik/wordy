@@ -62,7 +62,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
 
       set({
         answers: [...answers, newAnswer],
-        answerFeedback: { isCorrect: res.isCorrect, correctTranslation: res.correctTranslation },
+        answerFeedback: { isCorrect: res.isCorrect, correctTranslation: currentQuestion.correctTranslation },
         isLoading: false,
       });
 

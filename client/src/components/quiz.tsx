@@ -117,17 +117,21 @@ export function Quiz() {
         Привет, {user?.firstName ?? 'друг'} 🖐
       </h1>
 
-      {/* Word + transcription */}
+      {/* Word + direction hint */}
       <div className="flex flex-1 flex-col items-center justify-center">
+        <span className="mb-2 text-xs text-[var(--gray-11)]">
+          {question?.direction === 'ru-en' ? 'Переведите на английский' : 'Переведите на русский'}
+        </span>
         <h2 className="text-4xl font-bold">{question?.word}</h2>
-        <span className="mt-2 text-sm text-[var(--gray-11)]">&nbsp;</span>
       </div>
 
-      {/* Listen button */}
-      <Button variant="ghost" size="sm" className="mb-6" disabled>
-        <HugeiconsIcon strokeWidth={2} icon={VolumeHighIcon} size={20} />
-        Прослушать
-      </Button>
+      {/* Listen button — only for English words */}
+      {question?.direction === 'en-ru' && (
+        <Button variant="ghost" size="sm" className="mb-6" disabled>
+          <HugeiconsIcon strokeWidth={2} icon={VolumeHighIcon} size={20} />
+          Прослушать
+        </Button>
+      )}
 
       {/* Options grid 2x2 */}
       <div className="grid w-full grid-cols-2 gap-3">
@@ -140,15 +144,18 @@ export function Quiz() {
           return (
             <Button
               key={`${questionIndex}-${option}`}
-              variant="secondary"
+              variant={
+                !showResult ? 'secondary' :
+                isCorrectOption ? 'success' :
+                isWrongSelected ? 'destructive' :
+                'secondary'
+              }
               disabled={showResult && !isSelected && !isCorrectOption}
               onClick={() => handleAnswer(option)}
               className={cn(
                 'px-4 text-center text-sm',
                 showResult && 'pointer-events-none',
-                showResult && isCorrectOption && answerFeedback?.isCorrect && 'bg-[var(--green-9)] text-white',
                 showResult && isCorrectOption && !answerFeedback?.isCorrect && 'bg-[var(--green-3)] text-[var(--green-12)]',
-                showResult && isWrongSelected && 'bg-[var(--red-9)] text-white',
               )}
             >
               {option}

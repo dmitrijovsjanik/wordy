@@ -16,6 +16,7 @@ import type {
   AllWordsResponse,
   QuizQuestion,
   InfiniteAnswerResponse,
+  DictionaryLookupResult,
 } from '@/types/api';
 
 const TOKEN_KEY = 'wordy_token';
@@ -120,6 +121,14 @@ export function getMyStats() {
   return fetchApi<UserStats>('GET', '/api/users/me/stats');
 }
 
+export function updateLanguages(nativeLanguage: string, learningLanguage: string) {
+  return fetchApi<{ nativeLanguage: string; learningLanguage: string }>(
+    'PUT',
+    '/api/users/me/languages',
+    { nativeLanguage, learningLanguage },
+  );
+}
+
 // Collections
 export function getMarketplace() {
   return fetchApi<{ collections: MarketplaceCollection[] }>('GET', '/api/collections/marketplace');
@@ -173,9 +182,29 @@ export function getAllWords() {
   return fetchApi<AllWordsResponse>('GET', '/api/collections/words');
 }
 
+// Dictionary
+export function dictionaryLookup(text: string) {
+  return fetchApi<DictionaryLookupResult>('GET', `/api/dictionary/lookup?text=${encodeURIComponent(text)}`);
+}
+
+// Collection Words
+export function addCollectionWords(collectionId: number, data: {
+  meaningIds?: number[];
+  custom?: { wordText: string; translation: string; partOfSpeech?: string }[];
+}) {
+  return fetchApi<{ success: boolean; added: number }>('POST', `/api/collections/${collectionId}/words`, data);
+}
+
+export function removeCollectionWord(collectionId: number, wordId: number, type: 'meaning' | 'custom' = 'meaning') {
+  return fetchApi<{ success: boolean; deleted: number }>('DELETE', `/api/collections/${collectionId}/words/${wordId}?type=${type}`);
+}
+
 // Infinite Quiz
-export function quizNext(excludeIds: number[] = []) {
-  const query = excludeIds.length > 0 ? `?exclude=${excludeIds.join(',')}` : '';
+export function quizNext(excludeIds: number[] = [], collectionId?: number) {
+  const params = new URLSearchParams();
+  if (excludeIds.length > 0) params.set('exclude', excludeIds.join(','));
+  if (collectionId) params.set('collectionId', String(collectionId));
+  const query = params.toString() ? `?${params.toString()}` : '';
   return fetchApi<{ question: QuizQuestion | null }>('GET', `/api/quiz/next${query}`);
 }
 

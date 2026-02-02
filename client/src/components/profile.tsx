@@ -7,6 +7,12 @@ import type { UserStats } from '@/types/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BackButton } from '@/components/ui/back-button';
@@ -14,6 +20,60 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { Fire02Icon, Target02Icon, GameController01Icon, Award01Icon, Sun01Icon, Moon02Icon, ComputerIcon } from '@hugeicons/core-free-icons';
 import { useThemeStore } from '@/stores/theme-store';
 import { cn } from '@/lib/utils';
+
+const LANGUAGES = [
+  { code: 'ru', name: 'Русский', flag: '\u{1F1F7}\u{1F1FA}', available: true },
+  { code: 'en', name: 'English', flag: '\u{1F1EC}\u{1F1E7}', available: true },
+  { code: 'es', name: 'Espa\u00f1ol', flag: '\u{1F1EA}\u{1F1F8}', available: false },
+  { code: 'de', name: 'Deutsch', flag: '\u{1F1E9}\u{1F1EA}', available: false },
+  { code: 'fr', name: 'Fran\u00e7ais', flag: '\u{1F1EB}\u{1F1F7}', available: false },
+] as const;
+
+type LanguageDropdownProps = {
+  label: string;
+  value: string;
+  excludeCode: string;
+};
+
+function LanguageDropdown({ label, value, excludeCode }: LanguageDropdownProps) {
+  const current = LANGUAGES.find((l) => l.code === value);
+
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs font-medium text-[var(--gray-11)]">{label}</span>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded-xl bg-[var(--gray-3)] px-3 py-2 text-sm font-medium outline-none active:bg-[var(--gray-4)]"
+          >
+            <span>{current?.flag}</span>
+            <span>{current?.name}</span>
+            <span className="text-[var(--gray-11)]">▾</span>
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {LANGUAGES.filter((l) => l.code !== excludeCode).map((lang) => (
+            <DropdownMenuItem
+              key={lang.code}
+              disabled={!lang.available}
+              className={cn(
+                !lang.available && 'opacity-50',
+                lang.code === value && 'text-[var(--brand-11)] font-medium',
+              )}
+            >
+              <span>{lang.flag}</span>
+              <span className="flex-1">{lang.name}</span>
+              {!lang.available && (
+                <Badge variant="secondary" className="text-[10px]">soon</Badge>
+              )}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
 
 function xpForLevel(level: number) {
   return (level - 1) * (level - 1) * 100;
@@ -89,6 +149,23 @@ export function Profile() {
               {item.label}
             </Button>
           ))}
+        </div>
+      </Card>
+
+      {/* Language */}
+      <Card className="mt-4">
+        <span className="text-sm text-[var(--gray-11)]">Язык</span>
+        <div className="mt-3 flex flex-col gap-2">
+          <LanguageDropdown
+            label="Родной"
+            value={user.nativeLanguage}
+            excludeCode={user.learningLanguage}
+          />
+          <LanguageDropdown
+            label="Изучаю"
+            value={user.learningLanguage}
+            excludeCode={user.nativeLanguage}
+          />
         </div>
       </Card>
 

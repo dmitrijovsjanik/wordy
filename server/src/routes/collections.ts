@@ -11,6 +11,8 @@ import {
   deleteUserCollection,
   getDifficultWords,
   getAllWords,
+  addWordsToCollection,
+  removeWordFromCollection,
 } from '../services/collection-service.js';
 
 export default async function collectionRoutes(app: FastifyInstance) {
@@ -64,6 +66,28 @@ export default async function collectionRoutes(app: FastifyInstance) {
     const id = Number(request.params.id);
     await deleteUserCollection(request.user.id, id);
     return { success: true };
+  });
+
+  // Add words to collection
+  app.post<{
+    Params: { id: string };
+    Body: { meaningIds?: number[]; custom?: { wordText: string; translation: string; partOfSpeech?: string }[] };
+  }>('/api/collections/:id/words', async (request) => {
+    const id = Number(request.params.id);
+    const result = await addWordsToCollection(request.user.id, id, request.body);
+    return { success: true, added: result.added };
+  });
+
+  // Remove word from collection
+  app.delete<{
+    Params: { id: string; wordId: string };
+    Querystring: { type?: string };
+  }>('/api/collections/:id/words/:wordId', async (request) => {
+    const id = Number(request.params.id);
+    const wordId = Number(request.params.wordId);
+    const type = (request.query.type === 'custom' ? 'custom' : 'meaning') as 'meaning' | 'custom';
+    const result = await removeWordFromCollection(request.user.id, id, wordId, type);
+    return { success: true, deleted: result.deleted };
   });
 
   app.post<{ Params: { id: string } }>('/api/collections/:id/subscribe', async (request) => {

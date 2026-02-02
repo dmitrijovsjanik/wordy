@@ -387,6 +387,227 @@ export async function getActiveMeaningIds(userId: number): Promise<number[]> {
   return Array.from(meaningIds);
 }
 
+// ─── Quiz Pool (meanings + custom words) ─────────────────────────────────────
+
+export type CustomWordForQuiz = {
+  id: number;
+  wordText: string;
+  translation: string;
+};
+
+export type QuizPool = {
+  meaningIds: number[];
+  customWords: CustomWordForQuiz[];
+};
+
+export async function getQuizPool(userId: number, collectionId?: number): Promise<QuizPool> {
+  let collectionIds: number[];
+
+  if (collectionId) {
+    // Изоляция — только одна коллекция (проверяем что пользователь подписан)
+    const sub = await db.query.userCollections.findFirst({
+      where: and(
+        eq(userCollections.userId, userId),
+        eq(userCollections.collectionId, collectionId),
+      ),
+    });
+    if (!sub) return { meaningIds: [], customWords: [] };
+    collectionIds = [collectionId];
+  } else {
+    // Все активные коллекции
+    const activeSubs = await db
+      .select({ collectionId: userCollections.collectionId })
+      .from(userCollections)
+      .where(and(eq(userCollections.userId, userId), eq(userCollections.isActive, true)));
+
+    if (activeSubs.length === 0) return { meaningIds: [], customWords: [] };
+    collectionIds = activeSubs.map((s) => s.collectionId);
+  }
+
+  // Словарные слова
+  const systemMeanings = await db
+    .select({ meaningId: collectionWords.meaningId })
+    .from(collectionWords)
+    .where(inArray(collectionWords.collectionId, collectionIds));
+
+  const meaningIds = [...new Set(systemMeanings.map((m) => m.meaningId))];
+
+  // Кастомные слова
+  const custom = await db
+    .select({
+      id: userCustomWords.id,
+      wordText: userCustomWords.wordText,
+      translation: userCustomWords.translation,
+    })
+    .from(userCustomWords)
+    .where(
+      and(
+        eq(userCustomWords.userId, userId),
+        inArray(userCustomWords.collectionId, collectionIds),
+      ),
+    );
+
+  return { meaningIds, customWords: custom };
+}
+
+// ─── Add Words to Collection ─────────────────────────────────────────────
+
+type AddWordsInput = {
+  meaningIds?: number[];
+  custom?: { wordText: string; translation: string; partOfSpeech?: string }[];
+};
+
+export async function addWordsToCollection(
+  userId: number,
+  collectionId: number,
+  input: AddWordsInput,
+) {
+  const col = await db.query.collections.findFirst({
+    where: and(
+      eq(collections.id, collectionId),
+      eq(collections.creatorId, userId),
+      isNull(collections.deletedAt),
+    ),
+  });
+
+  if (!col) throw new Error('Коллекция не найдена');
+
+  let added = 0;
+
+  // Добавляем системные слова (из словаря)
+  if (input.meaningIds && input.meaningIds.length > 0) {
+    // Проверяем какие уже есть
+    const existing = await db
+      .select({ meaningId: collectionWords.meaningId })
+      .from(collectionWords)
+      .where(
+        and(
+          eq(collectionWords.collectionId, collectionId),
+          inArray(collectionWords.meaningId, input.meaningIds),
+        ),
+      );
+    const existingIds = new Set(existing.map((e) => e.meaningId));
+    const newMeaningIds = input.meaningIds.filter((id) => !existingIds.has(id));
+
+    if (newMeaningIds.length > 0) {
+      const maxOrder = await db
+        .select({ max: sql<number>`coalesce(max(${collectionWords.order}), 0)` })
+        .from(collectionWords)
+        .where(eq(collectionWords.collectionId, collectionId));
+
+      let order = (maxOrder[0]?.max ?? 0) + 1;
+
+      for (const meaningId of newMeaningIds) {
+        await db
+          .insert(collectionWords)
+          .values({ collectionId, meaningId, order });
+        order++;
+        added++;
+      }
+    }
+  }
+
+  // Добавляем кастомные слова (ручной ввод)
+  if (input.custom && input.custom.length > 0) {
+    for (const w of input.custom) {
+      // Проверяем дубликат
+      const dup = await db
+        .select({ id: userCustomWords.id })
+        .from(userCustomWords)
+        .where(
+          and(
+            eq(userCustomWords.collectionId, collectionId),
+            eq(userCustomWords.wordText, w.wordText),
+            eq(userCustomWords.translation, w.translation),
+          ),
+        )
+        .limit(1);
+
+      if (dup.length === 0) {
+        await db.insert(userCustomWords).values({
+          userId,
+          collectionId,
+          wordText: w.wordText,
+          translation: w.translation,
+          partOfSpeech: (w.partOfSpeech ?? 'noun') as 'noun' | 'verb' | 'adj' | 'adv' | 'phrase',
+        });
+        added++;
+      }
+    }
+  }
+
+  // Обновляем totalWords
+  if (added > 0) {
+    await db
+      .update(collections)
+      .set({
+        totalWords: sql`${collections.totalWords} + ${added}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(collections.id, collectionId));
+  }
+
+  return { added };
+}
+
+// ─── Remove Word from Collection ─────────────────────────────────────────
+
+export async function removeWordFromCollection(
+  userId: number,
+  collectionId: number,
+  wordId: number,
+  type: 'meaning' | 'custom',
+) {
+  const col = await db.query.collections.findFirst({
+    where: and(
+      eq(collections.id, collectionId),
+      eq(collections.creatorId, userId),
+      isNull(collections.deletedAt),
+    ),
+  });
+
+  if (!col) throw new Error('Коллекция не найдена');
+
+  let deleted = 0;
+
+  if (type === 'meaning') {
+    const result = await db
+      .delete(collectionWords)
+      .where(
+        and(
+          eq(collectionWords.collectionId, collectionId),
+          eq(collectionWords.meaningId, wordId),
+        ),
+      )
+      .returning();
+    deleted = result.length;
+  } else {
+    const result = await db
+      .delete(userCustomWords)
+      .where(
+        and(
+          eq(userCustomWords.id, wordId),
+          eq(userCustomWords.collectionId, collectionId),
+          eq(userCustomWords.userId, userId),
+        ),
+      )
+      .returning();
+    deleted = result.length;
+  }
+
+  if (deleted > 0) {
+    await db
+      .update(collections)
+      .set({
+        totalWords: sql`greatest(${collections.totalWords} - ${deleted}, 0)`,
+        updatedAt: new Date(),
+      })
+      .where(eq(collections.id, collectionId));
+  }
+
+  return { deleted };
+}
+
 export async function getActiveCustomWords(userId: number) {
   const activeSubs = await db
     .select({ collectionId: userCollections.collectionId })

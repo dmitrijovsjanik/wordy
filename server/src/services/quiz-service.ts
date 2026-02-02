@@ -1,7 +1,8 @@
 import { eq, ne, and, sql, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { wordMeanings, quizSessions, quizAnswers, users, userWordProgress } from '../db/schema.js';
-import { getActiveMeaningIds } from './collection-service.js';
+import { wordMeanings, quizSessions, quizAnswers, users, userWordProgress, userCustomWords } from '../db/schema.js';
+import { getQuizPool, type CustomWordForQuiz } from './collection-service.js';
+import { type LanguagePair, DEFAULT_LANG_PAIR, reversePair } from '../types/language.js';
 
 const QUESTIONS_PER_SESSION = 10;
 const XP_PER_CORRECT = 10;
@@ -12,7 +13,20 @@ type Question = {
   word: string;
   correctTranslation: string;
   options: string[];
+  direction: string;
 };
+
+function shuffle<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j]!, arr[i]!];
+  }
+  return arr;
+}
+
+function randomDirection(pair: LanguagePair = DEFAULT_LANG_PAIR): string {
+  return Math.random() < 0.5 ? pair : reversePair(pair);
+}
 
 export async function createSession(userId: number) {
   const [session] = await db
@@ -22,7 +36,7 @@ export async function createSession(userId: number) {
   return session!;
 }
 
-export async function generateQuestion(excludeMeaningIds: number[] = []): Promise<Question | null> {
+export async function generateQuestion(excludeMeaningIds: number[] = [], langPair: LanguagePair = DEFAULT_LANG_PAIR): Promise<Question | null> {
   // Выбираем случайный meaning для вопроса
   const condition = excludeMeaningIds.length > 0
     ? sql`${wordMeanings.id} NOT IN (${sql.join(excludeMeaningIds.map(id => sql`${id}`), sql`, `)})`
@@ -46,6 +60,7 @@ export async function generateQuestion(excludeMeaningIds: number[] = []): Promis
       eq(wordMeanings.difficulty, correct.difficulty),
       ne(wordMeanings.translation, correct.translation),
     ),
+    with: { word: true },
     limit: 3,
     orderBy: sql`RANDOM()`,
   });
@@ -60,25 +75,35 @@ export async function generateQuestion(excludeMeaningIds: number[] = []): Promis
           ? sql`${wordMeanings.id} NOT IN (${sql.join(wrongOptions.map(o => sql`${o.id}`), sql`, `)})`
           : undefined,
       ),
+      with: { word: true },
       limit: 3 - wrongOptions.length,
       orderBy: sql`RANDOM()`,
     });
     wrongOptions.push(...moreOptions);
   }
 
-  const options = [correct.translation, ...wrongOptions.map(o => o.translation)];
-  // Перемешиваем варианты
-  for (let i = options.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [options[i], options[j]] = [options[j]!, options[i]!];
-  }
+  const direction = randomDirection(langPair);
+  const isForward = direction === langPair;
 
-  return {
-    meaningId: correct.id,
-    word: correct.word.text,
-    correctTranslation: correct.translation,
-    options,
-  };
+  if (isForward) {
+    const options = shuffle([correct.translation, ...wrongOptions.map(o => o.translation)]);
+    return {
+      meaningId: correct.id,
+      word: correct.word.text,
+      correctTranslation: correct.translation,
+      options,
+      direction,
+    };
+  } else {
+    const options = shuffle([correct.word.text, ...wrongOptions.map(o => o.word.text)]);
+    return {
+      meaningId: correct.id,
+      word: correct.translation,
+      correctTranslation: correct.word.text,
+      options,
+      direction,
+    };
+  }
 }
 
 export async function recordAnswer(
@@ -206,22 +231,42 @@ export async function getAnsweredMeaningIds(sessionId: number): Promise<number[]
 export async function generateQuestionFromPool(
   userId: number,
   excludeMeaningIds: number[] = [],
+  langPair: LanguagePair = DEFAULT_LANG_PAIR,
+  collectionId?: number,
 ): Promise<Question | null> {
-  const poolMeaningIds = await getActiveMeaningIds(userId);
+  const pool = await getQuizPool(userId, collectionId);
+  const totalPool = pool.meaningIds.length + pool.customWords.length;
 
-  if (poolMeaningIds.length === 0) {
+  if (totalPool === 0) {
     // Нет активных коллекций — показываем из всей базы
-    return generateQuestion(excludeMeaningIds);
+    return generateQuestion(excludeMeaningIds, langPair);
   }
 
-  // Исключаем недавно показанные
-  const availableIds = poolMeaningIds.filter((id) => !excludeMeaningIds.includes(id));
+  // Фильтруем уже показанные
+  // excludeMeaningIds содержит и meaningId и customWord id (с отрицательным знаком для различия)
+  const availableMeaningIds = pool.meaningIds.filter((id) => !excludeMeaningIds.includes(id));
+  const availableCustom = pool.customWords.filter((w) => !excludeMeaningIds.includes(-w.id));
 
   // Если всё исчерпано — сбрасываем exclude
-  const idsToUse = availableIds.length > 0 ? availableIds : poolMeaningIds;
+  const meaningIds = availableMeaningIds.length > 0 ? availableMeaningIds : pool.meaningIds;
+  const customWords = availableCustom.length > 0 ? availableCustom : pool.customWords;
+  const totalAvailable = meaningIds.length + customWords.length;
+
+  // Случайно выбираем источник (взвешенно по количеству)
+  const useCustom = totalAvailable > 0 && Math.random() < customWords.length / totalAvailable;
+
+  if (useCustom && customWords.length > 0) {
+    return generateQuestionFromCustomWord(customWords, pool.customWords, langPair);
+  }
+
+  if (meaningIds.length === 0) {
+    return customWords.length > 0
+      ? generateQuestionFromCustomWord(customWords, pool.customWords, langPair)
+      : null;
+  }
 
   const candidates = await db.query.wordMeanings.findMany({
-    where: inArray(wordMeanings.id, idsToUse),
+    where: inArray(wordMeanings.id, meaningIds),
     with: { word: true },
     limit: 1,
     orderBy: sql`RANDOM()`,
@@ -238,6 +283,7 @@ export async function generateQuestionFromPool(
       eq(wordMeanings.difficulty, correct.difficulty),
       ne(wordMeanings.translation, correct.translation),
     ),
+    with: { word: true },
     limit: 3,
     orderBy: sql`RANDOM()`,
   });
@@ -251,24 +297,98 @@ export async function generateQuestionFromPool(
           ? sql`${wordMeanings.id} NOT IN (${sql.join(wrongOptions.map(o => sql`${o.id}`), sql`, `)})`
           : undefined,
       ),
+      with: { word: true },
       limit: 3 - wrongOptions.length,
       orderBy: sql`RANDOM()`,
     });
     wrongOptions.push(...moreOptions);
   }
 
-  const options = [correct.translation, ...wrongOptions.map(o => o.translation)];
-  for (let i = options.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [options[i], options[j]] = [options[j]!, options[i]!];
+  const direction = randomDirection(langPair);
+  const isForward = direction === langPair;
+
+  if (isForward) {
+    const options = shuffle([correct.translation, ...wrongOptions.map(o => o.translation)]);
+    return {
+      meaningId: correct.id,
+      word: correct.word.text,
+      correctTranslation: correct.translation,
+      options,
+      direction,
+    };
+  } else {
+    const options = shuffle([correct.word.text, ...wrongOptions.map(o => o.word.text)]);
+    return {
+      meaningId: correct.id,
+      word: correct.translation,
+      correctTranslation: correct.word.text,
+      options,
+      direction,
+    };
+  }
+}
+
+async function generateQuestionFromCustomWord(
+  candidates: CustomWordForQuiz[],
+  allCustom: CustomWordForQuiz[],
+  langPair: LanguagePair,
+): Promise<Question | null> {
+  const correct = candidates[Math.floor(Math.random() * candidates.length)]!;
+
+  // Неправильные варианты: сначала из кастомных слов того же пула
+  const otherCustom = shuffle(
+    allCustom.filter((w) => w.id !== correct.id && w.translation !== correct.translation),
+  );
+  const wrongTranslations: string[] = otherCustom.slice(0, 3).map((w) => w.translation);
+
+  // Если мало кастомных — добиваем из wordMeanings
+  if (wrongTranslations.length < 3) {
+    const dbWrong = await db.query.wordMeanings.findMany({
+      where: ne(wordMeanings.translation, correct.translation),
+      limit: 3 - wrongTranslations.length,
+      orderBy: sql`RANDOM()`,
+    });
+    wrongTranslations.push(...dbWrong.map((m) => m.translation));
   }
 
-  return {
-    meaningId: correct.id,
-    word: correct.word.text,
-    correctTranslation: correct.translation,
-    options,
-  };
+  const direction = randomDirection(langPair);
+  const isForward = direction === langPair;
+
+  if (isForward) {
+    const options = shuffle([correct.translation, ...wrongTranslations]);
+    return {
+      meaningId: -correct.id, // Отрицательный id = кастомное слово
+      word: correct.wordText,
+      correctTranslation: correct.translation,
+      options,
+      direction,
+    };
+  } else {
+    // Обратное направление: показываем перевод, варианты — английские слова
+    const otherWords = shuffle(
+      allCustom.filter((w) => w.id !== correct.id && w.wordText !== correct.wordText),
+    );
+    const wrongWords: string[] = otherWords.slice(0, 3).map((w) => w.wordText);
+
+    if (wrongWords.length < 3) {
+      const dbWrong = await db.query.wordMeanings.findMany({
+        where: ne(wordMeanings.translation, correct.translation),
+        with: { word: true },
+        limit: 3 - wrongWords.length,
+        orderBy: sql`RANDOM()`,
+      });
+      wrongWords.push(...dbWrong.map((m) => m.word.text));
+    }
+
+    const options = shuffle([correct.wordText, ...wrongWords]);
+    return {
+      meaningId: -correct.id,
+      word: correct.translation,
+      correctTranslation: correct.wordText,
+      options,
+      direction,
+    };
+  }
 }
 
 export async function recordInfiniteAnswer(
@@ -276,45 +396,65 @@ export async function recordInfiniteAnswer(
   meaningId: number,
   selectedMeaningId: number | null,
 ) {
-  const correctMeaning = await db.query.wordMeanings.findFirst({
-    where: eq(wordMeanings.id, meaningId),
-  });
+  const isCustom = meaningId < 0;
+  const realId = Math.abs(meaningId);
 
+  let correctTranslation = '';
   let isCorrect = false;
-  if (selectedMeaningId !== null && correctMeaning) {
-    const selected = await db.query.wordMeanings.findFirst({
-      where: eq(wordMeanings.id, selectedMeaningId),
+
+  if (isCustom) {
+    // Кастомное слово — проверяем по selectedMeaningId (тоже отрицательный)
+    const customWord = await db.query.userCustomWords.findFirst({
+      where: eq(userCustomWords.id, realId),
     });
-    isCorrect = selected?.translation === correctMeaning.translation;
-  }
-
-  // Обновляем user_word_progress
-  const [existing] = await db
-    .select()
-    .from(userWordProgress)
-    .where(and(eq(userWordProgress.userId, userId), eq(userWordProgress.meaningId, meaningId)))
-    .limit(1);
-
-  if (existing) {
-    await db
-      .update(userWordProgress)
-      .set({
-        correctCount: isCorrect ? sql`${userWordProgress.correctCount} + 1` : userWordProgress.correctCount,
-        incorrectCount: isCorrect ? userWordProgress.incorrectCount : sql`${userWordProgress.incorrectCount} + 1`,
-        lastSeenAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(userWordProgress.id, existing.id));
+    correctTranslation = customWord?.translation ?? '';
+    // Для кастомных: selectedMeaningId === meaningId означает правильный ответ
+    isCorrect = selectedMeaningId === meaningId;
   } else {
-    await db.insert(userWordProgress).values({
-      userId,
-      meaningId,
-      correctCount: isCorrect ? 1 : 0,
-      incorrectCount: isCorrect ? 0 : 1,
+    const correctMeaning = await db.query.wordMeanings.findFirst({
+      where: eq(wordMeanings.id, meaningId),
     });
+    correctTranslation = correctMeaning?.translation ?? '';
+
+    if (selectedMeaningId !== null && correctMeaning) {
+      if (selectedMeaningId > 0) {
+        const selected = await db.query.wordMeanings.findFirst({
+          where: eq(wordMeanings.id, selectedMeaningId),
+        });
+        isCorrect = selected?.translation === correctMeaning.translation;
+      } else {
+        isCorrect = selectedMeaningId === meaningId;
+      }
+    }
+
+    // Обновляем user_word_progress только для словарных слов
+    const [existing] = await db
+      .select()
+      .from(userWordProgress)
+      .where(and(eq(userWordProgress.userId, userId), eq(userWordProgress.meaningId, meaningId)))
+      .limit(1);
+
+    if (existing) {
+      await db
+        .update(userWordProgress)
+        .set({
+          correctCount: isCorrect ? sql`${userWordProgress.correctCount} + 1` : userWordProgress.correctCount,
+          incorrectCount: isCorrect ? userWordProgress.incorrectCount : sql`${userWordProgress.incorrectCount} + 1`,
+          lastSeenAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(userWordProgress.id, existing.id));
+    } else {
+      await db.insert(userWordProgress).values({
+        userId,
+        meaningId,
+        correctCount: isCorrect ? 1 : 0,
+        incorrectCount: isCorrect ? 0 : 1,
+      });
+    }
   }
 
-  // Начисляем XP сразу
+  // Начисляем XP
   let xpEarned = 0;
   if (isCorrect) {
     xpEarned = XP_PER_CORRECT;
@@ -336,7 +476,7 @@ export async function recordInfiniteAnswer(
 
     return {
       isCorrect,
-      correctTranslation: correctMeaning?.translation ?? '',
+      correctTranslation,
       xpEarned,
       totalXp: newXp,
       level: newLevel,
@@ -346,7 +486,7 @@ export async function recordInfiniteAnswer(
 
   return {
     isCorrect,
-    correctTranslation: correctMeaning?.translation ?? '',
+    correctTranslation,
     xpEarned: 0,
     totalXp: undefined,
     level: undefined,

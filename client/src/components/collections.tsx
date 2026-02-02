@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useCollectionStore } from '@/stores/collection-store';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { WordItem } from '@/components/ui/word-item';
+import { WordList } from '@/components/ui/word-list';
+import { WordViewToggle } from '@/components/ui/word-view-toggle';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -78,7 +79,7 @@ export function Collections() {
               >
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-col gap-1">
-                    <h3 className="text-base font-semibold leading-6">{col.title}</h3>
+                    <h3 className="text-base font-semibold leading-6 text-[var(--accent-11)]">{col.title}</h3>
                     {col.description && (
                       <p className="text-sm text-[var(--gray-11)]">{col.description}</p>
                     )}
@@ -109,15 +110,18 @@ export function Collections() {
 
         {activeTab === 'words' && !isLoading && (
           <>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-[var(--gray-11)]">{allWords.length} слов</span>
+              <WordViewToggle />
+            </div>
+
             {allWords.length === 0 && (
               <p className="mt-4 text-center text-sm text-[var(--gray-11)]">
                 Нет слов. Добавьте коллекции в библиотеку!
               </p>
             )}
 
-            {allWords.map((w, i) => (
-              <WordItem key={`${w.word}-${w.translation}-${i}`} word={w.word} translation={w.translation} />
-            ))}
+            <WordList words={allWords} />
           </>
         )}
 
@@ -137,7 +141,7 @@ export function Collections() {
               >
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-col gap-1">
-                    <h3 className="text-base font-semibold leading-6">{col.title}</h3>
+                    <h3 className="text-base font-semibold leading-6 text-[var(--accent-11)]">{col.title}</h3>
                     {col.description && (
                       <p className="text-sm text-[var(--gray-11)]">{col.description}</p>
                     )}

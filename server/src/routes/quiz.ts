@@ -8,28 +8,32 @@ import {
   generateQuestionFromPool,
   recordInfiniteAnswer,
 } from '../services/quiz-service.js';
+import type { LanguagePair } from '../types/language.js';
 
 export default async function quizRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
 
-  app.post('/api/quiz/start', async (request) => {
+  app.post<{ Querystring: { lang?: string } }>('/api/quiz/start', async (request) => {
+    const lang = (request.query.lang ?? 'en-ru') as LanguagePair;
     const session = await createSession(request.user.id);
-    const question = await generateQuestion();
+    const question = await generateQuestion([], lang);
 
     return { sessionId: session.id, question };
   });
 
   app.post<{
     Body: { sessionId: number; meaningId: number; selectedMeaningId: number | null; answerTimeMs: number };
+    Querystring: { lang?: string };
   }>('/api/quiz/answer', async (request) => {
     const { sessionId, meaningId, selectedMeaningId, answerTimeMs } = request.body;
+    const lang = (request.query.lang ?? 'en-ru') as LanguagePair;
 
     const result = await recordAnswer(sessionId, meaningId, selectedMeaningId, answerTimeMs);
 
     let nextQuestion = null;
     if (!result.isFinished) {
       const excludeIds = await getAnsweredMeaningIds(sessionId);
-      nextQuestion = await generateQuestion(excludeIds);
+      nextQuestion = await generateQuestion(excludeIds, lang);
     }
 
     return { ...result, nextQuestion };
@@ -43,13 +47,15 @@ export default async function quizRoutes(app: FastifyInstance) {
 
   // ─── Infinite Quiz ──────────────────────────────────────────────────────
 
-  app.get<{ Querystring: { exclude?: string } }>('/api/quiz/next', async (request) => {
+  app.get<{ Querystring: { exclude?: string; lang?: string; collectionId?: string } }>('/api/quiz/next', async (request) => {
     const excludeStr = request.query.exclude ?? '';
     const excludeIds = excludeStr
       ? excludeStr.split(',').map(Number).filter((n) => !Number.isNaN(n))
       : [];
+    const lang = (request.query.lang ?? 'en-ru') as LanguagePair;
+    const collectionId = request.query.collectionId ? Number(request.query.collectionId) : undefined;
 
-    const question = await generateQuestionFromPool(request.user.id, excludeIds);
+    const question = await generateQuestionFromPool(request.user.id, excludeIds, lang, collectionId);
     return { question };
   });
 

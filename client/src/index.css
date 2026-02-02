@@ -164,6 +164,95 @@ h1, h2, h3, h4, h5, h6 {
   animation: fade-in 0.2s ease-out both;
 }
 
+/* --- Streak glow: upward cone spread --- */
+.streak-glow {
+  position: absolute;
+  left: 15%;
+  right: 15%;
+  top: 0;
+  height: 200%;
+  transform-origin: center top;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 80% 120% at 50% 0%,
+    rgba(251, 146, 60, 0.2) 0%,
+    rgba(249, 115, 22, 0.08) 40%,
+    transparent 100%
+  );
+  filter: blur(8px);
+  animation: streak-glow-pulse 3.7s ease-in-out infinite;
+}
+
+@keyframes streak-glow-pulse {
+  0%, 100% { opacity: 0.7; transform: scaleY(1); }
+  30%      { opacity: 1; transform: scaleY(1.1); }
+  70%      { opacity: 0.6; transform: scaleY(0.95); }
+}
+
+.streak-particle {
+  position: absolute;
+  bottom: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgb(251, 146, 60);
+  opacity: 0;
+  filter: blur(0.5px);
+  animation: particle-rise 2s ease-out infinite, particle-wave 2s ease-in-out infinite;
+}
+
+.streak-particles-burst {
+  opacity: 1;
+  transition: opacity 0.15s ease-out;
+}
+
+.streak-particles-burst.streak-particles-fading {
+  opacity: 0;
+  transition: opacity 0.8s ease-out;
+}
+
+@keyframes particle-rise {
+  0% {
+    opacity: 0;
+    translate: 0 4px;
+    scale: 1;
+  }
+  10% {
+    opacity: 0.7;
+  }
+  60% {
+    opacity: 0.4;
+    filter: blur(1px);
+  }
+  100% {
+    opacity: 0;
+    translate: 0 -32px;
+    scale: 0.2;
+    filter: blur(2px);
+  }
+}
+
+@keyframes particle-wave {
+  0%   { transform: translateX(0); }
+  25%  { transform: translateX(5px); }
+  50%  { transform: translateX(0); }
+  75%  { transform: translateX(-5px); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes streak-bump {
+  0% {
+    transform: translateX(-50%) scale(1);
+  }
+  40% {
+    transform: translateX(-50%) scale(1.12, 0.9);
+  }
+  100% {
+    transform: translateX(-50%) scale(1);
+  }
+}
+
 @keyframes xp-float {
   0% {
     opacity: 0;
@@ -192,9 +281,18 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .duel-lava-wrap {
-  filter: url(#duel-goo) blur(14px);
+  filter: blur(14px);
+  -webkit-filter: blur(14px);
   opacity: 0.7;
 }
+
+.duel-lava-goo {
+  position: absolute;
+  inset: 0;
+  filter: url(#duel-goo);
+  -webkit-filter: url(#duel-goo);
+}
+
 
 .duel-blob {
   position: absolute;
@@ -207,7 +305,7 @@ h1, h2, h3, h4, h5, h6 {
   height: 100%;
   left: -5%;
   top: -10%;
-  background: #ff4500;
+  background: radial-gradient(circle at 40% 40%, #ffb347, #ff4500 60%, #b81c00);
   animation: duel-b1 6s ease-in-out infinite;
 }
 
@@ -216,7 +314,7 @@ h1, h2, h3, h4, h5, h6 {
   height: 80%;
   right: 0%;
   top: 0%;
-  background: #ff6a00;
+  background: radial-gradient(circle at 50% 35%, #ffd480, #ff6a00 55%, #c43e00);
   animation: duel-b2 7s ease-in-out infinite;
 }
 
@@ -225,7 +323,7 @@ h1, h2, h3, h4, h5, h6 {
   height: 70%;
   left: 35%;
   bottom: -20%;
-  background: #e63946;
+  background: radial-gradient(circle at 45% 45%, #ff8a80, #e63946 60%, #8b0000);
   animation: duel-b3 5s ease-in-out infinite;
 }
 
@@ -234,31 +332,44 @@ h1, h2, h3, h4, h5, h6 {
   height: 60%;
   right: 20%;
   top: -30%;
-  background: #ff8c00;
+  background: radial-gradient(circle at 55% 40%, #ffe0a0, #ff8c00 50%, #a35200);
   animation: duel-b4 8s ease-in-out infinite;
 }
 
 @keyframes duel-b1 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(15%, 10%) scale(1.1); }
-  66% { transform: translate(-5%, -8%) scale(0.95); }
+  0%   { transform: translate(0, 0) scale(1); }
+  15%  { transform: translate(12%, 6%) scale(1.08); }
+  35%  { transform: translate(-4%, 14%) scale(1.15); }
+  55%  { transform: translate(8%, -6%) scale(1.02); }
+  75%  { transform: translate(-8%, 8%) scale(1.12); }
+  100% { transform: translate(0, 0) scale(1); }
 }
 
 @keyframes duel-b2 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(-12%, 8%) scale(0.9); }
-  66% { transform: translate(8%, -12%) scale(1.05); }
+  0%   { transform: translate(0, 0) scale(1.05); }
+  20%  { transform: translate(-10%, 12%) scale(1.12); }
+  40%  { transform: translate(6%, -4%) scale(1); }
+  60%  { transform: translate(-6%, -10%) scale(1.1); }
+  80%  { transform: translate(10%, 6%) scale(1.02); }
+  100% { transform: translate(0, 0) scale(1.05); }
 }
 
 @keyframes duel-b3 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(-10%, -15%) scale(1.15); }
+  0%   { transform: translate(0, 0) scale(1.1); }
+  18%  { transform: translate(10%, -8%) scale(1); }
+  38%  { transform: translate(-12%, 6%) scale(1.18); }
+  58%  { transform: translate(4%, 12%) scale(1.05); }
+  78%  { transform: translate(-6%, -4%) scale(1.12); }
+  100% { transform: translate(0, 0) scale(1.1); }
 }
 
 @keyframes duel-b4 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  40% { transform: translate(10%, 20%) scale(1.1); }
-  70% { transform: translate(-8%, 5%) scale(0.9); }
+  0%   { transform: translate(0, 0) scale(1.08); }
+  22%  { transform: translate(8%, 14%) scale(1.15); }
+  44%  { transform: translate(-10%, -6%) scale(1); }
+  66%  { transform: translate(12%, -10%) scale(1.1); }
+  88%  { transform: translate(-4%, 8%) scale(1.05); }
+  100% { transform: translate(0, 0) scale(1.08); }
 }
 
 .duel-glow-border {

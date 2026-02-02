@@ -4,12 +4,14 @@ import { useUserStore } from '@/stores/user-store';
 import { useHomeStore } from '@/stores/home-store';
 import { useTelegram } from '@/hooks/use-telegram';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Sword01Icon, Fire02Icon } from '@hugeicons/core-free-icons';
+import { Sword01Icon } from '@hugeicons/core-free-icons';
 import { cn } from '@/lib/utils';
+import { motion, AnimatePresence } from 'framer-motion';
+import Lottie from 'lottie-react';
+import fireStreakData from '@/assets/fire-streak.json';
 
 function xpForLevel(level: number) {
   return (level - 1) * (level - 1) * 100;
@@ -26,6 +28,7 @@ export function Home() {
     feedback,
     isLoading,
     error,
+    streak,
     fetchNext,
     submitAnswer,
     skip,
@@ -34,6 +37,10 @@ export function Home() {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [xpDisplay, setXpDisplay] = useState<{ xp: number; levelUp?: number; key: number } | null>(null);
   const xpKeyRef = useRef(0);
+  const [streakBounceKey, setStreakBounceKey] = useState(0);
+  const initialStreakRef = useRef(streak);
+  const prevStreakRef = useRef(streak);
+  const hasMountedRef = useRef(false);
 
   useEffect(() => {
     if (!currentQuestion && !feedback) {
@@ -62,6 +69,29 @@ export function Home() {
       }
     }
   }, [feedback, hapticNotification, refreshProfile]);
+
+  // Streak bounce + flare trigger with gradual cooldown
+  const [particleBurst, setParticleBurst] = useState(false);
+  const [particleFading, setParticleFading] = useState(false);
+
+  useEffect(() => {
+    hasMountedRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (streak === prevStreakRef.current) return;
+    prevStreakRef.current = streak;
+    if (streak >= 3) {
+      setStreakBounceKey((k) => k + 1);
+      setParticleBurst(true);
+      setParticleFading(false);
+
+      const t1 = setTimeout(() => setParticleFading(true), 400);
+      const t2 = setTimeout(() => { setParticleBurst(false); setParticleFading(false); }, 1200);
+
+      return () => { clearTimeout(t1); clearTimeout(t2); };
+    }
+  }, [streak]);
 
   // XP display с автоочисткой после анимации
   useEffect(() => {
@@ -100,27 +130,26 @@ export function Home() {
 
   return (
     <div className="flex min-h-full flex-col px-4 pt-4 pb-4">
-      {/* Header — compact stats */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Badge>Ур. {user.level}</Badge>
-          {user.streakDays > 0 && (
-            <Badge>
-              <HugeiconsIcon strokeWidth={2} icon={Fire02Icon} size={14} />
-              {user.streakDays} дн.
-            </Badge>
-          )}
+      {/* Header — level & XP */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-baseline justify-between">
+          <div className="flex items-baseline gap-0.5">
+            <span className="text-2xl font-bold leading-none text-[var(--accent-11)]">{user.level}</span>
+            <span className="text-sm text-[var(--gray-11)]">ур.</span>
+          </div>
+          <div className="flex items-center gap-3 text-[14px] text-[var(--gray-11)]">
+            <span>
+              {user.xp - currentLevelXp} / {nextLevelXp - currentLevelXp} XP
+            </span>
+            {user.streakDays > 0 && (
+              <div className="flex items-center gap-1">
+                <Lottie animationData={fireStreakData} loop autoplay className="relative -top-[3px] -mr-1 h-5 w-5 shrink-0" />
+                {user.streakDays} дн.
+              </div>
+            )}
+          </div>
         </div>
-        <span className="text-sm font-medium text-[var(--gray-11)]">{user.xp} XP</span>
-      </div>
-
-      {/* XP Progress */}
-      <div className="mt-2">
         <Progress value={progressPercent} />
-        <div className="mt-0.5 flex justify-between text-[10px] text-[var(--gray-11)]">
-          <span>Ур. {user.level}</span>
-          <span>Ур. {user.level + 1}</span>
-        </div>
       </div>
 
       {/* Duel card + ambient light spill */}
@@ -146,16 +175,18 @@ export function Home() {
         </svg>
         {/* Animated lava blobs */}
         <div className="pointer-events-none absolute inset-[-10px] overflow-hidden duel-lava-wrap">
-          <div className="duel-blob duel-blob--1" />
-          <div className="duel-blob duel-blob--2" />
-          <div className="duel-blob duel-blob--3" />
-          <div className="duel-blob duel-blob--4" />
+          <div className="duel-lava-goo">
+            <div className="duel-blob duel-blob--1" />
+            <div className="duel-blob duel-blob--2" />
+            <div className="duel-blob duel-blob--3" />
+            <div className="duel-blob duel-blob--4" />
+          </div>
         </div>
         {/* Pulsing glow border */}
         <div className="pointer-events-none absolute inset-0 rounded-2xl duel-glow-border" />
         <HugeiconsIcon strokeWidth={2} icon={Sword01Icon} size={20} className="relative z-10" />
         <div className="relative z-10 flex flex-1 flex-col">
-          <span className="text-sm font-semibold">Дуэль</span>
+          <h3 className="text-sm font-semibold">Дуэль</h3>
           <span className="text-xs opacity-80">Сразись с другом</span>
         </div>
         <Button variant="secondary" size="compact" className="relative z-10 shrink-0 bg-white/20 text-white hover:bg-white/30" tabIndex={-1}>
@@ -202,7 +233,67 @@ export function Home() {
           <>
             {/* Word */}
             <div className="relative flex flex-1 flex-col items-center justify-center">
-              <h2 className="text-4xl font-bold">{currentQuestion.word}</h2>
+              <div className="relative">
+                {/* Streak bar — 16px gap above the word */}
+                <AnimatePresence>
+                  {streak >= 3 && (
+                    <motion.div
+                      key="streak"
+                      className="absolute left-1/2"
+                      style={{ bottom: 'calc(100% + 32px)' }}
+                      initial={initialStreakRef.current >= 3 ? false : { opacity: 0, scaleX: 0, x: '-50%' }}
+                      animate={{ opacity: 1, scaleX: 1, x: '-50%' }}
+                      exit={{ opacity: 0, scale: 0.8, x: '-50%' }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+                    >
+                      {/* Particles */}
+                      <div className={cn(
+                        'pointer-events-none absolute inset-x-0 -top-2 z-0 overflow-visible',
+                        particleBurst && 'streak-particles-burst',
+                        particleBurst && particleFading && 'streak-particles-fading',
+                      )}>
+                        <span className="streak-particle" style={{ left: '20%', animationDelay: '0s' }} />
+                        <span className="streak-particle" style={{ left: '40%', animationDelay: '0.5s' }} />
+                        <span className="streak-particle" style={{ left: '60%', animationDelay: '1.0s' }} />
+                        <span className="streak-particle" style={{ left: '80%', animationDelay: '0.3s' }} />
+                        <span className="streak-particle" style={{ left: '50%', animationDelay: '0.7s' }} />
+                        <span className="streak-particle" style={{ left: '30%', animationDelay: '1.3s' }} />
+                        <span className="streak-particle" style={{ left: '70%', animationDelay: '1.6s' }} />
+                      </div>
+                      {/* Glow layers — 3 overlapping with different periods for organic flicker */}
+                      <div className="streak-glow" />
+                      <motion.div
+                        key={streakBounceKey}
+                        className="relative z-10 flex h-8 items-center justify-center gap-0.5 rounded-full border border-orange-500/20 bg-orange-950/80 pl-2.5 pr-3.5 shadow-[inset_0_0_10px_rgba(251,146,60,0.15),inset_0_1px_0_rgba(255,255,255,0.06)]"
+                        initial={false}
+                        animate={streakBounceKey === 0 ? {} : {
+                          scaleX: [1, 1.15, 0.95, 1],
+                          scaleY: [1, 0.92, 1.04, 1],
+                          filter: ['brightness(1)', 'brightness(1.8)', 'brightness(1.15)', 'brightness(1)'],
+                        }}
+                        transition={{ duration: 0.35, ease: 'easeOut' }}
+                      >
+                        <Lottie animationData={fireStreakData} loop autoplay className="relative -top-0.5 h-5 w-5 shrink-0" />
+                        <span className="whitespace-nowrap text-xs font-medium tracking-wide text-[var(--red-11)]">
+                          {streak} подряд!
+                        </span>
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                <AnimatePresence mode="wait">
+                  <motion.h2
+                    key={currentQuestion.meaningId}
+                    className="text-4xl font-bold"
+                    initial={!hasMountedRef.current ? false : { opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    {currentQuestion.word}
+                  </motion.h2>
+                </AnimatePresence>
+              </div>
 
               {/* XP feedback — absolute so it doesn't shift the word */}
               {xpDisplay && (
@@ -230,15 +321,18 @@ export function Home() {
                 return (
                   <Button
                     key={`${currentQuestion.meaningId}-${option}`}
-                    variant="secondary"
+                    variant={
+                      !showResult ? 'secondary' :
+                      isCorrectOption ? 'success' :
+                      isWrongSelected ? 'destructive' :
+                      'secondary'
+                    }
                     disabled={showResult && !isSelected && !isCorrectOption}
                     onClick={() => handleAnswer(option)}
                     className={cn(
                       'h-14 px-4 text-center text-sm',
                       showResult && 'pointer-events-none',
-                      showResult && isCorrectOption && feedback?.isCorrect && 'bg-[var(--green-9)] text-white',
                       showResult && isCorrectOption && !feedback?.isCorrect && 'bg-[var(--green-3)] text-[var(--green-12)]',
-                      showResult && isWrongSelected && 'bg-[var(--red-9)] text-white',
                     )}
                   >
                     {option}

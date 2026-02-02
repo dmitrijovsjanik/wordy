@@ -50,7 +50,7 @@ export function BottomTabs() {
               key={tab.path}
               onClick={() => navigate(tab.path)}
               className={cn(
-                'flex flex-col items-center gap-0.5 px-4 py-1',
+                'flex flex-1 flex-col items-center gap-0.5 py-1',
                 isActive ? 'text-[var(--accent-9)]' : 'text-[var(--gray-11)]',
               )}
             >

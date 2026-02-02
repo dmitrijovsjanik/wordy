@@ -3,6 +3,16 @@ import type { QuizQuestion, InfiniteAnswerResponse } from '@/types/api';
 import { quizNext, quizAnswerInfinite } from '@/lib/api';
 
 const MAX_RECENT = 20;
+const STREAK_KEY = 'wordy:streak';
+
+function loadStreak(): number {
+  const raw = localStorage.getItem(STREAK_KEY);
+  return raw ? Number(raw) || 0 : 0;
+}
+
+function saveStreak(value: number) {
+  localStorage.setItem(STREAK_KEY, String(value));
+}
 
 type HomeState = {
   currentQuestion: QuizQuestion | null;
@@ -10,7 +20,10 @@ type HomeState = {
   feedback: (InfiniteAnswerResponse & { meaningId: number }) | null;
   isLoading: boolean;
   error: string | null;
+  streak: number;
+  collectionId: number | undefined;
 
+  setCollectionId: (id: number | undefined) => void;
   fetchNext: () => Promise<void>;
   submitAnswer: (selectedMeaningId: number | null) => Promise<void>;
   skip: () => Promise<void>;
@@ -23,12 +36,16 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
   feedback: null,
   isLoading: false,
   error: null,
+  streak: loadStreak(),
+  collectionId: undefined,
+
+  setCollectionId: (id) => set({ collectionId: id, recentMeaningIds: [], currentQuestion: null, feedback: null }),
 
   fetchNext: async () => {
     set({ isLoading: true, error: null });
     try {
-      const { recentMeaningIds } = get();
-      const res = await quizNext(recentMeaningIds);
+      const { recentMeaningIds, collectionId } = get();
+      const res = await quizNext(recentMeaningIds, collectionId);
       set({ currentQuestion: res.question, isLoading: false });
     } catch {
       set({ isLoading: false, error: 'Не удалось загрузить вопрос' });
@@ -44,11 +61,14 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
       const res = await quizAnswerInfinite(currentQuestion.meaningId, selectedMeaningId);
 
       const updatedRecent = [...recentMeaningIds, currentQuestion.meaningId].slice(-MAX_RECENT);
+      const newStreak = res.isCorrect ? get().streak + 1 : 0;
+      saveStreak(newStreak);
 
       set({
-        feedback: { ...res, meaningId: currentQuestion.meaningId },
+        feedback: { ...res, correctTranslation: currentQuestion.correctTranslation, meaningId: currentQuestion.meaningId },
         recentMeaningIds: updatedRecent,
         isLoading: false,
+        streak: newStreak,
       });
 
       // Автопереход к следующему вопросу
@@ -75,6 +95,7 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
       feedback: null,
       isLoading: false,
       error: null,
+      collectionId: undefined,
     });
   },
 }));

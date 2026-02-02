@@ -6,6 +6,8 @@ export type User = {
   xp: number;
   level: number;
   streakDays: number;
+  nativeLanguage: string;
+  learningLanguage: string;
   lastActivityAt: string | null;
 };
 
@@ -25,6 +27,7 @@ export type QuizQuestion = {
   word: string;
   correctTranslation: string;
   options: string[];
+  direction: string;
 };
 
 export type QuizStartResponse = {
@@ -160,6 +163,24 @@ export type DifficultWordsResponse = {
 
 export type AllWordsResponse = {
   words: { word: string; translation: string }[];
+};
+
+// ─── Dictionary ─────────────────────────────────────────────────────────────
+
+export type DictionaryMeaning = {
+  id: number | null;
+  translation: string;
+  partOfSpeech: string;
+  examples: { text: string; translation: string }[];
+  synonyms: string[];
+};
+
+export type DictionaryLookupResult = {
+  word: string;
+  transcription: string | null;
+  lang: string;
+  meanings: DictionaryMeaning[];
+  savedToDb: boolean;
 };
 
 // ─── Infinite Quiz ──────────────────────────────────────────────────────────

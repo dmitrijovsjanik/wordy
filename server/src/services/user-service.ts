@@ -13,6 +13,8 @@ export async function getProfile(userId: number) {
       xp: true,
       level: true,
       streakDays: true,
+      nativeLanguage: true,
+      learningLanguage: true,
       lastActivityAt: true,
     },
   });
@@ -47,4 +49,13 @@ export async function getStats(userId: number) {
     correctPercent,
     bestStreak: user?.streakDays ?? 0,
   };
+}
+
+export async function updateLanguages(userId: number, nativeLanguage: string, learningLanguage: string) {
+  await db
+    .update(users)
+    .set({ nativeLanguage, learningLanguage, updatedAt: new Date() })
+    .where(eq(users.id, userId));
+
+  return { nativeLanguage, learningLanguage };
 }
