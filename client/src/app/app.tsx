@@ -8,7 +8,6 @@ const Home = lazy(() => import('@/components/home').then((m) => ({ default: m.Ho
 const Collections = lazy(() => import('@/components/collections').then((m) => ({ default: m.Collections })));
 const CollectionDetail = lazy(() => import('@/components/collection-detail').then((m) => ({ default: m.CollectionDetail })));
 const CollectionCreate = lazy(() => import('@/components/collection-create').then((m) => ({ default: m.CollectionCreate })));
-const CollectionEdit = lazy(() => import('@/components/collection-edit').then((m) => ({ default: m.CollectionEdit })));
 const Profile = lazy(() => import('@/components/profile').then((m) => ({ default: m.Profile })));
 const DuelCreate = lazy(() => import('@/components/duel-create').then((m) => ({ default: m.DuelCreate })));
 const DuelGame = lazy(() => import('@/components/duel-game').then((m) => ({ default: m.DuelGame })));
@@ -28,7 +27,7 @@ export function App() {
   return (
     <BrowserRouter>
       <TelegramProvider>
-        <div className="flex h-dvh flex-col">
+        <div className="mx-auto flex h-dvh max-w-md flex-col">
           <main className="flex-1 overflow-y-auto">
             <Suspense fallback={<PageSkeleton />}>
               <Routes>
@@ -36,7 +35,6 @@ export function App() {
                 <Route path="/collections" element={<Collections />} />
                 <Route path="/collections/create" element={<CollectionCreate />} />
                 <Route path="/collections/:id" element={<CollectionDetail />} />
-                <Route path="/collections/:id/edit" element={<CollectionEdit />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/duel/create" element={<DuelCreate />} />
                 <Route path="/duel/:id" element={<DuelGame />} />

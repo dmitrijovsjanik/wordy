@@ -10,6 +10,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { BackButton } from '@/components/ui/back-button';
 import { DictionaryPreview } from '@/components/ui/dictionary-preview';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
@@ -26,15 +33,20 @@ import {
   Search01Icon,
   Cancel01Icon,
 } from '@hugeicons/core-free-icons';
-import { dictionaryLookup, addCollectionWords } from '@/lib/api';
+import { dictionaryLookup, addCollectionWords, removeCollectionWord } from '@/lib/api';
 import { useHomeStore } from '@/stores/home-store';
 import type { DictionaryLookupResult } from '@/types/api';
 
 export function CollectionDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { currentDetail, isLoading, fetchDetail, subscribe, unsubscribe, remove } =
-    useCollectionStore();
+  const currentDetail = useCollectionStore((s) => s.currentDetail);
+  const isLoadingDetail = useCollectionStore((s) => s.isLoadingDetail);
+  const fetchDetail = useCollectionStore((s) => s.fetchDetail);
+  const subscribe = useCollectionStore((s) => s.subscribe);
+  const unsubscribe = useCollectionStore((s) => s.unsubscribe);
+  const update = useCollectionStore((s) => s.update);
+  const remove = useCollectionStore((s) => s.remove);
   const setCollectionId = useHomeStore((s) => s.setCollectionId);
 
   useBackButton(() => navigate('/collections'));
@@ -45,8 +57,14 @@ export function CollectionDetail() {
   const [lookupResult, setLookupResult] = useState<DictionaryLookupResult | null>(null);
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Модалка редактирования
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   useEffect(() => {
     if (id) fetchDetail(Number(id));
@@ -92,11 +110,9 @@ export function CollectionDetail() {
           meaningIds: meaningIds.length > 0 ? meaningIds : undefined,
           custom: custom ? [custom] : undefined,
         });
-        // Очистить инпут и обновить деталь
         setQuery('');
         setLookupResult(null);
         fetchDetail(Number(id));
-        // Фокус обратно на инпут
         inputRef.current?.focus();
       } catch {
         // ошибка
@@ -123,12 +139,46 @@ export function CollectionDetail() {
     }
   };
 
+  const removeWordsLocally = useCollectionStore((s) => s.removeWordsLocally);
+
+  const handleDeleteWords = useCallback(
+    async (wordIds: number[]) => {
+      if (!id) return;
+      removeWordsLocally(wordIds);
+      await Promise.all(wordIds.map((wId) => removeCollectionWord(Number(id), wId)));
+    },
+    [id, removeWordsLocally],
+  );
+
+  const handleOpenEdit = () => {
+    if (!currentDetail) return;
+    setEditTitle(currentDetail.collection.title);
+    setEditDescription(currentDetail.collection.description ?? '');
+    setIsEditOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!id || !editTitle.trim()) return;
+    setIsSavingEdit(true);
+    try {
+      await update(Number(id), {
+        title: editTitle.trim(),
+        description: editDescription.trim() || undefined,
+      });
+      setIsEditOpen(false);
+    } catch {
+      // ошибка
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
   const existingMeaningIds = useMemo(
     () => new Set(currentDetail?.words.map((w) => w.id) ?? []),
     [currentDetail?.words],
   );
 
-  if (isLoading || !currentDetail) {
+  if (isLoadingDetail || !currentDetail) {
     return (
       <div className="flex flex-col px-4 pt-4 pb-4">
         <BackButton onClick={() => navigate('/collections')} />
@@ -155,12 +205,12 @@ export function CollectionDetail() {
         {isOwner && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex h-10 w-10 items-center justify-center rounded-full transition-colors active:bg-[var(--gray-3)]">
+              <Button variant="ghost" size="icon">
                 <HugeiconsIcon icon={MoreVerticalIcon} size={20} />
-              </button>
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => navigate(`/collections/${collection.id}/edit`)}>
+              <DropdownMenuItem onClick={handleOpenEdit}>
                 <HugeiconsIcon icon={Edit02Icon} size={16} />
                 Редактировать
               </DropdownMenuItem>
@@ -198,7 +248,10 @@ export function CollectionDetail() {
             Нет слов. Добавьте первое!
           </p>
         )}
-        <WordList words={words} />
+        <WordList
+          words={words}
+          onDeleteWords={isOwner ? handleDeleteWords : undefined}
+        />
       </div>
 
       {/* Нижняя панель */}
@@ -298,7 +351,10 @@ export function CollectionDetail() {
               )}
               <Button
                 variant="secondary"
-                onClick={() => unsubscribe(collection.id)}
+                onClick={async () => {
+                  await unsubscribe(collection.id);
+                  navigate('/collections');
+                }}
                 className="w-full"
               >
                 Удалить из библиотеки
@@ -314,6 +370,36 @@ export function CollectionDetail() {
           )}
         </div>
       </div>
+
+      {/* Модалка редактирования */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Редактировать коллекцию</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <Input
+              placeholder="Название"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+            />
+            <Input
+              placeholder="Описание (необязательно)"
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={handleSaveEdit}
+              disabled={!editTitle.trim() || isSavingEdit}
+              className="w-full"
+            >
+              Сохранить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

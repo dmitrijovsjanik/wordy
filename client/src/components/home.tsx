@@ -40,10 +40,11 @@ export function Home() {
   const [streakBounceKey, setStreakBounceKey] = useState(0);
   const initialStreakRef = useRef(streak);
   const prevStreakRef = useRef(streak);
-  const hasMountedRef = useRef(false);
+  // Храним ID первого вопроса, чтобы не анимировать его появление
+  const firstMeaningIdRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!currentQuestion && !feedback) {
+    if (!currentQuestion && !feedback && !isLoading) {
       fetchNext();
     }
   }, []);
@@ -74,9 +75,10 @@ export function Home() {
   const [particleBurst, setParticleBurst] = useState(false);
   const [particleFading, setParticleFading] = useState(false);
 
-  useEffect(() => {
-    hasMountedRef.current = true;
-  }, []);
+  // Запоминаем ID первого вопроса при его появлении
+  if (currentQuestion && firstMeaningIdRef.current === null) {
+    firstMeaningIdRef.current = currentQuestion.meaningId;
+  }
 
   useEffect(() => {
     if (streak === prevStreakRef.current) return;
@@ -189,9 +191,9 @@ export function Home() {
           <h3 className="text-sm font-semibold">Дуэль</h3>
           <span className="text-xs opacity-80">Сразись с другом</span>
         </div>
-        <Button variant="secondary" size="compact" className="relative z-10 shrink-0 bg-white/20 text-white hover:bg-white/30" tabIndex={-1}>
+        <span className="relative z-10 inline-flex shrink-0 items-center justify-center rounded-xl bg-white/20 px-3 py-1.5 text-xs font-medium text-white">
           Бросить вызов
-        </Button>
+        </span>
       </button>
       </div>
 
@@ -284,8 +286,17 @@ export function Home() {
                 <AnimatePresence mode="wait">
                   <motion.h2
                     key={currentQuestion.meaningId}
-                    className="text-4xl font-bold"
-                    initial={!hasMountedRef.current ? false : { opacity: 0, y: 8 }}
+                    className="text-4xl font-bold text-center"
+                    style={{
+                      // Уменьшаем шрифт для длинных слов (больше 10 символов)
+                      fontSize: currentQuestion.word.length > 14
+                        ? `${Math.max(1.5, 2.25 - (currentQuestion.word.length - 14) * 0.08)}rem`
+                        : currentQuestion.word.length > 10
+                          ? `${2.25 - (currentQuestion.word.length - 10) * 0.05}rem`
+                          : undefined,
+                    }}
+                    // Не анимируем первый вопрос
+                    initial={currentQuestion.meaningId === firstMeaningIdRef.current ? false : { opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
                     transition={{ duration: 0.2 }}
@@ -312,7 +323,7 @@ export function Home() {
 
             {/* Options 2x2 */}
             <div className="grid w-full grid-cols-2 gap-3">
-              {currentQuestion.options.map((option) => {
+              {currentQuestion.options.map((option, idx) => {
                 const isSelected = selectedOption === option;
                 const showResult = feedback !== null;
                 const isCorrectOption = option === feedback?.correctTranslation;
@@ -320,7 +331,7 @@ export function Home() {
 
                 return (
                   <Button
-                    key={`${currentQuestion.meaningId}-${option}`}
+                    key={`${currentQuestion.meaningId}-${idx}`}
                     variant={
                       !showResult ? 'secondary' :
                       isCorrectOption ? 'success' :

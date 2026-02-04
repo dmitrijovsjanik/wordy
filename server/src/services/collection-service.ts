@@ -5,12 +5,20 @@ import {
   collectionWords,
   userCollections,
   userCustomWords,
+  userCustomWordProgress,
   userWordProgress,
   wordMeanings,
   words,
 } from '../db/schema.js';
 
 // ─── Marketplace ────────────────────────────────────────────────────────────
+
+const CATEGORY_ORDER = ['level', 'pos', 'topic'] as const;
+const CATEGORY_TITLES: Record<string, string> = {
+  level: 'По уровню',
+  pos: 'По частям речи',
+  topic: 'По темам',
+};
 
 export async function getMarketplace(userId: number) {
   const systemCollections = await db
@@ -21,6 +29,7 @@ export async function getMarketplace(userId: number) {
       iconName: collections.iconName,
       totalWords: collections.totalWords,
       price: collections.price,
+      category: collections.category,
     })
     .from(collections)
     .where(
@@ -31,7 +40,6 @@ export async function getMarketplace(userId: number) {
       ),
     );
 
-  // Проверяем какие уже в библиотеке
   const userSubs = await db
     .select({ collectionId: userCollections.collectionId })
     .from(userCollections)
@@ -39,10 +47,34 @@ export async function getMarketplace(userId: number) {
 
   const subscribedIds = new Set(userSubs.map((s) => s.collectionId));
 
-  return systemCollections.map((c) => ({
+  const withLibrary = systemCollections.map((c) => ({
     ...c,
     isInLibrary: subscribedIds.has(c.id),
   }));
+
+  // Group by category
+  const grouped = new Map<string, typeof withLibrary>();
+  for (const c of withLibrary) {
+    const key = c.category ?? 'other';
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push(c);
+  }
+
+  const groups: { key: string; title: string; collections: typeof withLibrary }[] = [];
+
+  for (const key of CATEGORY_ORDER) {
+    const items = grouped.get(key);
+    if (items) {
+      groups.push({ key, title: CATEGORY_TITLES[key] ?? key, collections: items });
+    }
+  }
+
+  const other = grouped.get('other');
+  if (other) {
+    groups.push({ key: 'other', title: 'Другое', collections: other });
+  }
+
+  return groups;
 }
 
 // ─── User Library ───────────────────────────────────────────────────────────
@@ -73,12 +105,49 @@ export async function getLibrary(userId: number) {
     .from(collections)
     .where(and(inArray(collections.id, collectionIds), isNull(collections.deletedAt)));
 
+  // SRS progress per collection: count mastered words
+  const progressRows = await db
+    .select({
+      collectionId: collectionWords.collectionId,
+      masteredCount: sql<number>`count(*) filter (where ${userWordProgress.srsStage} >= 6)`,
+    })
+    .from(collectionWords)
+    .innerJoin(
+      userWordProgress,
+      and(
+        eq(userWordProgress.meaningId, collectionWords.meaningId),
+        eq(userWordProgress.userId, userId),
+      ),
+    )
+    .where(inArray(collectionWords.collectionId, collectionIds))
+    .groupBy(collectionWords.collectionId);
+
+  // SRS progress for custom words per collection
+  const customProgressRows = await db
+    .select({
+      collectionId: userCustomWords.collectionId,
+      masteredCount: sql<number>`count(*) filter (where ${userCustomWordProgress.srsStage} >= 6)`,
+    })
+    .from(userCustomWords)
+    .innerJoin(
+      userCustomWordProgress,
+      and(
+        eq(userCustomWordProgress.customWordId, userCustomWords.id),
+        eq(userCustomWordProgress.userId, userId),
+      ),
+    )
+    .where(inArray(userCustomWords.collectionId, collectionIds))
+    .groupBy(userCustomWords.collectionId);
+
+  const progressMap = new Map(progressRows.map((r) => [r.collectionId, Number(r.masteredCount)]));
+  const customProgressMap = new Map(customProgressRows.map((r) => [r.collectionId, Number(r.masteredCount)]));
   const subsMap = new Map(subs.map((s) => [s.collectionId, s]));
 
   return cols.map((c) => ({
     ...c,
     isActive: subsMap.get(c.id)?.isActive ?? true,
     addedAt: subsMap.get(c.id)?.addedAt,
+    masteredWords: (progressMap.get(c.id) ?? 0) + (customProgressMap.get(c.id) ?? 0),
   }));
 }
 
@@ -91,29 +160,48 @@ export async function getCollectionDetail(collectionId: number, userId: number) 
 
   if (!col) return null;
 
-  // Системные слова
+  // Системные слова с SRS-прогрессом
   const systemWords = await db
     .select({
       id: wordMeanings.id,
       word: words.text,
       translation: wordMeanings.translation,
+      alternativeTranslations: wordMeanings.alternativeTranslations,
       partOfSpeech: wordMeanings.partOfSpeech,
+      contextExample: wordMeanings.contextExample,
+      srsStage: userWordProgress.srsStage,
     })
     .from(collectionWords)
     .innerJoin(wordMeanings, eq(collectionWords.meaningId, wordMeanings.id))
     .innerJoin(words, eq(wordMeanings.wordId, words.id))
+    .leftJoin(
+      userWordProgress,
+      and(
+        eq(userWordProgress.meaningId, wordMeanings.id),
+        eq(userWordProgress.userId, userId),
+      ),
+    )
     .where(eq(collectionWords.collectionId, collectionId))
     .orderBy(collectionWords.order);
 
-  // Кастомные слова
+  // Кастомные слова с SRS-прогрессом
   const customWords = await db
     .select({
       id: userCustomWords.id,
       word: userCustomWords.wordText,
       translation: userCustomWords.translation,
       partOfSpeech: userCustomWords.partOfSpeech,
+      contextExample: userCustomWords.contextExample,
+      srsStage: userCustomWordProgress.srsStage,
     })
     .from(userCustomWords)
+    .leftJoin(
+      userCustomWordProgress,
+      and(
+        eq(userCustomWordProgress.customWordId, userCustomWords.id),
+        eq(userCustomWordProgress.userId, userId),
+      ),
+    )
     .where(eq(userCustomWords.collectionId, collectionId));
 
   // Проверяем подписку
@@ -124,13 +212,18 @@ export async function getCollectionDetail(collectionId: number, userId: number) 
     ),
   });
 
+  const wordsWithProgress = [
+    ...systemWords.map((w) => ({ ...w, srsStage: w.srsStage ?? 0, alternativeTranslations: w.alternativeTranslations ?? undefined, contextExample: w.contextExample ?? undefined })),
+    ...customWords.map((w) => ({ ...w, srsStage: (w.srsStage ?? 0) as number, alternativeTranslations: undefined as string[] | undefined, contextExample: w.contextExample ?? undefined })),
+  ];
+
   return {
     collection: {
       ...col,
       isInLibrary: !!sub,
       isActive: sub?.isActive ?? false,
     },
-    words: [...systemWords, ...customWords],
+    words: wordsWithProgress,
   };
 }
 
@@ -305,9 +398,32 @@ export async function getDifficultWords(userId: number) {
     )
     .orderBy(sql`${userWordProgress.incorrectCount} DESC`);
 
+  // Сложные кастомные слова
+  const customProgress = await db
+    .select({
+      meaningId: sql<number>`-${userCustomWordProgress.customWordId}`,
+      correctCount: userCustomWordProgress.correctCount,
+      incorrectCount: userCustomWordProgress.incorrectCount,
+      word: userCustomWords.wordText,
+      translation: userCustomWords.translation,
+    })
+    .from(userCustomWordProgress)
+    .innerJoin(userCustomWords, eq(userCustomWordProgress.customWordId, userCustomWords.id))
+    .where(
+      and(
+        eq(userCustomWordProgress.userId, userId),
+        sql`${userCustomWordProgress.incorrectCount} > 0`,
+      ),
+    )
+    .orderBy(sql`${userCustomWordProgress.incorrectCount} DESC`);
+
+  const allDifficult = [...progress, ...customProgress].sort(
+    (a, b) => b.incorrectCount - a.incorrectCount,
+  );
+
   return {
-    totalWords: progress.length,
-    words: progress,
+    totalWords: allDifficult.length,
+    words: allDifficult,
   };
 }
 
@@ -328,6 +444,8 @@ export async function getAllWords(userId: number) {
     .select({
       word: words.text,
       translation: wordMeanings.translation,
+      alternativeTranslations: wordMeanings.alternativeTranslations,
+      partOfSpeech: wordMeanings.partOfSpeech,
     })
     .from(collectionWords)
     .innerJoin(wordMeanings, eq(collectionWords.meaningId, wordMeanings.id))
@@ -339,6 +457,7 @@ export async function getAllWords(userId: number) {
     .select({
       word: userCustomWords.wordText,
       translation: userCustomWords.translation,
+      partOfSpeech: userCustomWords.partOfSpeech,
     })
     .from(userCustomWords)
     .where(
@@ -350,13 +469,18 @@ export async function getAllWords(userId: number) {
 
   // Deduplicate by word+translation
   const seen = new Set<string>();
-  const result: { word: string; translation: string }[] = [];
+  const result: { word: string; translation: string; alternativeTranslations?: string[]; partOfSpeech?: string }[] = [];
 
   for (const w of [...systemWords, ...customWordRows]) {
     const key = `${w.word}::${w.translation}`;
     if (!seen.has(key)) {
       seen.add(key);
-      result.push(w);
+      result.push({
+        word: w.word,
+        translation: w.translation,
+        alternativeTranslations: 'alternativeTranslations' in w ? (w.alternativeTranslations as string[] | null) ?? undefined : undefined,
+        partOfSpeech: w.partOfSpeech ?? undefined,
+      });
     }
   }
 

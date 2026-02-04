@@ -153,7 +153,7 @@ export function Quiz() {
               disabled={showResult && !isSelected && !isCorrectOption}
               onClick={() => handleAnswer(option)}
               className={cn(
-                'px-4 text-center text-sm',
+                'whitespace-normal px-4 text-center text-sm leading-tight',
                 showResult && 'pointer-events-none',
                 showResult && isCorrectOption && !answerFeedback?.isCorrect && 'bg-[var(--green-3)] text-[var(--green-12)]',
               )}

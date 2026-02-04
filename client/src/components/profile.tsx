@@ -16,6 +16,7 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BackButton } from '@/components/ui/back-button';
+import { Switch } from '@/components/ui/switch';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Fire02Icon, Target02Icon, GameController01Icon, Award01Icon, Sun01Icon, Moon02Icon, ComputerIcon } from '@hugeicons/core-free-icons';
 import { useThemeStore } from '@/stores/theme-store';
@@ -82,6 +83,7 @@ function xpForLevel(level: number) {
 export function Profile() {
   const navigate = useNavigate();
   const user = useUserStore((s) => s.user);
+  const toggleRepeatMastered = useUserStore((s) => s.toggleRepeatMastered);
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
   const [stats, setStats] = useState<UserStats | null>(null);
@@ -165,6 +167,21 @@ export function Profile() {
             label="Изучаю"
             value={user.learningLanguage}
             excludeCode={user.nativeLanguage}
+          />
+        </div>
+      </Card>
+
+      {/* Quiz Settings */}
+      <Card className="mt-4">
+        <span className="text-sm text-[var(--gray-11)]">Квиз</span>
+        <div className="mt-3 flex items-center justify-between">
+          <div className="flex flex-col">
+            <span className="text-sm font-medium">Повторять выученные слова</span>
+            <span className="text-xs text-[var(--gray-11)]">Выученные слова будут возвращаться раз в 3 месяца</span>
+          </div>
+          <Switch
+            checked={user.repeatMastered}
+            onCheckedChange={() => toggleRepeatMastered()}
           />
         </div>
       </Card>

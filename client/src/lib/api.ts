@@ -9,7 +9,7 @@ import type {
   DuelFinishResponse,
   User,
   UserStats,
-  MarketplaceCollection,
+  CollectionGroup,
   LibraryCollection,
   CollectionDetail,
   DifficultWordsResponse,
@@ -129,9 +129,13 @@ export function updateLanguages(nativeLanguage: string, learningLanguage: string
   );
 }
 
+export function updateSettings(settings: { repeatMastered?: boolean }) {
+  return fetchApi<{ repeatMastered?: boolean }>('PATCH', '/api/users/me/settings', settings);
+}
+
 // Collections
 export function getMarketplace() {
-  return fetchApi<{ collections: MarketplaceCollection[] }>('GET', '/api/collections/marketplace');
+  return fetchApi<{ groups: CollectionGroup[] }>('GET', '/api/collections/marketplace');
 }
 
 export function getLibrary() {

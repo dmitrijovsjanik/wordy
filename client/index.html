@@ -7,7 +7,34 @@
     <title>client</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Preload critical font weights for faster loading -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@700&display=swap">
     <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+      /* Hide text until fonts are ready to prevent FOUT */
+      .fonts-loading h1, .fonts-loading h2, .fonts-loading h3,
+      .fonts-loading h4, .fonts-loading h5, .fonts-loading h6 {
+        opacity: 0;
+      }
+      .fonts-ready h1, .fonts-ready h2, .fonts-ready h3,
+      .fonts-ready h4, .fonts-ready h5, .fonts-ready h6 {
+        opacity: 1;
+        transition: opacity 0.1s ease-in;
+      }
+    </style>
+    <script>
+      document.documentElement.classList.add('fonts-loading');
+      if ('fonts' in document) {
+        document.fonts.ready.then(function() {
+          document.documentElement.classList.remove('fonts-loading');
+          document.documentElement.classList.add('fonts-ready');
+        });
+      } else {
+        // Fallback for browsers without document.fonts
+        document.documentElement.classList.remove('fonts-loading');
+        document.documentElement.classList.add('fonts-ready');
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -1,7 +1,7 @@
 import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { eq, and, sql, isNotNull } from 'drizzle-orm';
-import { collections, collectionWords, words, wordMeanings } from '../schema.js';
+import { collections, collectionWords, words, wordMeanings, topics, wordMeaningTopics } from '../schema.js';
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL ?? 'postgresql://localhost:5432/wordy',
@@ -73,6 +73,8 @@ async function createCollection(
   description: string,
   iconName: string,
   meaningIds: number[],
+  uniqueWordCount: number,
+  category?: string,
 ) {
   if (meaningIds.length === 0) return;
 
@@ -95,8 +97,9 @@ async function createCollection(
       title,
       description,
       iconName,
+      category,
       isPublished: true,
-      totalWords: meaningIds.length,
+      totalWords: uniqueWordCount,
     })
     .returning({ id: collections.id });
 
@@ -144,11 +147,11 @@ async function generateCollections() {
   // 1. Коллекции по уровням
   console.log('--- Level collections ---');
   for (const config of LEVEL_CONFIGS) {
-    const meaningIds = allMeanings
-      .filter((m) => m.cefr === config.cefr)
-      .map((m) => m.meaningId);
+    const filtered = allMeanings.filter((m) => m.cefr === config.cefr);
+    const meaningIds = filtered.map((m) => m.meaningId);
+    const uniqueWords = new Set(filtered.map((m) => m.wordId)).size;
 
-    await createCollection(config.title, config.description, config.iconName, meaningIds);
+    await createCollection(config.title, config.description, config.iconName, meaningIds, uniqueWords, 'level');
   }
 
   // 2. Коллекции по POS + уровню
@@ -157,21 +160,53 @@ async function generateCollections() {
     const levelMeanings = allMeanings.filter((m) => m.cefr === config.cefr);
 
     for (const [pos, posName] of Object.entries(POS_NAMES)) {
-      const meaningIds = levelMeanings
-        .filter((m) => m.partOfSpeech === pos)
-        .map((m) => m.meaningId);
+      const filtered = levelMeanings.filter((m) => m.partOfSpeech === pos);
+      const meaningIds = filtered.map((m) => m.meaningId);
 
       if (meaningIds.length < MIN_WORDS_FOR_POS_COLLECTION) {
         console.log(`  "${posName} ${CEFR_LABELS[config.cefr]}" — only ${meaningIds.length} words, skipping`);
         continue;
       }
 
+      const uniqueWords = new Set(filtered.map((m) => m.wordId)).size;
       const title = `${posName} ${CEFR_LABELS[config.cefr]}`;
       const description = `${posName} уровня ${CEFR_LABELS[config.cefr]} из списка NGSL`;
       const iconName = POS_ICONS[pos] ?? 'BookOpen02Icon';
 
-      await createCollection(title, description, iconName, meaningIds);
+      await createCollection(title, description, iconName, meaningIds, uniqueWords, 'pos');
     }
+  }
+
+  // 3. Коллекции по темам
+  console.log('\n--- Topic collections ---');
+  const allTopics = await db.select().from(topics).orderBy(topics.sortOrder);
+
+  for (const topic of allTopics) {
+    const topicMeanings = await db
+      .select({
+        meaningId: wordMeaningTopics.meaningId,
+        wordId: wordMeanings.wordId,
+      })
+      .from(wordMeaningTopics)
+      .innerJoin(wordMeanings, eq(wordMeaningTopics.meaningId, wordMeanings.id))
+      .where(eq(wordMeaningTopics.topicId, topic.id));
+
+    if (topicMeanings.length < 10) {
+      console.log(`  "${topic.title}" — only ${topicMeanings.length} meanings, skipping`);
+      continue;
+    }
+
+    const meaningIds = topicMeanings.map((m) => m.meaningId);
+    const uniqueWords = new Set(topicMeanings.map((m) => m.wordId)).size;
+
+    await createCollection(
+      topic.title,
+      topic.description ?? `Слова по теме «${topic.title}»`,
+      topic.iconName ?? 'BookOpen02Icon',
+      meaningIds,
+      uniqueWords,
+      'topic',
+    );
   }
 
   console.log('\nCollection generation complete!');

@@ -8,6 +8,7 @@ export type User = {
   streakDays: number;
   nativeLanguage: string;
   learningLanguage: string;
+  repeatMastered: boolean;
   lastActivityAt: string | null;
 };
 
@@ -133,16 +134,26 @@ export type MarketplaceCollection = Collection & {
   isInLibrary: boolean;
 };
 
+export type CollectionGroup = {
+  key: string;
+  title: string;
+  collections: MarketplaceCollection[];
+};
+
 export type LibraryCollection = Collection & {
   isActive: boolean;
   addedAt: string | null;
+  masteredWords: number;
 };
 
 export type CollectionWord = {
   id: number;
   word: string;
   translation: string;
+  alternativeTranslations?: string[];
   partOfSpeech: string;
+  contextExample?: string;
+  srsStage: number;
 };
 
 export type CollectionDetail = {
@@ -162,7 +173,7 @@ export type DifficultWordsResponse = {
 };
 
 export type AllWordsResponse = {
-  words: { word: string; translation: string }[];
+  words: { word: string; translation: string; alternativeTranslations?: string[] }[];
 };
 
 // ─── Dictionary ─────────────────────────────────────────────────────────────

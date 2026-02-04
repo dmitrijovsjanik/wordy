@@ -1,7 +1,8 @@
 import { eq, ne, and, sql, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { wordMeanings, quizSessions, quizAnswers, users, userWordProgress, userCustomWords } from '../db/schema.js';
+import { wordMeanings, quizSessions, quizAnswers, users, userWordProgress, userCustomWords, userCustomWordProgress } from '../db/schema.js';
 import { getQuizPool, type CustomWordForQuiz } from './collection-service.js';
+import { computeNextReview, MASTERED_STAGE } from './srs-service.js';
 import { type LanguagePair, DEFAULT_LANG_PAIR, reversePair } from '../types/language.js';
 
 const QUESTIONS_PER_SESSION = 10;
@@ -26,6 +27,10 @@ function shuffle<T>(arr: T[]): T[] {
 
 function randomDirection(pair: LanguagePair = DEFAULT_LANG_PAIR): string {
   return Math.random() < 0.5 ? pair : reversePair(pair);
+}
+
+function getAllTranslations(meaning: { translation: string; alternativeTranslations: string[] | null }): string[] {
+  return [meaning.translation, ...(meaning.alternativeTranslations ?? [])];
 }
 
 export async function createSession(userId: number) {
@@ -53,12 +58,16 @@ export async function generateQuestion(excludeMeaningIds: number[] = [], langPai
 
   const correct = candidates[0]!;
 
-  // 3 неправильных варианта той же сложности, не совпадающие по переводу
+  // Все переводы правильного значения (primary + alternatives)
+  const correctTranslations = getAllTranslations(correct);
+  const correctTranslationsSet = new Set(correctTranslations);
+
+  // 3 неправильных варианта той же сложности, не совпадающие ни с одним переводом правильного
   const wrongOptions = await db.query.wordMeanings.findMany({
     where: and(
       ne(wordMeanings.id, correct.id),
       eq(wordMeanings.difficulty, correct.difficulty),
-      ne(wordMeanings.translation, correct.translation),
+      sql`${wordMeanings.translation} NOT IN (${sql.join(correctTranslations.map(t => sql`${t}`), sql`, `)})`,
     ),
     with: { word: true },
     limit: 3,
@@ -70,7 +79,7 @@ export async function generateQuestion(excludeMeaningIds: number[] = [], langPai
     const moreOptions = await db.query.wordMeanings.findMany({
       where: and(
         ne(wordMeanings.id, correct.id),
-        ne(wordMeanings.translation, correct.translation),
+        sql`${wordMeanings.translation} NOT IN (${sql.join(correctTranslations.map(t => sql`${t}`), sql`, `)})`,
         wrongOptions.length > 0
           ? sql`${wordMeanings.id} NOT IN (${sql.join(wrongOptions.map(o => sql`${o.id}`), sql`, `)})`
           : undefined,
@@ -82,11 +91,14 @@ export async function generateQuestion(excludeMeaningIds: number[] = [], langPai
     wrongOptions.push(...moreOptions);
   }
 
+  // Фильтруем варианты, чей перевод совпадает с альтернативным переводом правильного
+  const filteredWrong = wrongOptions.filter(o => !correctTranslationsSet.has(o.translation));
+
   const direction = randomDirection(langPair);
   const isForward = direction === langPair;
 
   if (isForward) {
-    const options = shuffle([correct.translation, ...wrongOptions.map(o => o.translation)]);
+    const options = shuffle([correct.translation, ...filteredWrong.map(o => o.translation)]);
     return {
       meaningId: correct.id,
       word: correct.word.text,
@@ -95,7 +107,7 @@ export async function generateQuestion(excludeMeaningIds: number[] = [], langPai
       direction,
     };
   } else {
-    const options = shuffle([correct.word.text, ...wrongOptions.map(o => o.word.text)]);
+    const options = shuffle([correct.word.text, ...filteredWrong.map(o => o.word.text)]);
     return {
       meaningId: correct.id,
       word: correct.translation,
@@ -122,7 +134,8 @@ export async function recordAnswer(
     const selected = await db.query.wordMeanings.findFirst({
       where: eq(wordMeanings.id, selectedMeaningId),
     });
-    isCorrect = selected?.translation === correctMeaning.translation;
+    const validTranslations = new Set(getAllTranslations(correctMeaning));
+    isCorrect = selected ? validTranslations.has(selected.translation) : false;
   }
 
   await db
@@ -238,18 +251,121 @@ export async function generateQuestionFromPool(
   const totalPool = pool.meaningIds.length + pool.customWords.length;
 
   if (totalPool === 0) {
-    // Нет активных коллекций — показываем из всей базы
     return generateQuestion(excludeMeaningIds, langPair);
   }
 
-  // Фильтруем уже показанные
-  // excludeMeaningIds содержит и meaningId и customWord id (с отрицательным знаком для различия)
-  const availableMeaningIds = pool.meaningIds.filter((id) => !excludeMeaningIds.includes(id));
-  const availableCustom = pool.customWords.filter((w) => !excludeMeaningIds.includes(-w.id));
+  // SRS-фильтрация для системных слов
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, userId),
+    columns: { repeatMastered: true },
+  });
+  const repeatMastered = user?.repeatMastered ?? false;
+
+  const now = new Date();
+  let reviewReady: number[] = [];
+  let unseen: number[] = [];
+
+  if (pool.meaningIds.length > 0) {
+    const progressRows = await db
+      .select({
+        meaningId: userWordProgress.meaningId,
+        srsStage: userWordProgress.srsStage,
+        nextReviewAt: userWordProgress.nextReviewAt,
+      })
+      .from(userWordProgress)
+      .where(
+        and(
+          eq(userWordProgress.userId, userId),
+          inArray(userWordProgress.meaningId, pool.meaningIds),
+        ),
+      );
+
+    const progressMap = new Map(progressRows.map((p) => [p.meaningId, p]));
+
+    for (const id of pool.meaningIds) {
+      const progress = progressMap.get(id);
+      if (!progress) {
+        unseen.push(id);
+      } else if (progress.srsStage >= MASTERED_STAGE && !repeatMastered) {
+        // выученное — пропускаем
+      } else if (!progress.nextReviewAt || progress.nextReviewAt <= now) {
+        reviewReady.push(id);
+      }
+      // nextReviewAt > now — ещё в таймауте, пропускаем
+    }
+  }
+
+  // SRS-фильтрация для кастомных слов
+  let customReviewReady: CustomWordForQuiz[] = [];
+  let customUnseen: CustomWordForQuiz[] = [];
+
+  if (pool.customWords.length > 0) {
+    const customIds = pool.customWords.map((w) => w.id);
+    const customProgressRows = await db
+      .select({
+        customWordId: userCustomWordProgress.customWordId,
+        srsStage: userCustomWordProgress.srsStage,
+        nextReviewAt: userCustomWordProgress.nextReviewAt,
+      })
+      .from(userCustomWordProgress)
+      .where(
+        and(
+          eq(userCustomWordProgress.userId, userId),
+          inArray(userCustomWordProgress.customWordId, customIds),
+        ),
+      );
+
+    const customProgressMap = new Map(customProgressRows.map((p) => [p.customWordId, p]));
+
+    for (const cw of pool.customWords) {
+      const progress = customProgressMap.get(cw.id);
+      if (!progress) {
+        customUnseen.push(cw);
+      } else if (progress.srsStage >= MASTERED_STAGE && !repeatMastered) {
+        // выученное — пропускаем
+      } else if (!progress.nextReviewAt || progress.nextReviewAt <= now) {
+        customReviewReady.push(cw);
+      }
+      // nextReviewAt > now — ещё в таймауте, пропускаем
+    }
+  }
+
+  // Расширяем exclude: для каждого показанного meaningId исключаем все значения того же слова (полисемия)
+  let expandedExclude = new Set(excludeMeaningIds);
+  const positiveMeaningIds = excludeMeaningIds.filter((id) => id > 0);
+  if (positiveMeaningIds.length > 0) {
+    const shownMeanings = await db
+      .select({ wordId: wordMeanings.wordId })
+      .from(wordMeanings)
+      .where(inArray(wordMeanings.id, positiveMeaningIds));
+    const wordIds = [...new Set(shownMeanings.map((m) => m.wordId))];
+    if (wordIds.length > 0) {
+      const siblings = await db
+        .select({ id: wordMeanings.id })
+        .from(wordMeanings)
+        .where(inArray(wordMeanings.wordId, wordIds));
+      for (const s of siblings) expandedExclude.add(s.id);
+    }
+  }
+
+  // Фильтруем уже показанные (включая сиблинг-значения)
+  const availableReview = reviewReady.filter((id) => !expandedExclude.has(id));
+  const availableUnseen = unseen.filter((id) => !expandedExclude.has(id));
+  const srsFilteredCustom = [...customReviewReady, ...customUnseen];
+  const availableCustom = srsFilteredCustom.filter((w) => !expandedExclude.has(-w.id));
 
   // Если всё исчерпано — сбрасываем exclude
-  const meaningIds = availableMeaningIds.length > 0 ? availableMeaningIds : pool.meaningIds;
-  const customWords = availableCustom.length > 0 ? availableCustom : pool.customWords;
+  const finalReview = availableReview.length > 0 ? availableReview : reviewReady;
+  const finalUnseen = availableUnseen.length > 0 ? availableUnseen : unseen;
+  const customWords = availableCustom.length > 0 ? availableCustom : srsFilteredCustom;
+
+  // Выбираем между review/unseen с весами 70/30
+  let meaningIds: number[];
+  if (finalReview.length > 0 && finalUnseen.length > 0) {
+    meaningIds = Math.random() < 0.7 ? finalReview : finalUnseen;
+  } else {
+    meaningIds = finalReview.length > 0 ? finalReview : finalUnseen;
+  }
   const totalAvailable = meaningIds.length + customWords.length;
 
   // Случайно выбираем источник (взвешенно по количеству)
@@ -276,12 +392,16 @@ export async function generateQuestionFromPool(
 
   const correct = candidates[0]!;
 
+  // Все переводы правильного значения (primary + alternatives)
+  const correctTranslations = getAllTranslations(correct);
+  const correctTranslationsSet = new Set(correctTranslations);
+
   // 3 неправильных варианта
   const wrongOptions = await db.query.wordMeanings.findMany({
     where: and(
       ne(wordMeanings.id, correct.id),
       eq(wordMeanings.difficulty, correct.difficulty),
-      ne(wordMeanings.translation, correct.translation),
+      sql`${wordMeanings.translation} NOT IN (${sql.join(correctTranslations.map(t => sql`${t}`), sql`, `)})`,
     ),
     with: { word: true },
     limit: 3,
@@ -292,7 +412,7 @@ export async function generateQuestionFromPool(
     const moreOptions = await db.query.wordMeanings.findMany({
       where: and(
         ne(wordMeanings.id, correct.id),
-        ne(wordMeanings.translation, correct.translation),
+        sql`${wordMeanings.translation} NOT IN (${sql.join(correctTranslations.map(t => sql`${t}`), sql`, `)})`,
         wrongOptions.length > 0
           ? sql`${wordMeanings.id} NOT IN (${sql.join(wrongOptions.map(o => sql`${o.id}`), sql`, `)})`
           : undefined,
@@ -304,11 +424,13 @@ export async function generateQuestionFromPool(
     wrongOptions.push(...moreOptions);
   }
 
+  const filteredWrong = wrongOptions.filter(o => !correctTranslationsSet.has(o.translation));
+
   const direction = randomDirection(langPair);
   const isForward = direction === langPair;
 
   if (isForward) {
-    const options = shuffle([correct.translation, ...wrongOptions.map(o => o.translation)]);
+    const options = shuffle([correct.translation, ...filteredWrong.map(o => o.translation)]);
     return {
       meaningId: correct.id,
       word: correct.word.text,
@@ -317,7 +439,7 @@ export async function generateQuestionFromPool(
       direction,
     };
   } else {
-    const options = shuffle([correct.word.text, ...wrongOptions.map(o => o.word.text)]);
+    const options = shuffle([correct.word.text, ...filteredWrong.map(o => o.word.text)]);
     return {
       meaningId: correct.id,
       word: correct.translation,
@@ -408,8 +530,40 @@ export async function recordInfiniteAnswer(
       where: eq(userCustomWords.id, realId),
     });
     correctTranslation = customWord?.translation ?? '';
-    // Для кастомных: selectedMeaningId === meaningId означает правильный ответ
     isCorrect = selectedMeaningId === meaningId;
+
+    // SRS-прогресс для кастомных слов
+    const [existing] = await db
+      .select()
+      .from(userCustomWordProgress)
+      .where(and(eq(userCustomWordProgress.userId, userId), eq(userCustomWordProgress.customWordId, realId)))
+      .limit(1);
+
+    if (existing) {
+      const srs = computeNextReview(existing.srsStage, isCorrect);
+      await db
+        .update(userCustomWordProgress)
+        .set({
+          correctCount: isCorrect ? sql`${userCustomWordProgress.correctCount} + 1` : userCustomWordProgress.correctCount,
+          incorrectCount: isCorrect ? userCustomWordProgress.incorrectCount : sql`${userCustomWordProgress.incorrectCount} + 1`,
+          srsStage: srs.newStage,
+          nextReviewAt: srs.nextReviewAt,
+          masteredAt: srs.isMastered ? new Date() : (srs.newStage < MASTERED_STAGE ? null : existing.masteredAt),
+          lastSeenAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(userCustomWordProgress.id, existing.id));
+    } else {
+      const srs = computeNextReview(0, isCorrect);
+      await db.insert(userCustomWordProgress).values({
+        userId,
+        customWordId: realId,
+        correctCount: isCorrect ? 1 : 0,
+        incorrectCount: isCorrect ? 0 : 1,
+        srsStage: srs.newStage,
+        nextReviewAt: srs.nextReviewAt,
+      });
+    }
   } else {
     const correctMeaning = await db.query.wordMeanings.findFirst({
       where: eq(wordMeanings.id, meaningId),
@@ -421,7 +575,8 @@ export async function recordInfiniteAnswer(
         const selected = await db.query.wordMeanings.findFirst({
           where: eq(wordMeanings.id, selectedMeaningId),
         });
-        isCorrect = selected?.translation === correctMeaning.translation;
+        const validTranslations = new Set(getAllTranslations(correctMeaning));
+        isCorrect = selected ? validTranslations.has(selected.translation) : false;
       } else {
         isCorrect = selectedMeaningId === meaningId;
       }
@@ -435,21 +590,28 @@ export async function recordInfiniteAnswer(
       .limit(1);
 
     if (existing) {
+      const srs = computeNextReview(existing.srsStage, isCorrect);
       await db
         .update(userWordProgress)
         .set({
           correctCount: isCorrect ? sql`${userWordProgress.correctCount} + 1` : userWordProgress.correctCount,
           incorrectCount: isCorrect ? userWordProgress.incorrectCount : sql`${userWordProgress.incorrectCount} + 1`,
+          srsStage: srs.newStage,
+          nextReviewAt: srs.nextReviewAt,
+          masteredAt: srs.isMastered ? new Date() : (srs.newStage < MASTERED_STAGE ? null : existing.masteredAt),
           lastSeenAt: new Date(),
           updatedAt: new Date(),
         })
         .where(eq(userWordProgress.id, existing.id));
     } else {
+      const srs = computeNextReview(0, isCorrect);
       await db.insert(userWordProgress).values({
         userId,
         meaningId,
         correctCount: isCorrect ? 1 : 0,
         incorrectCount: isCorrect ? 0 : 1,
+        srsStage: srs.newStage,
+        nextReviewAt: srs.nextReviewAt,
       });
     }
   }

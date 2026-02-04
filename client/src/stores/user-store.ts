@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { User } from '@/types/api';
-import { authInit, authDev, getMe, setToken, getToken, removeToken } from '@/lib/api';
+import { authInit, authDev, getMe, setToken, getToken, removeToken, updateSettings } from '@/lib/api';
 import { telegram } from '@/lib/telegram';
 
 type UserState = {
@@ -10,6 +10,7 @@ type UserState = {
   error: string | null;
   init: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  toggleRepeatMastered: () => Promise<void>;
   logout: () => void;
 };
 
@@ -52,6 +53,18 @@ export const useUserStore = create<UserState>()((set) => ({
       set({ user });
     } catch {
       // silent — profile refresh is non-critical
+    }
+  },
+
+  toggleRepeatMastered: async () => {
+    const current = useUserStore.getState().user;
+    if (!current) return;
+    const newValue = !current.repeatMastered;
+    set({ user: { ...current, repeatMastered: newValue } });
+    try {
+      await updateSettings({ repeatMastered: newValue });
+    } catch {
+      set({ user: { ...current, repeatMastered: !newValue } });
     }
   },
 

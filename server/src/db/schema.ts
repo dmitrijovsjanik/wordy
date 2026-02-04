@@ -6,6 +6,7 @@ import {
   bigint,
   boolean,
   timestamp,
+  text,
   pgEnum,
   uniqueIndex,
   index,
@@ -52,6 +53,7 @@ export const users = pgTable('users', {
   streakDays: integer('streak_days').default(0).notNull(),
   nativeLanguage: varchar('native_language', { length: 10 }).default('ru').notNull(),
   learningLanguage: varchar('learning_language', { length: 10 }).default('en').notNull(),
+  repeatMastered: boolean('repeat_mastered').default(false).notNull(),
   lastActivityAt: timestamp('last_activity_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -81,9 +83,43 @@ export const wordMeanings = pgTable('word_meanings', {
   contextExample: varchar('context_example', { length: 500 }),
   difficulty: difficultyEnum('difficulty').notNull(),
   cefr: cefrLevelEnum('cefr'),
+  alternativeTranslations: text('alternative_translations').array(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
+
+// ─── Topics ─────────────────────────────────────────────────────────────────
+
+export const topics = pgTable('topics', {
+  id: serial('id').primaryKey(),
+  slug: varchar('slug', { length: 50 }).unique().notNull(),
+  title: varchar('title', { length: 255 }).notNull(),
+  description: varchar('description', { length: 500 }),
+  iconName: varchar('icon_name', { length: 100 }),
+  sortOrder: integer('sort_order').default(0).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// ─── Word Meaning Topics ────────────────────────────────────────────────────
+
+export const wordMeaningTopics = pgTable(
+  'word_meaning_topics',
+  {
+    id: serial('id').primaryKey(),
+    meaningId: integer('meaning_id')
+      .references(() => wordMeanings.id, { onDelete: 'cascade' })
+      .notNull(),
+    topicId: integer('topic_id')
+      .references(() => topics.id, { onDelete: 'cascade' })
+      .notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('word_meaning_topic_uniq').on(table.meaningId, table.topicId),
+    index('word_meaning_topics_topic_idx').on(table.topicId),
+  ],
+);
 
 // ─── Quiz Sessions ───────────────────────────────────────────────────────────
 
@@ -158,6 +194,7 @@ export const collections = pgTable('collections', {
   iconName: varchar('icon_name', { length: 100 }),
   price: integer('price'),
   isPublished: boolean('is_published').default(false).notNull(),
+  category: varchar('category', { length: 50 }),
   totalWords: integer('total_words').default(0).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -220,6 +257,9 @@ export const userWordProgress = pgTable(
       .notNull(),
     correctCount: integer('correct_count').default(0).notNull(),
     incorrectCount: integer('incorrect_count').default(0).notNull(),
+    srsStage: integer('srs_stage').default(0).notNull(),
+    nextReviewAt: timestamp('next_review_at'),
+    masteredAt: timestamp('mastered_at'),
     lastSeenAt: timestamp('last_seen_at').defaultNow().notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -227,6 +267,7 @@ export const userWordProgress = pgTable(
   (table) => [
     uniqueIndex('user_word_progress_uniq').on(table.userId, table.meaningId),
     index('user_word_progress_user_idx').on(table.userId),
+    index('user_word_progress_review_idx').on(table.userId, table.nextReviewAt),
   ],
 );
 
@@ -256,14 +297,52 @@ export const userCustomWords = pgTable(
   ],
 );
 
+// ─── User Custom Word Progress ──────────────────────────────────────────────
+
+export const userCustomWordProgress = pgTable(
+  'user_custom_word_progress',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    customWordId: integer('custom_word_id')
+      .references(() => userCustomWords.id, { onDelete: 'cascade' })
+      .notNull(),
+    correctCount: integer('correct_count').default(0).notNull(),
+    incorrectCount: integer('incorrect_count').default(0).notNull(),
+    srsStage: integer('srs_stage').default(0).notNull(),
+    nextReviewAt: timestamp('next_review_at'),
+    masteredAt: timestamp('mastered_at'),
+    lastSeenAt: timestamp('last_seen_at').defaultNow().notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('user_custom_word_progress_uniq').on(table.userId, table.customWordId),
+    index('user_custom_word_progress_user_idx').on(table.userId),
+    index('user_custom_word_progress_review_idx').on(table.userId, table.nextReviewAt),
+  ],
+);
+
 // ─── Relations ──────────────────────────────────────────────────────────────
 
 export const wordsRelations = relations(words, ({ many }) => ({
   meanings: many(wordMeanings),
 }));
 
-export const wordMeaningsRelations = relations(wordMeanings, ({ one }) => ({
+export const wordMeaningsRelations = relations(wordMeanings, ({ one, many }) => ({
   word: one(words, { fields: [wordMeanings.wordId], references: [words.id] }),
+  topics: many(wordMeaningTopics),
+}));
+
+export const topicsRelations = relations(topics, ({ many }) => ({
+  wordMeanings: many(wordMeaningTopics),
+}));
+
+export const wordMeaningTopicsRelations = relations(wordMeaningTopics, ({ one }) => ({
+  meaning: one(wordMeanings, { fields: [wordMeaningTopics.meaningId], references: [wordMeanings.id] }),
+  topic: one(topics, { fields: [wordMeaningTopics.topicId], references: [topics.id] }),
 }));
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -311,7 +390,13 @@ export const userWordProgressRelations = relations(userWordProgress, ({ one }) =
   meaning: one(wordMeanings, { fields: [userWordProgress.meaningId], references: [wordMeanings.id] }),
 }));
 
-export const userCustomWordsRelations = relations(userCustomWords, ({ one }) => ({
+export const userCustomWordsRelations = relations(userCustomWords, ({ one, many }) => ({
   user: one(users, { fields: [userCustomWords.userId], references: [users.id] }),
   collection: one(collections, { fields: [userCustomWords.collectionId], references: [collections.id] }),
+  progress: many(userCustomWordProgress),
+}));
+
+export const userCustomWordProgressRelations = relations(userCustomWordProgress, ({ one }) => ({
+  user: one(users, { fields: [userCustomWordProgress.userId], references: [users.id] }),
+  customWord: one(userCustomWords, { fields: [userCustomWordProgress.customWordId], references: [userCustomWords.id] }),
 }));

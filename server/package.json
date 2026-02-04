@@ -15,7 +15,8 @@
     "db:enrich": "tsx --env-file=.env src/db/seed/enrich.ts",
     "db:import-ngsl": "tsx --env-file=.env src/db/seed/ngsl-import.ts",
     "db:generate-collections": "tsx --env-file=.env src/db/seed/generate-collections.ts",
-    "db:seed-full": "npm run db:import-ngsl && npm run db:enrich && npm run db:generate-collections"
+    "db:seed-topics": "tsx --env-file=.env src/db/seed/seed-topics.ts",
+    "db:seed-full": "npm run db:import-ngsl && npm run db:enrich && npm run db:seed-topics && npm run db:generate-collections"
   },
   "devDependencies": {
     "@types/node": "^25.2.0",

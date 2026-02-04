@@ -19,8 +19,8 @@ export default async function collectionRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
 
   app.get('/api/collections/marketplace', async (request) => {
-    const items = await getMarketplace(request.user.id);
-    return { collections: items };
+    const groups = await getMarketplace(request.user.id);
+    return { groups };
   });
 
   app.get('/api/collections/library', async (request) => {

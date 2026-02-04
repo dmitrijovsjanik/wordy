@@ -13,6 +13,14 @@
 @import "@radix-ui/colors/blue-dark.css";
 @import "@radix-ui/colors/pink.css";
 @import "@radix-ui/colors/pink-dark.css";
+@import "@radix-ui/colors/teal.css";
+@import "@radix-ui/colors/teal-dark.css";
+@import "@radix-ui/colors/cyan.css";
+@import "@radix-ui/colors/cyan-dark.css";
+@import "@radix-ui/colors/iris.css";
+@import "@radix-ui/colors/iris-dark.css";
+@import "@radix-ui/colors/plum.css";
+@import "@radix-ui/colors/plum-dark.css";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));

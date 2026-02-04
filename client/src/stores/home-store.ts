@@ -42,6 +42,8 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
   setCollectionId: (id) => set({ collectionId: id, recentMeaningIds: [], currentQuestion: null, feedback: null }),
 
   fetchNext: async () => {
+    // Предотвращаем параллельные запросы (важно для React StrictMode)
+    if (get().isLoading) return;
     set({ isLoading: true, error: null });
     try {
       const { recentMeaningIds, collectionId } = get();

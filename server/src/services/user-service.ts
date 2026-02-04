@@ -15,6 +15,7 @@ export async function getProfile(userId: number) {
       streakDays: true,
       nativeLanguage: true,
       learningLanguage: true,
+      repeatMastered: true,
       lastActivityAt: true,
     },
   });
@@ -58,4 +59,18 @@ export async function updateLanguages(userId: number, nativeLanguage: string, le
     .where(eq(users.id, userId));
 
   return { nativeLanguage, learningLanguage };
+}
+
+export async function updateSettings(userId: number, settings: { repeatMastered?: boolean }) {
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (settings.repeatMastered !== undefined) {
+    updates.repeatMastered = settings.repeatMastered;
+  }
+
+  await db
+    .update(users)
+    .set(updates)
+    .where(eq(users.id, userId));
+
+  return settings;
 }
