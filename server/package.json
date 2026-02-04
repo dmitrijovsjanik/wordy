@@ -16,10 +16,12 @@
     "db:import-ngsl": "tsx --env-file=.env src/db/seed/ngsl-import.ts",
     "db:generate-collections": "tsx --env-file=.env src/db/seed/generate-collections.ts",
     "db:seed-topics": "tsx --env-file=.env src/db/seed/seed-topics.ts",
+    "db:update-ranks": "tsx --env-file=.env src/db/seed/update-popularity-ranks.ts",
     "db:seed-full": "npm run db:import-ngsl && npm run db:enrich && npm run db:seed-topics && npm run db:generate-collections"
   },
   "devDependencies": {
     "@types/node": "^25.2.0",
+    "@types/node-cron": "^3.0.11",
     "@types/pg": "^8.16.0",
     "drizzle-kit": "^0.31.8",
     "tsup": "^8.5.1",
@@ -32,6 +34,7 @@
     "drizzle-orm": "^0.45.1",
     "fastify": "^5.7.2",
     "fastify-plugin": "^5.1.0",
+    "node-cron": "^4.2.1",
     "pg": "^8.18.0"
   }
 }

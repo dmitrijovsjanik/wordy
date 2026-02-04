@@ -4,18 +4,14 @@ import { useUserStore } from '@/stores/user-store';
 import { useHomeStore } from '@/stores/home-store';
 import { useTelegram } from '@/hooks/use-telegram';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { PlayerStatusCard } from '@/components/ui/player-status-card';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Sword01Icon } from '@hugeicons/core-free-icons';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import Lottie from 'lottie-react';
 import fireStreakData from '@/assets/fire-streak.json';
-
-function xpForLevel(level: number) {
-  return (level - 1) * (level - 1) * 100;
-}
 
 export function Home() {
   const navigate = useNavigate();
@@ -126,33 +122,10 @@ export function Home() {
 
   if (!user) return null;
 
-  const currentLevelXp = xpForLevel(user.level);
-  const nextLevelXp = xpForLevel(user.level + 1);
-  const progressPercent = ((user.xp - currentLevelXp) / (nextLevelXp - currentLevelXp)) * 100;
-
   return (
     <div className="flex min-h-full flex-col px-4 pt-4 pb-4">
-      {/* Header — level & XP */}
-      <div className="flex flex-col gap-2">
-        <div className="flex items-baseline justify-between">
-          <div className="flex items-baseline gap-0.5">
-            <span className="text-2xl font-bold leading-none text-[var(--accent-11)]">{user.level}</span>
-            <span className="text-sm text-[var(--gray-11)]">ур.</span>
-          </div>
-          <div className="flex items-center gap-3 text-[14px] text-[var(--gray-11)]">
-            <span>
-              {user.xp - currentLevelXp} / {nextLevelXp - currentLevelXp} XP
-            </span>
-            {user.streakDays > 0 && (
-              <div className="flex items-center gap-1">
-                <Lottie animationData={fireStreakData} loop autoplay className="relative -top-[3px] -mr-1 h-5 w-5 shrink-0" />
-                {user.streakDays} дн.
-              </div>
-            )}
-          </div>
-        </div>
-        <Progress value={progressPercent} />
-      </div>
+      {/* Player Status — level, XP, streak + league */}
+      <PlayerStatusCard user={user} />
 
       {/* Duel card + ambient light spill */}
       <div className="relative mt-4">

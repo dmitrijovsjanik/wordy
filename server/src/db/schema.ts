@@ -40,6 +40,31 @@ export const collectionTypeEnum = pgEnum('collection_type', [
   'auto',
 ]);
 
+export const leagueTierEnum = pgEnum('league_tier', [
+  'bronze',
+  'silver',
+  'gold',
+  'amber',
+  'sapphire',
+  'amethyst',
+  'topaz',
+  'ruby',
+  'legend',
+]);
+
+export const leagueNotificationTypeEnum = pgEnum('league_notification_type', [
+  'season_started',
+  'safe_zone_reached',
+  'competition_entered',
+  'top5_reached',
+  'overtaken',
+  'season_ending',
+  'season_finished',
+  'promoted',
+  'demoted',
+  'maintained',
+]);
+
 // ─── Users ───────────────────────────────────────────────────────────────────
 
 export const users = pgTable('users', {
@@ -84,6 +109,8 @@ export const wordMeanings = pgTable('word_meanings', {
   difficulty: difficultyEnum('difficulty').notNull(),
   cefr: cefrLevelEnum('cefr'),
   alternativeTranslations: text('alternative_translations').array(),
+  // Ранг популярности перевода (1 = самый популярный, из Yandex Dictionary API)
+  popularityRank: integer('popularity_rank'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -399,4 +426,107 @@ export const userCustomWordsRelations = relations(userCustomWords, ({ one, many 
 export const userCustomWordProgressRelations = relations(userCustomWordProgress, ({ one }) => ({
   user: one(users, { fields: [userCustomWordProgress.userId], references: [users.id] }),
   customWord: one(userCustomWords, { fields: [userCustomWordProgress.customWordId], references: [userCustomWords.id] }),
+}));
+
+// ─── League Seasons ─────────────────────────────────────────────────────────
+
+export const leagueSeasons = pgTable(
+  'league_seasons',
+  {
+    id: serial('id').primaryKey(),
+    weekNumber: integer('week_number').notNull(),
+    year: integer('year').notNull(),
+    startedAt: timestamp('started_at').notNull(),
+    endedAt: timestamp('ended_at'),
+    isActive: boolean('is_active').default(false).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex('league_season_week_year_uniq').on(table.weekNumber, table.year)],
+);
+
+// ─── User League Progress ───────────────────────────────────────────────────
+
+export const userLeagueProgress = pgTable('user_league_progress', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id')
+    .references(() => users.id, { onDelete: 'cascade' })
+    .unique()
+    .notNull(),
+  tier: leagueTierEnum('tier').default('bronze').notNull(),
+  division: integer('division').default(3).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// ─── User Season Stats ──────────────────────────────────────────────────────
+
+export const userSeasonStats = pgTable(
+  'user_season_stats',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    seasonId: integer('season_id')
+      .references(() => leagueSeasons.id, { onDelete: 'cascade' })
+      .notNull(),
+    leaguePoints: integer('league_points').default(0).notNull(),
+    correctAnswers: integer('correct_answers').default(0).notNull(),
+    quizzesCompleted: integer('quizzes_completed').default(0).notNull(),
+    duelsWon: integer('duels_won').default(0).notNull(),
+    streakBonus: integer('streak_bonus').default(0).notNull(),
+    tierAtStart: leagueTierEnum('tier_at_start').notNull(),
+    divisionAtStart: integer('division_at_start').notNull(),
+    tierAtEnd: leagueTierEnum('tier_at_end'),
+    divisionAtEnd: integer('division_at_end'),
+    divisionChange: integer('division_change'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('user_season_stats_uniq').on(table.userId, table.seasonId),
+    index('user_season_stats_season_idx').on(table.seasonId),
+    index('user_season_stats_lp_idx').on(table.seasonId, table.leaguePoints),
+  ],
+);
+
+// ─── League Notifications ───────────────────────────────────────────────────
+
+export const leagueNotifications = pgTable(
+  'league_notifications',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    seasonId: integer('season_id')
+      .references(() => leagueSeasons.id, { onDelete: 'cascade' })
+      .notNull(),
+    type: leagueNotificationTypeEnum('type').notNull(),
+    payload: text('payload'),
+    isRead: boolean('is_read').default(false).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [index('league_notifications_user_idx').on(table.userId, table.isRead)],
+);
+
+// ─── League Relations ───────────────────────────────────────────────────────
+
+export const leagueSeasonsRelations = relations(leagueSeasons, ({ many }) => ({
+  userStats: many(userSeasonStats),
+  notifications: many(leagueNotifications),
+}));
+
+export const userLeagueProgressRelations = relations(userLeagueProgress, ({ one }) => ({
+  user: one(users, { fields: [userLeagueProgress.userId], references: [users.id] }),
+}));
+
+export const userSeasonStatsRelations = relations(userSeasonStats, ({ one }) => ({
+  user: one(users, { fields: [userSeasonStats.userId], references: [users.id] }),
+  season: one(leagueSeasons, { fields: [userSeasonStats.seasonId], references: [leagueSeasons.id] }),
+}));
+
+export const leagueNotificationsRelations = relations(leagueNotifications, ({ one }) => ({
+  user: one(users, { fields: [leagueNotifications.userId], references: [users.id] }),
+  season: one(leagueSeasons, { fields: [leagueNotifications.seasonId], references: [leagueSeasons.id] }),
 }));

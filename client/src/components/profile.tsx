@@ -17,6 +17,7 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BackButton } from '@/components/ui/back-button';
 import { Switch } from '@/components/ui/switch';
+import { LeagueCard } from '@/components/ui/league-card';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Fire02Icon, Target02Icon, GameController01Icon, Award01Icon, Sun01Icon, Moon02Icon, ComputerIcon } from '@hugeicons/core-free-icons';
 import { useThemeStore } from '@/stores/theme-store';
@@ -130,6 +131,9 @@ export function Profile() {
           <span>{nextLevelXp} XP</span>
         </div>
       </Card>
+
+      {/* League */}
+      <LeagueCard className="mt-4" />
 
       {/* Theme */}
       <Card className="mt-4">

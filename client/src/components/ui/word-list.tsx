@@ -129,6 +129,7 @@ export function WordList({ words, onDeleteWords }: WordListProps) {
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 90,
     overscan: 5,
+    measureElement: (element) => element.getBoundingClientRect().height,
   });
 
   if (viewMode === 'badges') {
@@ -152,6 +153,8 @@ export function WordList({ words, onDeleteWords }: WordListProps) {
           return (
             <div
               key={g.word}
+              ref={virtualizer.measureElement}
+              data-index={virtualRow.index}
               className="absolute left-0 top-0 w-full pb-2"
               style={{
                 transform: `translateY(${virtualRow.start}px)`,

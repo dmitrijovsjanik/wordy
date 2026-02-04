@@ -272,6 +272,28 @@ import { BookOpen02Icon } from '@hugeicons/core-free-icons';
 - Формат seed-файла: JSON или TS-массив в `server/src/db/seed/`
 - Seed идемпотентный — повторный запуск не дублирует данные
 
+### Popularity Rank (фильтрация переводов)
+Yandex Dictionary API возвращает переводы отсортированные по популярности. Поле `word_meanings.popularity_rank` хранит позицию перевода (1 = самый популярный).
+
+**Важно:**
+- База хранит ВСЕ переводы из Yandex API
+- Квизы используют только топ-N переводов (настраивается в `quiz-service.ts`)
+- Константа `MAX_POPULARITY_RANK` в [quiz-service.ts](server/src/services/quiz-service.ts) — менять для расширения/сужения пула
+
+**Скрипты:**
+- `npm run db:enrich` — обогащает слова переводами, автоматически ставит `popularityRank`
+- `npm run db:update-ranks` — миграция: проставляет ранги существующим meanings без ранга
+
+**Как работает фильтр:**
+```ts
+const MAX_POPULARITY_RANK = 3; // Только топ-3 перевода
+
+const popularityFilter = or(
+  isNull(wordMeanings.popularityRank),  // старые данные без ранга
+  lte(wordMeanings.popularityRank, MAX_POPULARITY_RANK),
+);
+```
+
 ---
 
 ## Deployment

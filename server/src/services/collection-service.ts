@@ -1,4 +1,4 @@
-import { eq, and, sql, isNull, inArray } from 'drizzle-orm';
+import { eq, and, sql, isNull, inArray, or, lte } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   collections,
@@ -10,6 +10,11 @@ import {
   wordMeanings,
   words,
 } from '../db/schema.js';
+
+// ─── Constants ──────────────────────────────────────────────────────────────
+
+// Максимальный ранг популярности для отображения (1 = самый популярный)
+const MAX_POPULARITY_RANK = 3;
 
 // ─── Marketplace ────────────────────────────────────────────────────────────
 
@@ -160,6 +165,12 @@ export async function getCollectionDetail(collectionId: number, userId: number) 
 
   if (!col) return null;
 
+  // Фильтр по популярности: только топ-N переводов
+  const popularityFilter = or(
+    isNull(wordMeanings.popularityRank),
+    lte(wordMeanings.popularityRank, MAX_POPULARITY_RANK),
+  );
+
   // Системные слова с SRS-прогрессом
   const systemWords = await db
     .select({
@@ -181,7 +192,7 @@ export async function getCollectionDetail(collectionId: number, userId: number) 
         eq(userWordProgress.userId, userId),
       ),
     )
-    .where(eq(collectionWords.collectionId, collectionId))
+    .where(and(eq(collectionWords.collectionId, collectionId), popularityFilter))
     .orderBy(collectionWords.order);
 
   // Кастомные слова с SRS-прогрессом
@@ -439,6 +450,12 @@ export async function getAllWords(userId: number) {
 
   const collectionIds = subs.map((s) => s.collectionId);
 
+  // Фильтр по популярности: только топ-N переводов
+  const popularityFilter = or(
+    isNull(wordMeanings.popularityRank),
+    lte(wordMeanings.popularityRank, MAX_POPULARITY_RANK),
+  );
+
   // System words from collections
   const systemWords = await db
     .select({
@@ -450,7 +467,7 @@ export async function getAllWords(userId: number) {
     .from(collectionWords)
     .innerJoin(wordMeanings, eq(collectionWords.meaningId, wordMeanings.id))
     .innerJoin(words, eq(wordMeanings.wordId, words.id))
-    .where(inArray(collectionWords.collectionId, collectionIds));
+    .where(and(inArray(collectionWords.collectionId, collectionIds), popularityFilter));
 
   // Custom words from collections
   const customWordRows = await db

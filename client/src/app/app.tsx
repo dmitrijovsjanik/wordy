@@ -12,6 +12,7 @@ const Profile = lazy(() => import('@/components/profile').then((m) => ({ default
 const DuelCreate = lazy(() => import('@/components/duel-create').then((m) => ({ default: m.DuelCreate })));
 const DuelGame = lazy(() => import('@/components/duel-game').then((m) => ({ default: m.DuelGame })));
 const DuelResult = lazy(() => import('@/components/duel-result').then((m) => ({ default: m.DuelResult })));
+const Leaderboard = lazy(() => import('@/components/leaderboard'));
 
 function PageSkeleton() {
   return (
@@ -39,6 +40,7 @@ export function App() {
                 <Route path="/duel/create" element={<DuelCreate />} />
                 <Route path="/duel/:id" element={<DuelGame />} />
                 <Route path="/duel/:id/result" element={<DuelResult />} />
+                <Route path="/leaderboard" element={<Leaderboard />} />
               </Routes>
             </Suspense>
           </main>

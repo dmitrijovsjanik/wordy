@@ -2,6 +2,7 @@ import { eq, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { duels, quizSessions, users } from '../db/schema.js';
 import { generateQuestion } from './quiz-service.js';
+import { addLpForDuelWin } from './league-service.js';
 
 const XP_DUEL_WIN = 50;
 
@@ -138,7 +139,7 @@ export async function finishDuel(duelId: number) {
     .set({ status: 'finished', winnerId, updatedAt: new Date() })
     .where(eq(duels.id, duelId));
 
-  // Начислить XP победителю
+  // Начислить XP и LP победителю
   if (winnerId) {
     await db
       .update(users)
@@ -148,6 +149,9 @@ export async function finishDuel(duelId: number) {
         updatedAt: new Date(),
       })
       .where(eq(users.id, winnerId));
+
+    // League Points за победу в дуэли
+    await addLpForDuelWin(winnerId);
   }
 
   return { winnerId };

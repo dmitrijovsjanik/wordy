@@ -17,6 +17,10 @@ import type {
   QuizQuestion,
   InfiniteAnswerResponse,
   DictionaryLookupResult,
+  LeagueStatusResponse,
+  LeaderboardEntry,
+  LeagueNotification,
+  LeagueHistoryEntry,
 } from '@/types/api';
 
 const TOKEN_KEY = 'wordy_token';
@@ -217,4 +221,25 @@ export function quizAnswerInfinite(meaningId: number, selectedMeaningId: number 
     meaningId,
     selectedMeaningId,
   });
+}
+
+// Leagues
+export function getLeagueStatus() {
+  return fetchApi<LeagueStatusResponse>('GET', '/api/leagues/me');
+}
+
+export function getLeaderboard() {
+  return fetchApi<{ entries: LeaderboardEntry[] }>('GET', '/api/leagues/leaderboard');
+}
+
+export function getLeagueNotifications() {
+  return fetchApi<{ notifications: LeagueNotification[] }>('GET', '/api/leagues/notifications');
+}
+
+export function markLeagueNotificationsRead(ids: number[]) {
+  return fetchApi<{ success: boolean }>('POST', '/api/leagues/notifications/read', { ids });
+}
+
+export function getLeagueHistory() {
+  return fetchApi<{ history: LeagueHistoryEntry[] }>('GET', '/api/leagues/history');
 }

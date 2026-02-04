@@ -203,4 +203,90 @@ export type InfiniteAnswerResponse = {
   totalXp?: number;
   level?: number;
   levelUp?: number;
+  lpEarned: number;
+  totalLp?: number;
+};
+
+// ─── Leagues ─────────────────────────────────────────────────────────────────
+
+export type LeagueTier =
+  | 'bronze'
+  | 'silver'
+  | 'gold'
+  | 'amber'
+  | 'sapphire'
+  | 'amethyst'
+  | 'topaz'
+  | 'ruby'
+  | 'legend';
+
+export type UserLeagueProgress = {
+  tier: LeagueTier;
+  division: number;
+};
+
+export type LeagueSeason = {
+  id: number;
+  weekNumber: number;
+  year: number;
+  startedAt: string;
+  endedAt: string | null;
+  isActive: boolean;
+};
+
+export type UserSeasonStats = {
+  leaguePoints: number;
+  correctAnswers: number;
+  quizzesCompleted: number;
+  duelsWon: number;
+  streakBonus: number;
+};
+
+export type LeaderboardEntry = {
+  userId: number;
+  firstName: string;
+  username: string | null;
+  avatarUrl: string | null;
+  leaguePoints: number;
+  position: number;
+  isCurrentUser: boolean;
+};
+
+export type LeagueNotificationType =
+  | 'season_started'
+  | 'safe_zone_reached'
+  | 'competition_entered'
+  | 'top5_reached'
+  | 'overtaken'
+  | 'season_ending'
+  | 'season_finished'
+  | 'promoted'
+  | 'demoted'
+  | 'maintained';
+
+export type LeagueNotification = {
+  id: number;
+  type: LeagueNotificationType;
+  payload: string | null;
+  isRead: boolean;
+  createdAt: string;
+};
+
+export type LeagueStatusResponse = {
+  progress: UserLeagueProgress;
+  stats: UserSeasonStats | null;
+  position: { position: number; total: number } | null;
+  season: LeagueSeason | null;
+};
+
+export type LeagueHistoryEntry = {
+  seasonId: number;
+  weekNumber: number;
+  year: number;
+  leaguePoints: number;
+  tierAtStart: LeagueTier;
+  divisionAtStart: number;
+  tierAtEnd: LeagueTier | null;
+  divisionAtEnd: number | null;
+  divisionChange: number | null;
 };

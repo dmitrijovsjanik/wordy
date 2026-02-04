@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { QuizQuestion, InfiniteAnswerResponse } from '@/types/api';
 import { quizNext, quizAnswerInfinite } from '@/lib/api';
+import { useLeagueStore } from './league-store';
 
 const MAX_RECENT = 20;
 const STREAK_KEY = 'wordy:streak';
@@ -65,6 +66,11 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
       const updatedRecent = [...recentMeaningIds, currentQuestion.meaningId].slice(-MAX_RECENT);
       const newStreak = res.isCorrect ? get().streak + 1 : 0;
       saveStreak(newStreak);
+
+      // Обновляем LP в реальном времени
+      if (res.totalLp !== undefined) {
+        useLeagueStore.getState().updateLp(res.totalLp);
+      }
 
       set({
         feedback: { ...res, correctTranslation: currentQuestion.correctTranslation, meaningId: currentQuestion.meaningId },

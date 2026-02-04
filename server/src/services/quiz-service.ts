@@ -1,13 +1,18 @@
-import { eq, ne, and, sql, inArray } from 'drizzle-orm';
+import { eq, ne, and, or, sql, inArray, isNull, lte } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { wordMeanings, quizSessions, quizAnswers, users, userWordProgress, userCustomWords, userCustomWordProgress } from '../db/schema.js';
 import { getQuizPool, type CustomWordForQuiz } from './collection-service.js';
 import { computeNextReview, MASTERED_STAGE } from './srs-service.js';
 import { type LanguagePair, DEFAULT_LANG_PAIR, reversePair } from '../types/language.js';
+import { addLpForCorrectAnswer, addLpForQuizComplete, addLpForStreak } from './league-service.js';
 
 const QUESTIONS_PER_SESSION = 10;
 const XP_PER_CORRECT = 10;
 const XP_STREAK_BONUS = 5;
+
+// Максимальный ранг популярности для использования в квизах
+// (1 = самый популярный перевод, берём только топ-3)
+const MAX_POPULARITY_RANK = 3;
 
 type Question = {
   meaningId: number;
@@ -42,13 +47,19 @@ export async function createSession(userId: number) {
 }
 
 export async function generateQuestion(excludeMeaningIds: number[] = [], langPair: LanguagePair = DEFAULT_LANG_PAIR): Promise<Question | null> {
+  // Фильтр по популярности: только топ-N переводов (или без ранга для старых данных)
+  const popularityFilter = or(
+    isNull(wordMeanings.popularityRank),
+    lte(wordMeanings.popularityRank, MAX_POPULARITY_RANK),
+  );
+
   // Выбираем случайный meaning для вопроса
-  const condition = excludeMeaningIds.length > 0
+  const excludeCondition = excludeMeaningIds.length > 0
     ? sql`${wordMeanings.id} NOT IN (${sql.join(excludeMeaningIds.map(id => sql`${id}`), sql`, `)})`
     : undefined;
 
   const candidates = await db.query.wordMeanings.findMany({
-    where: condition,
+    where: and(popularityFilter, excludeCondition),
     with: { word: true },
     limit: 1,
     orderBy: sql`RANDOM()`,
@@ -65,6 +76,7 @@ export async function generateQuestion(excludeMeaningIds: number[] = [], langPai
   // 3 неправильных варианта той же сложности, не совпадающие ни с одним переводом правильного
   const wrongOptions = await db.query.wordMeanings.findMany({
     where: and(
+      popularityFilter,
       ne(wordMeanings.id, correct.id),
       eq(wordMeanings.difficulty, correct.difficulty),
       sql`${wordMeanings.translation} NOT IN (${sql.join(correctTranslations.map(t => sql`${t}`), sql`, `)})`,
@@ -78,6 +90,7 @@ export async function generateQuestion(excludeMeaningIds: number[] = [], langPai
   if (wrongOptions.length < 3) {
     const moreOptions = await db.query.wordMeanings.findMany({
       where: and(
+        popularityFilter,
         ne(wordMeanings.id, correct.id),
         sql`${wordMeanings.translation} NOT IN (${sql.join(correctTranslations.map(t => sql`${t}`), sql`, `)})`,
         wrongOptions.length > 0
@@ -220,6 +233,12 @@ export async function finishSession(sessionId: number, userId: number) {
       updatedAt: now,
     })
     .where(eq(users.id, userId));
+
+  // League Points: за завершение квиза и streak
+  await addLpForQuizComplete(userId);
+  if (newStreakDays > user.streakDays) {
+    await addLpForStreak(userId, newStreakDays);
+  }
 
   return {
     correctCount: session.correctCount,
@@ -396,9 +415,16 @@ export async function generateQuestionFromPool(
   const correctTranslations = getAllTranslations(correct);
   const correctTranslationsSet = new Set(correctTranslations);
 
+  // Фильтр по популярности для неправильных вариантов
+  const popularityFilter = or(
+    isNull(wordMeanings.popularityRank),
+    lte(wordMeanings.popularityRank, MAX_POPULARITY_RANK),
+  );
+
   // 3 неправильных варианта
   const wrongOptions = await db.query.wordMeanings.findMany({
     where: and(
+      popularityFilter,
       ne(wordMeanings.id, correct.id),
       eq(wordMeanings.difficulty, correct.difficulty),
       sql`${wordMeanings.translation} NOT IN (${sql.join(correctTranslations.map(t => sql`${t}`), sql`, `)})`,
@@ -411,6 +437,7 @@ export async function generateQuestionFromPool(
   if (wrongOptions.length < 3) {
     const moreOptions = await db.query.wordMeanings.findMany({
       where: and(
+        popularityFilter,
         ne(wordMeanings.id, correct.id),
         sql`${wordMeanings.translation} NOT IN (${sql.join(correctTranslations.map(t => sql`${t}`), sql`, `)})`,
         wrongOptions.length > 0
@@ -463,10 +490,14 @@ async function generateQuestionFromCustomWord(
   );
   const wrongTranslations: string[] = otherCustom.slice(0, 3).map((w) => w.translation);
 
-  // Если мало кастомных — добиваем из wordMeanings
+  // Если мало кастомных — добиваем из wordMeanings (только популярные)
   if (wrongTranslations.length < 3) {
+    const popularityFilter = or(
+      isNull(wordMeanings.popularityRank),
+      lte(wordMeanings.popularityRank, MAX_POPULARITY_RANK),
+    );
     const dbWrong = await db.query.wordMeanings.findMany({
-      where: ne(wordMeanings.translation, correct.translation),
+      where: and(popularityFilter, ne(wordMeanings.translation, correct.translation)),
       limit: 3 - wrongTranslations.length,
       orderBy: sql`RANDOM()`,
     });
@@ -493,8 +524,12 @@ async function generateQuestionFromCustomWord(
     const wrongWords: string[] = otherWords.slice(0, 3).map((w) => w.wordText);
 
     if (wrongWords.length < 3) {
+      const popularityFilter = or(
+        isNull(wordMeanings.popularityRank),
+        lte(wordMeanings.popularityRank, MAX_POPULARITY_RANK),
+      );
       const dbWrong = await db.query.wordMeanings.findMany({
-        where: ne(wordMeanings.translation, correct.translation),
+        where: and(popularityFilter, ne(wordMeanings.translation, correct.translation)),
         with: { word: true },
         limit: 3 - wrongWords.length,
         orderBy: sql`RANDOM()`,
@@ -616,7 +651,7 @@ export async function recordInfiniteAnswer(
     }
   }
 
-  // Начисляем XP
+  // Начисляем XP и LP
   let xpEarned = 0;
   if (isCorrect) {
     xpEarned = XP_PER_CORRECT;
@@ -636,6 +671,9 @@ export async function recordInfiniteAnswer(
       })
       .where(eq(users.id, userId));
 
+    // League Points за правильный ответ
+    const lpResult = await addLpForCorrectAnswer(userId);
+
     return {
       isCorrect,
       correctTranslation,
@@ -643,6 +681,8 @@ export async function recordInfiniteAnswer(
       totalXp: newXp,
       level: newLevel,
       levelUp: newLevel > user.level ? newLevel : undefined,
+      lpEarned: lpResult.lpEarned,
+      totalLp: lpResult.totalLp,
     };
   }
 
@@ -653,5 +693,7 @@ export async function recordInfiniteAnswer(
     totalXp: undefined,
     level: undefined,
     levelUp: undefined,
+    lpEarned: 0,
+    totalLp: undefined,
   };
 }

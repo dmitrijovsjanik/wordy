@@ -86,19 +86,25 @@ async function enrich() {
       let added = 0;
       let updated = 0;
 
-      for (const m of result.meanings) {
+      for (let idx = 0; idx < result.meanings.length; idx++) {
+        const m = result.meanings[idx]!;
+        const popularityRank = idx + 1; // 1 = самый популярный
+
         const existing = existingMeanings.find(
           (e) => e.translation === m.translation,
         );
 
         if (existing) {
-          // Обновляем contextExample и cefr если их не было
+          // Обновляем contextExample, cefr и popularityRank если их не было
           const updates: Record<string, unknown> = {};
           if (!existing.contextExample && m.examples.length > 0) {
             updates.contextExample = m.examples[0]!.text;
           }
           if (!existing.cefr) {
             updates.cefr = cefr;
+          }
+          if (existing.popularityRank === null) {
+            updates.popularityRank = popularityRank;
           }
           if (Object.keys(updates).length > 0) {
             await db
@@ -115,6 +121,7 @@ async function enrich() {
             contextExample: m.examples[0]?.text ?? null,
             difficulty,
             cefr,
+            popularityRank,
           });
           added++;
         }
