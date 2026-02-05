@@ -12,13 +12,15 @@ import {
   LP_CORRECT_ANSWER,
   LP_QUIZ_COMPLETE,
   LP_DUEL_WIN,
-  LP_STREAK_MULTIPLIER,
+  LP_STREAK_DAYS_MULTIPLIER,
   LP_THRESHOLDS,
   TOP_POSITIONS,
   DEMOTION_LIMITS,
   SEASON_SCHEDULE,
   isProtectedTier,
   calculateDivisionChange,
+  getLpModifier,
+  applyModifier,
   type LeagueTier,
 } from '../config/league-config.js';
 
@@ -164,9 +166,11 @@ async function addLeaguePoints(userId: number, points: number, field: 'correctAn
   return stats?.leaguePoints ?? 0;
 }
 
-export async function addLpForCorrectAnswer(userId: number): Promise<{ lpEarned: number; totalLp: number }> {
-  const totalLp = await addLeaguePoints(userId, LP_CORRECT_ANSWER, 'correctAnswers');
-  return { lpEarned: LP_CORRECT_ANSWER, totalLp };
+export async function addLpForCorrectAnswer(userId: number, streak: number = 0): Promise<{ lpEarned: number; lpModifier: number; totalLp: number }> {
+  const lpModifier = getLpModifier(streak);
+  const lpEarned = applyModifier(LP_CORRECT_ANSWER, lpModifier);
+  const totalLp = await addLeaguePoints(userId, lpEarned, 'correctAnswers');
+  return { lpEarned, lpModifier, totalLp };
 }
 
 export async function addLpForQuizComplete(userId: number) {
@@ -178,7 +182,7 @@ export async function addLpForDuelWin(userId: number) {
 }
 
 export async function addLpForStreak(userId: number, streakDays: number) {
-  const points = LP_STREAK_MULTIPLIER * streakDays;
+  const points = LP_STREAK_DAYS_MULTIPLIER * streakDays;
   await addLeaguePoints(userId, points, 'streakBonus');
 }
 

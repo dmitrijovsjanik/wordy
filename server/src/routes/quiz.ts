@@ -60,13 +60,14 @@ export default async function quizRoutes(app: FastifyInstance) {
   });
 
   app.post<{
-    Body: { meaningId: number; selectedMeaningId: number | null };
+    Body: { meaningId: number; selectedMeaningId: number | null; streak?: number };
   }>('/api/quiz/answer-infinite', async (request) => {
-    const { meaningId, selectedMeaningId } = request.body;
+    const { meaningId, selectedMeaningId, streak = 0 } = request.body;
     const result = await recordInfiniteAnswer(
       request.user.id,
       meaningId,
       selectedMeaningId,
+      streak,
     );
     return result;
   });

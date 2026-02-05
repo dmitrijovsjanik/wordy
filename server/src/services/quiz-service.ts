@@ -1,22 +1,35 @@
-import { eq, ne, and, or, sql, inArray, isNull, lte } from 'drizzle-orm';
+import { eq, ne, and, or, sql, inArray, isNull, lte, gte } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { wordMeanings, quizSessions, quizAnswers, users, userWordProgress, userCustomWords, userCustomWordProgress } from '../db/schema.js';
 import { getQuizPool, type CustomWordForQuiz } from './collection-service.js';
 import { computeNextReview, MASTERED_STAGE } from './srs-service.js';
 import { type LanguagePair, DEFAULT_LANG_PAIR, reversePair } from '../types/language.js';
-import { addLpForCorrectAnswer, addLpForQuizComplete, addLpForStreak } from './league-service.js';
+import {
+  rewardCorrectAnswer,
+  rewardQuizSessionComplete,
+  updateStreakDays,
+  XP_CORRECT_ANSWER,
+} from './progression-service.js';
 
 const QUESTIONS_PER_SESSION = 10;
-const XP_PER_CORRECT = 10;
-const XP_STREAK_BONUS = 5;
 
 // Максимальный ранг популярности для использования в квизах
 // (1 = самый популярный перевод, берём только топ-3)
 const MAX_POPULARITY_RANK = 3;
 
+// Минимальная частотность перевода (fr из Yandex API)
+// fr=1 — очень редкие переводы (град=city), fr=10 — популярные
+const MIN_FREQUENCY = 2;
+
+// Фильтр: перевод должен содержать хотя бы одну кириллическую букву
+// Исключает латинские термины типа "Plus", "Wi-Fi" и т.д.
+const CYRILLIC_FILTER = sql`${wordMeanings.translation} ~ '[а-яА-ЯёЁ]'`;
+
 type Question = {
   meaningId: number;
   word: string;
+  originalForm: string | null; // Оригинальная форма если word — лемма (shoes при word=shoe)
+  transcription: string | null;
   correctTranslation: string;
   options: string[];
   direction: string;
@@ -53,13 +66,19 @@ export async function generateQuestion(excludeMeaningIds: number[] = [], langPai
     lte(wordMeanings.popularityRank, MAX_POPULARITY_RANK),
   );
 
+  // Фильтр по частотности: исключаем редкие переводы (fr=1)
+  const frequencyFilter = or(
+    isNull(wordMeanings.frequency),
+    gte(wordMeanings.frequency, MIN_FREQUENCY),
+  );
+
   // Выбираем случайный meaning для вопроса
   const excludeCondition = excludeMeaningIds.length > 0
     ? sql`${wordMeanings.id} NOT IN (${sql.join(excludeMeaningIds.map(id => sql`${id}`), sql`, `)})`
     : undefined;
 
   const candidates = await db.query.wordMeanings.findMany({
-    where: and(popularityFilter, excludeCondition),
+    where: and(popularityFilter, frequencyFilter, excludeCondition),
     with: { word: true },
     limit: 1,
     orderBy: sql`RANDOM()`,
@@ -74,9 +93,13 @@ export async function generateQuestion(excludeMeaningIds: number[] = [], langPai
   const correctTranslationsSet = new Set(correctTranslations);
 
   // 3 неправильных варианта той же сложности, не совпадающие ни с одним переводом правильного
+  // + фильтруем латинские термины (переводы должны содержать кириллицу)
+  // + фильтруем редкие переводы (frequency >= MIN_FREQUENCY)
   const wrongOptions = await db.query.wordMeanings.findMany({
     where: and(
       popularityFilter,
+      frequencyFilter,
+      CYRILLIC_FILTER,
       ne(wordMeanings.id, correct.id),
       eq(wordMeanings.difficulty, correct.difficulty),
       sql`${wordMeanings.translation} NOT IN (${sql.join(correctTranslations.map(t => sql`${t}`), sql`, `)})`,
@@ -91,6 +114,8 @@ export async function generateQuestion(excludeMeaningIds: number[] = [], langPai
     const moreOptions = await db.query.wordMeanings.findMany({
       where: and(
         popularityFilter,
+        frequencyFilter,
+        CYRILLIC_FILTER,
         ne(wordMeanings.id, correct.id),
         sql`${wordMeanings.translation} NOT IN (${sql.join(correctTranslations.map(t => sql`${t}`), sql`, `)})`,
         wrongOptions.length > 0
@@ -111,19 +136,27 @@ export async function generateQuestion(excludeMeaningIds: number[] = [], langPai
   const isForward = direction === langPair;
 
   if (isForward) {
+    // en-ru: показываем английское слово с транскрипцией
+    // Если есть лемма — показываем её как главное слово, оригинал сверху
+    const lemma = correct.word.lemma;
     const options = shuffle([correct.translation, ...filteredWrong.map(o => o.translation)]);
     return {
       meaningId: correct.id,
-      word: correct.word.text,
+      word: lemma ?? correct.word.text,
+      originalForm: lemma ? correct.word.text : null,
+      transcription: correct.word.transcription,
       correctTranslation: correct.translation,
       options,
       direction,
     };
   } else {
+    // ru-en: показываем русское слово, транскрипция не нужна
     const options = shuffle([correct.word.text, ...filteredWrong.map(o => o.word.text)]);
     return {
       meaningId: correct.id,
       word: correct.translation,
+      originalForm: null,
+      transcription: null,
       correctTranslation: correct.word.text,
       options,
       direction,
@@ -162,7 +195,7 @@ export async function recordAnswer(
     .set({
       totalCount: sql`${quizSessions.totalCount} + 1`,
       correctCount: isCorrect ? sql`${quizSessions.correctCount} + 1` : quizSessions.correctCount,
-      score: isCorrect ? sql`${quizSessions.score} + ${XP_PER_CORRECT}` : quizSessions.score,
+      score: isCorrect ? sql`${quizSessions.score} + ${XP_CORRECT_ANSWER}` : quizSessions.score,
     })
     .where(eq(quizSessions.id, sessionId));
 
@@ -189,64 +222,29 @@ export async function finishSession(sessionId: number, userId: number) {
 
   if (!user) throw new Error('Пользователь не найден');
 
-  // Подсчёт XP
-  let xpEarned = session.correctCount * XP_PER_CORRECT;
+  // Обновляем streak дней
+  const newStreakDays = await updateStreakDays(userId);
 
-  // Streak logic
-  const now = new Date();
-  const lastActivity = user.lastActivityAt;
-  let newStreakDays = user.streakDays;
-
-  if (lastActivity) {
-    const diffMs = now.getTime() - lastActivity.getTime();
-    const diffHours = diffMs / (1000 * 60 * 60);
-
-    if (diffHours >= 24 && diffHours < 48) {
-      newStreakDays += 1;
-    } else if (diffHours >= 48) {
-      newStreakDays = 1;
-    }
-    // < 24 часов — streak не меняется (уже играли сегодня)
-  } else {
-    newStreakDays = 1;
-  }
-
-  xpEarned += XP_STREAK_BONUS * newStreakDays;
-
-  const newXp = user.xp + xpEarned;
-  const newLevel = Math.floor(Math.sqrt(newXp / 100)) + 1;
+  // Начисляем награды через progression-service
+  const result = await rewardQuizSessionComplete(
+    userId,
+    session.correctCount,
+    newStreakDays > user.streakDays ? newStreakDays : 0, // LP за streak только при увеличении
+  );
 
   // Обновляем сессию
   await db
     .update(quizSessions)
-    .set({ xpEarned, finishedAt: now })
+    .set({ xpEarned: result.xpEarned, finishedAt: new Date() })
     .where(eq(quizSessions.id, sessionId));
-
-  // Обновляем пользователя
-  await db
-    .update(users)
-    .set({
-      xp: newXp,
-      level: newLevel,
-      streakDays: newStreakDays,
-      lastActivityAt: now,
-      updatedAt: now,
-    })
-    .where(eq(users.id, userId));
-
-  // League Points: за завершение квиза и streak
-  await addLpForQuizComplete(userId);
-  if (newStreakDays > user.streakDays) {
-    await addLpForStreak(userId, newStreakDays);
-  }
 
   return {
     correctCount: session.correctCount,
     totalCount: session.totalCount,
-    xpEarned,
+    xpEarned: result.xpEarned,
     streak: newStreakDays,
-    totalXp: newXp,
-    level: newLevel,
+    totalXp: result.totalXp,
+    level: result.level,
   };
 }
 
@@ -415,16 +413,22 @@ export async function generateQuestionFromPool(
   const correctTranslations = getAllTranslations(correct);
   const correctTranslationsSet = new Set(correctTranslations);
 
-  // Фильтр по популярности для неправильных вариантов
+  // Фильтры по популярности и частотности для неправильных вариантов
   const popularityFilter = or(
     isNull(wordMeanings.popularityRank),
     lte(wordMeanings.popularityRank, MAX_POPULARITY_RANK),
   );
+  const frequencyFilter = or(
+    isNull(wordMeanings.frequency),
+    gte(wordMeanings.frequency, MIN_FREQUENCY),
+  );
 
-  // 3 неправильных варианта
+  // 3 неправильных варианта (с фильтром кириллицы для латинских терминов)
   const wrongOptions = await db.query.wordMeanings.findMany({
     where: and(
       popularityFilter,
+      frequencyFilter,
+      CYRILLIC_FILTER,
       ne(wordMeanings.id, correct.id),
       eq(wordMeanings.difficulty, correct.difficulty),
       sql`${wordMeanings.translation} NOT IN (${sql.join(correctTranslations.map(t => sql`${t}`), sql`, `)})`,
@@ -438,6 +442,8 @@ export async function generateQuestionFromPool(
     const moreOptions = await db.query.wordMeanings.findMany({
       where: and(
         popularityFilter,
+        frequencyFilter,
+        CYRILLIC_FILTER,
         ne(wordMeanings.id, correct.id),
         sql`${wordMeanings.translation} NOT IN (${sql.join(correctTranslations.map(t => sql`${t}`), sql`, `)})`,
         wrongOptions.length > 0
@@ -457,19 +463,27 @@ export async function generateQuestionFromPool(
   const isForward = direction === langPair;
 
   if (isForward) {
+    // en-ru: показываем английское слово с транскрипцией
+    // Если есть лемма — показываем её как главное слово, оригинал сверху
+    const lemma = correct.word.lemma;
     const options = shuffle([correct.translation, ...filteredWrong.map(o => o.translation)]);
     return {
       meaningId: correct.id,
-      word: correct.word.text,
+      word: lemma ?? correct.word.text,
+      originalForm: lemma ? correct.word.text : null,
+      transcription: correct.word.transcription,
       correctTranslation: correct.translation,
       options,
       direction,
     };
   } else {
+    // ru-en: показываем русское слово, транскрипция не нужна
     const options = shuffle([correct.word.text, ...filteredWrong.map(o => o.word.text)]);
     return {
       meaningId: correct.id,
       word: correct.translation,
+      originalForm: null,
+      transcription: null,
       correctTranslation: correct.word.text,
       options,
       direction,
@@ -490,14 +504,18 @@ async function generateQuestionFromCustomWord(
   );
   const wrongTranslations: string[] = otherCustom.slice(0, 3).map((w) => w.translation);
 
-  // Если мало кастомных — добиваем из wordMeanings (только популярные)
+  // Если мало кастомных — добиваем из wordMeanings (только популярные + частотные + кириллица)
   if (wrongTranslations.length < 3) {
     const popularityFilter = or(
       isNull(wordMeanings.popularityRank),
       lte(wordMeanings.popularityRank, MAX_POPULARITY_RANK),
     );
+    const frequencyFilter = or(
+      isNull(wordMeanings.frequency),
+      gte(wordMeanings.frequency, MIN_FREQUENCY),
+    );
     const dbWrong = await db.query.wordMeanings.findMany({
-      where: and(popularityFilter, ne(wordMeanings.translation, correct.translation)),
+      where: and(popularityFilter, frequencyFilter, CYRILLIC_FILTER, ne(wordMeanings.translation, correct.translation)),
       limit: 3 - wrongTranslations.length,
       orderBy: sql`RANDOM()`,
     });
@@ -512,6 +530,8 @@ async function generateQuestionFromCustomWord(
     return {
       meaningId: -correct.id, // Отрицательный id = кастомное слово
       word: correct.wordText,
+      originalForm: null, // Кастомные слова без леммы
+      transcription: null, // Кастомные слова без транскрипции
       correctTranslation: correct.translation,
       options,
       direction,
@@ -528,8 +548,12 @@ async function generateQuestionFromCustomWord(
         isNull(wordMeanings.popularityRank),
         lte(wordMeanings.popularityRank, MAX_POPULARITY_RANK),
       );
+      const frequencyFilter = or(
+        isNull(wordMeanings.frequency),
+        gte(wordMeanings.frequency, MIN_FREQUENCY),
+      );
       const dbWrong = await db.query.wordMeanings.findMany({
-        where: and(popularityFilter, ne(wordMeanings.translation, correct.translation)),
+        where: and(popularityFilter, frequencyFilter, ne(wordMeanings.translation, correct.translation)),
         with: { word: true },
         limit: 3 - wrongWords.length,
         orderBy: sql`RANDOM()`,
@@ -541,6 +565,8 @@ async function generateQuestionFromCustomWord(
     return {
       meaningId: -correct.id,
       word: correct.translation,
+      originalForm: null,
+      transcription: null,
       correctTranslation: correct.wordText,
       options,
       direction,
@@ -552,6 +578,7 @@ export async function recordInfiniteAnswer(
   userId: number,
   meaningId: number,
   selectedMeaningId: number | null,
+  streak: number = 0,
 ) {
   const isCustom = meaningId < 0;
   const realId = Math.abs(meaningId);
@@ -651,38 +678,21 @@ export async function recordInfiniteAnswer(
     }
   }
 
-  // Начисляем XP и LP
-  let xpEarned = 0;
+  // Начисляем XP и LP с модификаторами streak через progression-service
   if (isCorrect) {
-    xpEarned = XP_PER_CORRECT;
-    const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
-    if (!user) throw new Error('Пользователь не найден');
-
-    const newXp = user.xp + xpEarned;
-    const newLevel = Math.floor(Math.sqrt(newXp / 100)) + 1;
-
-    await db
-      .update(users)
-      .set({
-        xp: newXp,
-        level: newLevel,
-        lastActivityAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, userId));
-
-    // League Points за правильный ответ
-    const lpResult = await addLpForCorrectAnswer(userId);
+    const reward = await rewardCorrectAnswer(userId, streak);
 
     return {
       isCorrect,
       correctTranslation,
-      xpEarned,
-      totalXp: newXp,
-      level: newLevel,
-      levelUp: newLevel > user.level ? newLevel : undefined,
-      lpEarned: lpResult.lpEarned,
-      totalLp: lpResult.totalLp,
+      xpEarned: reward.xpEarned,
+      xpModifier: reward.xpModifier,
+      totalXp: reward.totalXp,
+      level: reward.level,
+      levelUp: reward.levelUp,
+      lpEarned: reward.lpEarned,
+      lpModifier: reward.lpModifier,
+      totalLp: reward.totalLp,
     };
   }
 

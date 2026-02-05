@@ -32,6 +32,7 @@ export async function getMarketplace(userId: number) {
       title: collections.title,
       description: collections.description,
       iconName: collections.iconName,
+      cefrLevel: collections.cefrLevel,
       totalWords: collections.totalWords,
       price: collections.price,
       category: collections.category,
@@ -104,6 +105,7 @@ export async function getLibrary(userId: number) {
       title: collections.title,
       description: collections.description,
       iconName: collections.iconName,
+      cefrLevel: collections.cefrLevel,
       totalWords: collections.totalWords,
       price: collections.price,
     })
@@ -171,16 +173,19 @@ export async function getCollectionDetail(collectionId: number, userId: number) 
     lte(wordMeanings.popularityRank, MAX_POPULARITY_RANK),
   );
 
-  // Системные слова с SRS-прогрессом
+  // Системные слова с SRS-прогрессом и popularity
   const systemWords = await db
     .select({
       id: wordMeanings.id,
       word: words.text,
+      lemma: words.lemma,
+      transcription: words.transcription,
       translation: wordMeanings.translation,
       alternativeTranslations: wordMeanings.alternativeTranslations,
       partOfSpeech: wordMeanings.partOfSpeech,
       contextExample: wordMeanings.contextExample,
       srsStage: userWordProgress.srsStage,
+      popularityRank: words.frequencyRank,
     })
     .from(collectionWords)
     .innerJoin(wordMeanings, eq(collectionWords.meaningId, wordMeanings.id))
@@ -224,8 +229,24 @@ export async function getCollectionDetail(collectionId: number, userId: number) 
   });
 
   const wordsWithProgress = [
-    ...systemWords.map((w) => ({ ...w, srsStage: w.srsStage ?? 0, alternativeTranslations: w.alternativeTranslations ?? undefined, contextExample: w.contextExample ?? undefined })),
-    ...customWords.map((w) => ({ ...w, srsStage: (w.srsStage ?? 0) as number, alternativeTranslations: undefined as string[] | undefined, contextExample: w.contextExample ?? undefined })),
+    ...systemWords.map((w) => ({
+      ...w,
+      srsStage: w.srsStage ?? 0,
+      lemma: w.lemma ?? undefined,
+      transcription: w.transcription ?? undefined,
+      alternativeTranslations: w.alternativeTranslations ?? undefined,
+      contextExample: w.contextExample ?? undefined,
+      popularityRank: w.popularityRank ?? undefined,
+    })),
+    ...customWords.map((w) => ({
+      ...w,
+      srsStage: (w.srsStage ?? 0) as number,
+      lemma: undefined as string | undefined,
+      transcription: undefined as string | undefined,
+      alternativeTranslations: undefined as string[] | undefined,
+      contextExample: w.contextExample ?? undefined,
+      popularityRank: undefined as number | undefined,
+    })),
   ];
 
   return {
@@ -456,27 +477,49 @@ export async function getAllWords(userId: number) {
     lte(wordMeanings.popularityRank, MAX_POPULARITY_RANK),
   );
 
-  // System words from collections
+  // System words from collections with SRS progress and popularity
   const systemWords = await db
     .select({
+      id: wordMeanings.id,
       word: words.text,
+      lemma: words.lemma,
+      transcription: words.transcription,
       translation: wordMeanings.translation,
       alternativeTranslations: wordMeanings.alternativeTranslations,
       partOfSpeech: wordMeanings.partOfSpeech,
+      srsStage: userWordProgress.srsStage,
+      popularityRank: wordMeanings.popularityRank,
+      frequencyRank: words.frequencyRank,
     })
     .from(collectionWords)
     .innerJoin(wordMeanings, eq(collectionWords.meaningId, wordMeanings.id))
     .innerJoin(words, eq(wordMeanings.wordId, words.id))
+    .leftJoin(
+      userWordProgress,
+      and(
+        eq(userWordProgress.meaningId, wordMeanings.id),
+        eq(userWordProgress.userId, userId),
+      ),
+    )
     .where(and(inArray(collectionWords.collectionId, collectionIds), popularityFilter));
 
-  // Custom words from collections
+  // Custom words from collections with SRS progress
   const customWordRows = await db
     .select({
+      id: userCustomWords.id,
       word: userCustomWords.wordText,
       translation: userCustomWords.translation,
       partOfSpeech: userCustomWords.partOfSpeech,
+      srsStage: userCustomWordProgress.srsStage,
     })
     .from(userCustomWords)
+    .leftJoin(
+      userCustomWordProgress,
+      and(
+        eq(userCustomWordProgress.customWordId, userCustomWords.id),
+        eq(userCustomWordProgress.userId, userId),
+      ),
+    )
     .where(
       and(
         eq(userCustomWords.userId, userId),
@@ -486,17 +529,32 @@ export async function getAllWords(userId: number) {
 
   // Deduplicate by word+translation
   const seen = new Set<string>();
-  const result: { word: string; translation: string; alternativeTranslations?: string[]; partOfSpeech?: string }[] = [];
+  const result: {
+    id?: number;
+    word: string;
+    lemma?: string;
+    transcription?: string;
+    translation: string;
+    alternativeTranslations?: string[];
+    partOfSpeech?: string;
+    srsStage?: number;
+    popularityRank?: number;
+  }[] = [];
 
   for (const w of [...systemWords, ...customWordRows]) {
     const key = `${w.word}::${w.translation}`;
     if (!seen.has(key)) {
       seen.add(key);
       result.push({
+        id: w.id,
         word: w.word,
+        lemma: 'lemma' in w ? ((w.lemma as string | null) ?? undefined) : undefined,
+        transcription: 'transcription' in w ? ((w.transcription as string | null) ?? undefined) : undefined,
         translation: w.translation,
         alternativeTranslations: 'alternativeTranslations' in w ? (w.alternativeTranslations as string[] | null) ?? undefined : undefined,
         partOfSpeech: w.partOfSpeech ?? undefined,
+        srsStage: w.srsStage ?? 0,
+        popularityRank: 'frequencyRank' in w ? ((w.frequencyRank as number | null) ?? undefined) : undefined,
       });
     }
   }
@@ -565,11 +623,18 @@ export async function getQuizPool(userId: number, collectionId?: number): Promis
     collectionIds = activeSubs.map((s) => s.collectionId);
   }
 
-  // Словарные слова
+  // Фильтр по популярности: только топ-N переводов
+  const popularityFilter = or(
+    isNull(wordMeanings.popularityRank),
+    lte(wordMeanings.popularityRank, MAX_POPULARITY_RANK),
+  );
+
+  // Словарные слова (только популярные переводы)
   const systemMeanings = await db
     .select({ meaningId: collectionWords.meaningId })
     .from(collectionWords)
-    .where(inArray(collectionWords.collectionId, collectionIds));
+    .innerJoin(wordMeanings, eq(collectionWords.meaningId, wordMeanings.id))
+    .where(and(inArray(collectionWords.collectionId, collectionIds), popularityFilter));
 
   const meaningIds = [...new Set(systemMeanings.map((m) => m.meaningId))];
 

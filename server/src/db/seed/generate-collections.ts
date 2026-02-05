@@ -1,6 +1,6 @@
 import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { eq, and, sql, isNotNull } from 'drizzle-orm';
+import { eq, and, isNotNull } from 'drizzle-orm';
 import { collections, collectionWords, words, wordMeanings, topics, wordMeaningTopics } from '../schema.js';
 
 const pool = new pg.Pool({
@@ -23,25 +23,25 @@ type LevelConfig = {
 const LEVEL_CONFIGS: LevelConfig[] = [
   {
     cefr: 'a1',
-    title: 'Начальный уровень (A1)',
+    title: 'Начальный уровень',
     description: 'Самые частотные 500 слов — базовая лексика для повседневного общения',
     iconName: 'BookOpen02Icon',
   },
   {
     cefr: 'a2',
-    title: 'Элементарный (A2)',
+    title: 'Элементарный',
     description: 'Расширение словарного запаса для простых разговоров и текстов',
     iconName: 'Book02Icon',
   },
   {
     cefr: 'b1',
-    title: 'Средний уровень (B1)',
+    title: 'Средний уровень',
     description: 'Лексика для свободного чтения и обсуждения повседневных тем',
     iconName: 'MortarboardIcon',
   },
   {
     cefr: 'b2',
-    title: 'Продвинутый (B2)',
+    title: 'Продвинутый',
     description: 'Углублённая лексика для уверенного владения языком',
     iconName: 'UniversityIcon',
   },
@@ -75,6 +75,7 @@ async function createCollection(
   meaningIds: number[],
   uniqueWordCount: number,
   category?: string,
+  cefrLevel?: CefrLevel,
 ) {
   if (meaningIds.length === 0) return;
 
@@ -97,6 +98,7 @@ async function createCollection(
       title,
       description,
       iconName,
+      cefrLevel,
       category,
       isPublished: true,
       totalWords: uniqueWordCount,
@@ -151,7 +153,7 @@ async function generateCollections() {
     const meaningIds = filtered.map((m) => m.meaningId);
     const uniqueWords = new Set(filtered.map((m) => m.wordId)).size;
 
-    await createCollection(config.title, config.description, config.iconName, meaningIds, uniqueWords, 'level');
+    await createCollection(config.title, config.description, config.iconName, meaningIds, uniqueWords, 'level', config.cefr);
   }
 
   // 2. Коллекции по POS + уровню
@@ -169,11 +171,11 @@ async function generateCollections() {
       }
 
       const uniqueWords = new Set(filtered.map((m) => m.wordId)).size;
-      const title = `${posName} ${CEFR_LABELS[config.cefr]}`;
+      const title = posName;
       const description = `${posName} уровня ${CEFR_LABELS[config.cefr]} из списка NGSL`;
       const iconName = POS_ICONS[pos] ?? 'BookOpen02Icon';
 
-      await createCollection(title, description, iconName, meaningIds, uniqueWords, 'pos');
+      await createCollection(title, description, iconName, meaningIds, uniqueWords, 'pos', config.cefr);
     }
   }
 

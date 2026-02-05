@@ -15,6 +15,8 @@ const POS_LABELS: Record<string, string> = {
 
 type WordItemProps = {
   word: string;
+  lemma?: string;
+  transcription?: string;
   translations: string[];
   alternativeTranslations?: string[];
   partOfSpeech?: string;
@@ -23,7 +25,11 @@ type WordItemProps = {
   onDelete?: () => Promise<void>;
 };
 
-export const WordItem = memo(function WordItem({ word, translations, alternativeTranslations, partOfSpeech, contextExample, srsStage, onDelete }: WordItemProps) {
+export const WordItem = memo(function WordItem({ word, lemma, transcription, translations, alternativeTranslations, partOfSpeech, contextExample, srsStage, onDelete }: WordItemProps) {
+  // Если есть лемма — показываем её крупно, оригинальное слово мелко сверху
+  // Если нет леммы — показываем оригинальное слово крупно
+  const displayWord = lemma ?? word;
+  const variantWord = lemma ? word : undefined;
   const [isDeleting, setIsDeleting] = useState(false);
   const [confirmVisible, setConfirmVisible] = useState(false);
   const confirmTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -56,7 +62,15 @@ export const WordItem = memo(function WordItem({ word, translations, alternative
     <Card className="flex flex-col gap-1.5 p-4">
       {/* Строка 1: слово + часть речи + SRS + удаление */}
       <div className="flex items-start gap-2">
-        <span className="text-base font-semibold">{word}</span>
+        <div className="flex flex-col">
+          {variantWord && (
+            <span className="text-[10px] text-[var(--gray-10)]">{variantWord}</span>
+          )}
+          <span className="text-base font-semibold">{displayWord}</span>
+          {transcription && (
+            <span className="text-xs text-[var(--gray-10)]">[{transcription}]</span>
+          )}
+        </div>
         <div className="ml-auto flex items-center gap-2">
           {partOfSpeech && (
             <span className="text-xs text-[var(--gray-9)]">

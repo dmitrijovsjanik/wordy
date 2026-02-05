@@ -14,7 +14,7 @@ export default async function dictionaryRoutes(app: FastifyInstance) {
     }
 
     try {
-      const result = await lookup(text, lang);
+      const result = await lookup(text, { lang });
       return result;
     } catch (err) {
       request.log.error(err);

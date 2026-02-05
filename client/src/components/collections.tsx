@@ -2,40 +2,40 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCollectionStore } from '@/stores/collection-store';
 import { Button } from '@/components/ui/button';
-import { WordList } from '@/components/ui/word-list';
+import { Input } from '@/components/ui/input';
+import { WordList, countUniqueWords } from '@/components/ui/word-list';
 import { WordViewToggle } from '@/components/ui/word-view-toggle';
+import { WordSortSelect } from '@/components/ui/word-sort-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Add01Icon } from '@hugeicons/core-free-icons';
+import { Add01Icon, Search01Icon, Cancel01Icon } from '@hugeicons/core-free-icons';
 import { Progress } from '@/components/ui/progress';
 import { ICON_MAP, DEFAULT_ICON } from '@/lib/icon-map';
-import type { MarketplaceCollection, CollectionGroup, LibraryCollection } from '@/types/api';
+import type { MarketplaceCollection, CollectionGroup, LibraryCollection, CefrLevel } from '@/types/api';
 
-function extractLevel(title: string): string | null {
-  const match = title.match(/\b(A1|A2|B1|B2)\b/i);
-  return match ? match[1].toUpperCase() : null;
-}
+const CEFR_LABELS: Record<CefrLevel, string> = {
+  a1: 'A1',
+  a2: 'A2',
+  b1: 'B1',
+  b2: 'B2',
+  c1: 'C1',
+};
 
-function stripLevel(title: string): string {
-  return title
-    .replace(/\s*\(?(A1|A2|B1|B2)\)?\s*/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function getLevelStyle(level: string | null): { bg: string; text: string } {
+function getLevelStyle(level: CefrLevel | null): { bg: string; text: string } {
   if (!level) return { bg: 'bg-[var(--gray-3)]', text: 'text-[var(--gray-11)]' };
   switch (level) {
-    case 'A1':
+    case 'a1':
       return { bg: 'bg-[var(--cyan-4)]', text: 'text-[var(--cyan-11)]' };
-    case 'A2':
+    case 'a2':
       return { bg: 'bg-[var(--teal-4)]', text: 'text-[var(--teal-11)]' };
-    case 'B1':
+    case 'b1':
       return { bg: 'bg-[var(--iris-4)]', text: 'text-[var(--iris-11)]' };
-    case 'B2':
+    case 'b2':
       return { bg: 'bg-[var(--plum-4)]', text: 'text-[var(--plum-11)]' };
+    case 'c1':
+      return { bg: 'bg-[var(--violet-4)]', text: 'text-[var(--violet-11)]' };
     default:
       return { bg: 'bg-[var(--gray-3)]', text: 'text-[var(--gray-11)]' };
   }
@@ -45,13 +45,11 @@ type CollectionCardProps = {
   col: MarketplaceCollection | LibraryCollection;
   onClick: () => void;
   variant: 'marketplace' | 'library';
-  showLevelInsteadOfIcon?: boolean;
 };
 
-function CollectionCard({ col, onClick, variant, showLevelInsteadOfIcon = false }: CollectionCardProps) {
+function CollectionCard({ col, onClick, variant }: CollectionCardProps) {
   const IconComponent = col.iconName ? ICON_MAP[col.iconName] ?? DEFAULT_ICON : DEFAULT_ICON;
-  const level = showLevelInsteadOfIcon ? extractLevel(col.title) : null;
-  const displayTitle = level ? stripLevel(col.title) : col.title;
+  const level = col.cefrLevel;
   const levelStyle = getLevelStyle(level);
 
   const isMarketplace = variant === 'marketplace';
@@ -66,13 +64,13 @@ function CollectionCard({ col, onClick, variant, showLevelInsteadOfIcon = false 
     >
       <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${level ? levelStyle.bg : 'bg-[var(--gray-3)]'}`}>
         {level ? (
-          <span className={`text-sm font-bold ${levelStyle.text}`}>{level}</span>
+          <span className={`text-sm font-bold ${levelStyle.text}`}>{CEFR_LABELS[level]}</span>
         ) : (
           <HugeiconsIcon icon={IconComponent} size={20} className="text-[var(--gray-11)]" />
         )}
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-sm font-medium text-[var(--gray-12)]">{displayTitle}</span>
+        <span className="truncate text-sm font-medium text-[var(--gray-12)]">{col.title}</span>
         {isMarketplace ? (
           <span className="text-xs text-[var(--gray-11)]">{col.totalWords} слов</span>
         ) : (
@@ -104,21 +102,21 @@ function CollectionCard({ col, onClick, variant, showLevelInsteadOfIcon = false 
 
 type Tab = 'library' | 'words' | 'marketplace';
 
-const LEVEL_ORDER = ['A1', 'A2', 'B1', 'B2'] as const;
+const LEVEL_ORDER: CefrLevel[] = ['a1', 'a2', 'b1', 'b2'];
 
 // Переключатель уровней
 function LevelToggle({
   selected,
   onChange,
 }: {
-  selected: string;
-  onChange: (level: string) => void;
+  selected: CefrLevel;
+  onChange: (level: CefrLevel) => void;
 }) {
   return (
     <ToggleGroup
       type="single"
       value={selected}
-      onValueChange={(value) => value && onChange(value)}
+      onValueChange={(value) => value && onChange(value as CefrLevel)}
       variant="outline"
       spacing={2}
     >
@@ -128,7 +126,7 @@ function LevelToggle({
           value={level}
           className="rounded-full px-4"
         >
-          {level}
+          {CEFR_LABELS[level]}
         </ToggleGroupItem>
       ))}
     </ToggleGroup>
@@ -143,30 +141,28 @@ function MarketplaceGroup({
   navigate: (path: string) => void;
 }) {
   const isPosGroup = group.key === 'pos';
-  const showLevelInsteadOfIcon = group.key === 'pos' || group.key === 'level';
-  const [selectedLevel, setSelectedLevel] = useState<string>('A1');
+  const isLevelGroup = group.key === 'level';
+  const [selectedLevel, setSelectedLevel] = useState<CefrLevel>('a1');
 
   // Фильтруем по выбранному уровню (только для pos)
   const filteredCollections = useMemo(() => {
     if (!isPosGroup) return group.collections;
-    return group.collections.filter((col) => extractLevel(col.title) === selectedLevel);
+    return group.collections.filter((col) => col.cefrLevel === selectedLevel);
   }, [group.collections, isPosGroup, selectedLevel]);
 
   // Сортировка: по уровню (для level группы)
   const sortedCollections = useMemo(() => {
-    if (!showLevelInsteadOfIcon || isPosGroup) return filteredCollections;
+    if (!isLevelGroup) return filteredCollections;
 
     const sorted = [...filteredCollections];
     sorted.sort((a, b) => {
-      const levelA = extractLevel(a.title);
-      const levelB = extractLevel(b.title);
-      const indexA = levelA ? LEVEL_ORDER.indexOf(levelA as typeof LEVEL_ORDER[number]) : 99;
-      const indexB = levelB ? LEVEL_ORDER.indexOf(levelB as typeof LEVEL_ORDER[number]) : 99;
+      const indexA = a.cefrLevel ? LEVEL_ORDER.indexOf(a.cefrLevel) : 99;
+      const indexB = b.cefrLevel ? LEVEL_ORDER.indexOf(b.cefrLevel) : 99;
       return indexA - indexB;
     });
 
     return sorted;
-  }, [filteredCollections, showLevelInsteadOfIcon, isPosGroup]);
+  }, [filteredCollections, isLevelGroup]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -185,7 +181,6 @@ function MarketplaceGroup({
             col={col}
             variant="marketplace"
             onClick={() => navigate(`/collections/${col.id}`)}
-            showLevelInsteadOfIcon={showLevelInsteadOfIcon}
           />
         ))}
       </div>
@@ -215,6 +210,19 @@ export function Collections() {
   const fetchLibrary = useCollectionStore((s) => s.fetchLibrary);
   const fetchMarketplace = useCollectionStore((s) => s.fetchMarketplace);
   const fetchAllWords = useCollectionStore((s) => s.fetchAllWords);
+
+  // Поиск слов
+  const [wordSearch, setWordSearch] = useState('');
+
+  const filteredWords = useMemo(() => {
+    const query = wordSearch.trim().toLowerCase();
+    if (!query) return allWords;
+    return allWords.filter(
+      (w) =>
+        w.word.toLowerCase().includes(query) ||
+        w.translation.toLowerCase().includes(query),
+    );
+  }, [allWords, wordSearch]);
 
   useEffect(() => {
     fetchLibrary();
@@ -281,18 +289,45 @@ export function Collections() {
 
         {activeTab === 'words' && !isLoadingAllWords && (
           <>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-[var(--gray-11)]">{allWords.length} слов</span>
-              <WordViewToggle />
+            {/* Поиск */}
+            <div className="relative">
+              <HugeiconsIcon
+                icon={Search01Icon}
+                size={18}
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--gray-11)]"
+              />
+              <Input
+                placeholder="Поиск слов..."
+                value={wordSearch}
+                onChange={(e) => setWordSearch(e.target.value)}
+                className="pl-11 pr-11"
+              />
+              {wordSearch && (
+                <button
+                  type="button"
+                  onClick={() => setWordSearch('')}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--gray-11)] active:text-[var(--gray-12)]"
+                >
+                  <HugeiconsIcon icon={Cancel01Icon} size={18} />
+                </button>
+              )}
             </div>
 
-            {allWords.length === 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-[var(--gray-11)]">{countUniqueWords(filteredWords)} слов</span>
+              <div className="flex items-center gap-2">
+                <WordSortSelect />
+                <WordViewToggle />
+              </div>
+            </div>
+
+            {filteredWords.length === 0 && (
               <p className="mt-4 text-center text-sm text-[var(--gray-11)]">
-                Нет слов. Добавьте коллекции в библиотеку!
+                {wordSearch ? 'Ничего не найдено' : 'Нет слов. Добавьте коллекции в библиотеку!'}
               </p>
             )}
 
-            <WordList words={allWords} />
+            <WordList words={filteredWords} />
           </>
         )}
 

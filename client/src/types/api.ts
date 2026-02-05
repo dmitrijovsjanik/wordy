@@ -26,6 +26,8 @@ export type AuthResponse = {
 export type QuizQuestion = {
   meaningId: number;
   word: string;
+  originalForm: string | null; // Оригинальная форма если word — лемма (shoes при word=shoe)
+  transcription: string | null;
   correctTranslation: string;
   options: string[];
   direction: string;
@@ -120,12 +122,15 @@ export type ApiError = {
 
 // ─── Collections ────────────────────────────────────────────────────────────
 
+export type CefrLevel = 'a1' | 'a2' | 'b1' | 'b2' | 'c1';
+
 export type Collection = {
   id: number;
   type: 'system' | 'user' | 'auto';
   title: string;
   description: string | null;
   iconName: string | null;
+  cefrLevel: CefrLevel | null;
   totalWords: number;
   price: number | null;
 };
@@ -149,11 +154,14 @@ export type LibraryCollection = Collection & {
 export type CollectionWord = {
   id: number;
   word: string;
+  lemma?: string;
+  transcription?: string;
   translation: string;
   alternativeTranslations?: string[];
   partOfSpeech: string;
   contextExample?: string;
   srsStage: number;
+  popularityRank?: number;
 };
 
 export type CollectionDetail = {
@@ -173,7 +181,17 @@ export type DifficultWordsResponse = {
 };
 
 export type AllWordsResponse = {
-  words: { word: string; translation: string; alternativeTranslations?: string[] }[];
+  words: {
+    id?: number;
+    word: string;
+    lemma?: string;
+    transcription?: string;
+    translation: string;
+    alternativeTranslations?: string[];
+    partOfSpeech?: string;
+    srsStage?: number;
+    popularityRank?: number;
+  }[];
 };
 
 // ─── Dictionary ─────────────────────────────────────────────────────────────
@@ -200,10 +218,12 @@ export type InfiniteAnswerResponse = {
   isCorrect: boolean;
   correctTranslation: string;
   xpEarned: number;
+  xpModifier?: number; // модификатор в процентах (100 = x1.0, 110 = x1.1)
   totalXp?: number;
   level?: number;
   levelUp?: number;
   lpEarned: number;
+  lpModifier?: number; // модификатор в процентах (100 = x1.0, 105 = x1.05)
   totalLp?: number;
 };
 

@@ -61,7 +61,7 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
 
     set({ isLoading: true });
     try {
-      const res = await quizAnswerInfinite(currentQuestion.meaningId, selectedMeaningId);
+      const res = await quizAnswerInfinite(currentQuestion.meaningId, selectedMeaningId, get().streak);
 
       const updatedRecent = [...recentMeaningIds, currentQuestion.meaningId].slice(-MAX_RECENT);
       const newStreak = res.isCorrect ? get().streak + 1 : 0;

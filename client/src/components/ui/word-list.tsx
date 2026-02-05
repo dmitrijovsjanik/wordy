@@ -1,5 +1,4 @@
-import { useMemo, useRef } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useMemo } from 'react';
 import { WordItem } from '@/components/ui/word-item';
 import { WordBadge } from '@/components/ui/word-badge';
 import { useWordViewStore } from '@/stores/word-view-store';
@@ -7,21 +6,27 @@ import { useWordViewStore } from '@/stores/word-view-store';
 type WordEntry = {
   id?: number;
   word: string;
+  lemma?: string;
+  transcription?: string;
   translation: string;
   alternativeTranslations?: string[];
   partOfSpeech?: string;
   contextExample?: string;
   srsStage?: number;
+  popularityRank?: number;
 };
 
 type GroupedWord = {
   ids: number[];
   word: string;
+  lemma?: string;
+  transcription?: string;
   translations: string[];
   alternativeTranslations: string[];
   partOfSpeech?: string;
   contextExample?: string;
   srsStage: number;
+  popularityRank?: number;
 };
 
 type WordListProps = {
@@ -29,13 +34,17 @@ type WordListProps = {
   onDeleteWords?: (wordIds: number[]) => Promise<void>;
 };
 
+export function countUniqueWords(words: { word: string }[]): number {
+  return new Set(words.map((w) => w.word.toLowerCase())).size;
+}
+
 function groupWords(words: WordEntry[]): GroupedWord[] {
   // 1. Собираем переводы для каждого слова
   const byWord = new Map<string, Set<string>>();
   const idsByWord = new Map<string, number[]>();
   const altsByWord = new Map<string, Set<string>>();
   const stageByPair = new Map<string, number>();
-  const metaByWord = new Map<string, { partOfSpeech?: string; contextExample?: string }>();
+  const metaByWord = new Map<string, { partOfSpeech?: string; contextExample?: string; popularityRank?: number; lemma?: string; transcription?: string }>();
 
   for (const w of words) {
     if (!byWord.has(w.word)) byWord.set(w.word, new Set());
@@ -48,7 +57,13 @@ function groupWords(words: WordEntry[]): GroupedWord[] {
     stageByPair.set(key, Math.max(stageByPair.get(key) ?? 0, w.srsStage ?? 0));
 
     if (!metaByWord.has(w.word)) {
-      metaByWord.set(w.word, { partOfSpeech: w.partOfSpeech, contextExample: w.contextExample });
+      metaByWord.set(w.word, {
+        partOfSpeech: w.partOfSpeech,
+        contextExample: w.contextExample,
+        popularityRank: w.popularityRank,
+        lemma: w.lemma,
+        transcription: w.transcription,
+      });
     }
 
     if (w.alternativeTranslations) {
@@ -86,11 +101,18 @@ function groupWords(words: WordEntry[]): GroupedWord[] {
     for (const gw of group.words) seenWords.add(gw);
 
     let maxStage = 0;
+    let minPopularity: number | undefined;
     const allIds: number[] = [];
     for (const gw of group.words) {
       allIds.push(...(idsByWord.get(gw) ?? []));
       for (const t of group.translations) {
         maxStage = Math.max(maxStage, stageByPair.get(`${gw}::${t}`) ?? 0);
+      }
+      const meta = metaByWord.get(gw);
+      if (meta?.popularityRank !== undefined) {
+        minPopularity = minPopularity === undefined
+          ? meta.popularityRank
+          : Math.min(minPopularity, meta.popularityRank);
       }
     }
 
@@ -107,72 +129,78 @@ function groupWords(words: WordEntry[]): GroupedWord[] {
     result.push({
       ids: allIds,
       word: [...group.words].join(', '),
+      lemma: meta?.lemma,
+      transcription: meta?.transcription,
       translations: group.translations,
       alternativeTranslations: [...alts],
       partOfSpeech: meta?.partOfSpeech,
       contextExample: meta?.contextExample,
       srsStage: maxStage,
+      popularityRank: minPopularity,
     });
   }
 
   return result;
 }
 
+function sortWords(words: GroupedWord[], sortMode: string): GroupedWord[] {
+  const sorted = [...words];
+  switch (sortMode) {
+    case 'alphabetical':
+      sorted.sort((a, b) => a.word.localeCompare(b.word, 'en', { sensitivity: 'base' }));
+      break;
+    case 'progress':
+      // Сначала неизученные (srsStage 0), потом в процессе, потом выученные
+      sorted.sort((a, b) => a.srsStage - b.srsStage);
+      break;
+    case 'popularity':
+    default:
+      // Чем меньше rank — тем популярнее слово (1 = самое популярное)
+      // Слова без rank идут в конец
+      sorted.sort((a, b) => {
+        const aRank = a.popularityRank ?? Infinity;
+        const bRank = b.popularityRank ?? Infinity;
+        return aRank - bRank;
+      });
+      break;
+  }
+  return sorted;
+}
+
 export function WordList({ words, onDeleteWords }: WordListProps) {
   const viewMode = useWordViewStore((s) => s.viewMode);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const sortMode = useWordViewStore((s) => s.sortMode);
 
   const grouped = useMemo(() => groupWords(words), [words]);
-
-  const virtualizer = useVirtualizer({
-    count: grouped.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => 90,
-    overscan: 5,
-    measureElement: (element) => element.getBoundingClientRect().height,
-  });
+  const sorted = useMemo(() => sortWords(grouped, sortMode), [grouped, sortMode]);
 
   if (viewMode === 'badges') {
     return (
       <div className="flex flex-wrap gap-2">
-        {grouped.map((g) => (
+        {sorted.map((g) => (
           <WordBadge key={g.word} word={g.word} translations={g.translations} alternativeTranslations={g.alternativeTranslations} srsStage={g.srsStage} />
         ))}
       </div>
     );
   }
 
+  // Простой рендер без виртуализации — страница сама скроллится
   return (
-    <div ref={scrollRef} className="h-[calc(100vh-280px)] overflow-auto">
-      <div
-        className="relative w-full"
-        style={{ height: `${virtualizer.getTotalSize()}px` }}
-      >
-        {virtualizer.getVirtualItems().map((virtualRow) => {
-          const g = grouped[virtualRow.index];
-          return (
-            <div
-              key={g.word}
-              ref={virtualizer.measureElement}
-              data-index={virtualRow.index}
-              className="absolute left-0 top-0 w-full pb-2"
-              style={{
-                transform: `translateY(${virtualRow.start}px)`,
-              }}
-            >
-              <WordItem
-                word={g.word}
-                translations={g.translations}
-                alternativeTranslations={g.alternativeTranslations}
-                partOfSpeech={g.partOfSpeech}
-                contextExample={g.contextExample}
-                srsStage={g.srsStage}
-                onDelete={onDeleteWords ? () => onDeleteWords(g.ids) : undefined}
-              />
-            </div>
-          );
-        })}
-      </div>
+    <div className="flex flex-col gap-2">
+      {sorted.map((g) => (
+        <WordItem
+          key={g.word}
+          word={g.word}
+          lemma={g.lemma}
+          transcription={g.transcription}
+          translations={g.translations}
+          alternativeTranslations={g.alternativeTranslations}
+          partOfSpeech={g.partOfSpeech}
+          contextExample={g.contextExample}
+          srsStage={g.srsStage}
+          onDelete={onDeleteWords ? () => onDeleteWords(g.ids) : undefined}
+        />
+      ))}
     </div>
   );
 }

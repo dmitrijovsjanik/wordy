@@ -17,6 +17,7 @@
     "db:generate-collections": "tsx --env-file=.env src/db/seed/generate-collections.ts",
     "db:seed-topics": "tsx --env-file=.env src/db/seed/seed-topics.ts",
     "db:update-ranks": "tsx --env-file=.env src/db/seed/update-popularity-ranks.ts",
+    "db:cleanup-latin": "tsx --env-file=.env src/db/seed/cleanup-latin-translations.ts",
     "db:seed-full": "npm run db:import-ngsl && npm run db:enrich && npm run db:seed-topics && npm run db:generate-collections"
   },
   "devDependencies": {
@@ -35,6 +36,7 @@
     "fastify": "^5.7.2",
     "fastify-plugin": "^5.1.0",
     "node-cron": "^4.2.1",
-    "pg": "^8.18.0"
+    "pg": "^8.18.0",
+    "wink-lemmatizer": "^3.0.4"
   }
 }

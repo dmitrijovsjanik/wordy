@@ -4,8 +4,9 @@ import { useCollectionStore } from '@/stores/collection-store';
 import { useBackButton } from '@/hooks/use-back-button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { WordList } from '@/components/ui/word-list';
+import { WordList, countUniqueWords } from '@/components/ui/word-list';
 import { WordViewToggle } from '@/components/ui/word-view-toggle';
+import { WordSortSelect } from '@/components/ui/word-sort-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BackButton } from '@/components/ui/back-button';
 import { DictionaryPreview } from '@/components/ui/dictionary-preview';
@@ -202,7 +203,7 @@ export function CollectionDetail() {
       {/* Шапка */}
       <div className="flex items-center justify-between">
         <BackButton onClick={() => navigate('/collections')} />
-        {isOwner && (
+        {isOwner ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon">
@@ -224,7 +225,27 @@ export function CollectionDetail() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        )}
+        ) : collection.isInLibrary ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <HugeiconsIcon icon={MoreVerticalIcon} size={20} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={async () => {
+                  await unsubscribe(collection.id);
+                  navigate('/collections');
+                }}
+                className="text-[var(--red-11)]"
+              >
+                <HugeiconsIcon icon={Delete02Icon} size={16} />
+                Удалить из библиотеки
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
       </div>
 
       {/* Инфо */}
@@ -232,16 +253,20 @@ export function CollectionDetail() {
       {collection.description && (
         <p className="mt-1 text-sm text-[var(--gray-11)]">{collection.description}</p>
       )}
-      <p className="mt-1 text-xs text-[var(--gray-11)]">
-        {collection.totalWords} слов
-        {collection.price ? ` · ${collection.price} ₽` : ''}
-      </p>
+      {collection.price && (
+        <p className="mt-1 text-xs text-[var(--gray-11)]">
+          {collection.price} ₽
+        </p>
+      )}
 
       {/* Список слов */}
-      <div className="mt-6 flex flex-1 flex-col gap-2">
+      <div className="mt-6 flex flex-1 flex-col gap-3">
         <div className="flex items-center justify-between">
-          <span className="text-sm text-[var(--gray-11)]">{words.length} слов</span>
-          <WordViewToggle />
+          <span className="text-sm text-[var(--gray-11)]">{countUniqueWords(words)} слов</span>
+          <div className="flex items-center gap-2">
+            <WordSortSelect />
+            <WordViewToggle />
+          </div>
         </div>
         {words.length === 0 && !isAddingMode && (
           <p className="py-8 text-center text-sm text-[var(--gray-11)]">
@@ -337,29 +362,17 @@ export function CollectionDetail() {
               </div>
             )
           ) : collection.isInLibrary ? (
-            <div className="flex flex-col gap-2">
-              {words.length > 0 && (
-                <Button
-                  onClick={() => {
-                    setCollectionId(collection.id);
-                    navigate('/');
-                  }}
-                  className="w-full"
-                >
-                  Учить эту коллекцию
-                </Button>
-              )}
+            words.length > 0 && (
               <Button
-                variant="secondary"
-                onClick={async () => {
-                  await unsubscribe(collection.id);
-                  navigate('/collections');
+                onClick={() => {
+                  setCollectionId(collection.id);
+                  navigate('/');
                 }}
                 className="w-full"
               >
-                Удалить из библиотеки
+                Учить эту коллекцию
               </Button>
-            </div>
+            )
           ) : (
             <Button
               onClick={() => subscribe(collection.id)}

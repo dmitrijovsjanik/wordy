@@ -10,6 +10,7 @@ import {
   pgEnum,
   uniqueIndex,
   index,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -91,6 +92,11 @@ export const words = pgTable('words', {
   text: varchar('text', { length: 255 }).notNull(),
   language: varchar('language', { length: 10 }).default('en').notNull(),
   frequencyRank: integer('frequency_rank'),
+  // Транскрипция из Yandex API (ts): [ɡʊd]
+  transcription: varchar('transcription', { length: 100 }),
+  // Лемма (словарная форма): shoes → shoe, ran → run
+  // Если слово уже в словарной форме — null
+  lemma: varchar('lemma', { length: 255 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -111,6 +117,20 @@ export const wordMeanings = pgTable('word_meanings', {
   alternativeTranslations: text('alternative_translations').array(),
   // Ранг популярности перевода (1 = самый популярный, из Yandex Dictionary API)
   popularityRank: integer('popularity_rank'),
+  // Частотность из Yandex API (fr): 1-10, чем выше — тем популярнее перевод
+  frequency: integer('frequency'),
+  // Английские слова-уточнения контекста (mean из Yandex API)
+  // Например: good → "полезный" имеет hints: ["useful", "helpful"]
+  meaningHints: text('meaning_hints').array(),
+  // Синонимы перевода из Yandex API (syn)
+  // Например: good → "хороший" имеет synonyms: ["добротный", "неплохой"]
+  synonyms: text('synonyms').array(),
+  // Часть речи перевода (tr[].pos из Yandex API)
+  // Может отличаться от части речи слова: run (verb) → бег (noun)
+  translationPartOfSpeech: varchar('translation_part_of_speech', { length: 50 }),
+  // Примеры использования с переводами (ex из Yandex API)
+  // Формат: [{ text: "good boy", translation: "хороший мальчик" }, ...]
+  examples: jsonb('examples').$type<{ text: string; translation: string }[]>(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -219,6 +239,7 @@ export const collections = pgTable('collections', {
   title: varchar('title', { length: 255 }).notNull(),
   description: varchar('description', { length: 1000 }),
   iconName: varchar('icon_name', { length: 100 }),
+  cefrLevel: cefrLevelEnum('cefr_level'),
   price: integer('price'),
   isPublished: boolean('is_published').default(false).notNull(),
   category: varchar('category', { length: 50 }),

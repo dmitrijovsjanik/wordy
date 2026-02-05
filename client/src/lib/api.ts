@@ -216,10 +216,11 @@ export function quizNext(excludeIds: number[] = [], collectionId?: number) {
   return fetchApi<{ question: QuizQuestion | null }>('GET', `/api/quiz/next${query}`);
 }
 
-export function quizAnswerInfinite(meaningId: number, selectedMeaningId: number | null) {
+export function quizAnswerInfinite(meaningId: number, selectedMeaningId: number | null, streak: number) {
   return fetchApi<InfiniteAnswerResponse>('POST', '/api/quiz/answer-infinite', {
     meaningId,
     selectedMeaningId,
+    streak,
   });
 }
 

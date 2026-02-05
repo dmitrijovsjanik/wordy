@@ -122,7 +122,14 @@ export function Quiz() {
         <span className="mb-2 text-xs text-[var(--gray-11)]">
           {question?.direction === 'ru-en' ? 'Переведите на английский' : 'Переведите на русский'}
         </span>
+        {/* Оригинальная форма сверху мелко (shoes при word=shoe) */}
+        {question?.originalForm && (
+          <span className="mb-1 text-xs text-[var(--gray-10)]">{question.originalForm}</span>
+        )}
         <h2 className="text-4xl font-bold">{question?.word}</h2>
+        {question?.transcription && (
+          <span className="mt-1 text-sm text-[var(--gray-10)]">[{question.transcription}]</span>
+        )}
       </div>
 
       {/* Listen button — only for English words */}

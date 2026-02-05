@@ -27,7 +27,15 @@ type CachedDetail = {
 type CollectionState = {
   marketplace: CollectionGroup[];
   library: LibraryCollection[];
-  allWords: { word: string; translation: string; alternativeTranslations?: string[]; partOfSpeech?: string }[];
+  allWords: {
+    id?: number;
+    word: string;
+    translation: string;
+    alternativeTranslations?: string[];
+    partOfSpeech?: string;
+    srsStage?: number;
+    popularityRank?: number;
+  }[];
   currentDetail: CollectionDetail | null;
   detailCache: Map<number, CachedDetail>;
   isLoadingLibrary: boolean;

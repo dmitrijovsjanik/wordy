@@ -10,8 +10,6 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { Sword01Icon } from '@hugeicons/core-free-icons';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
-import Lottie from 'lottie-react';
-import fireStreakData from '@/assets/fire-streak.json';
 
 export function Home() {
   const navigate = useNavigate();
@@ -31,8 +29,15 @@ export function Home() {
   } = useHomeStore();
 
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
-  const [xpDisplay, setXpDisplay] = useState<{ xp: number; levelUp?: number; key: number } | null>(null);
-  const xpKeyRef = useRef(0);
+  const [rewardDisplay, setRewardDisplay] = useState<{
+    xp: number;
+    xpMultiplier: number;
+    lp: number;
+    lpMultiplier: number;
+    levelUp?: number;
+    key: number;
+  } | null>(null);
+  const rewardKeyRef = useRef(0);
   const [streakBounceKey, setStreakBounceKey] = useState(0);
   const initialStreakRef = useRef(streak);
   const prevStreakRef = useRef(streak);
@@ -91,15 +96,28 @@ export function Home() {
     }
   }, [streak]);
 
-  // XP display с автоочисткой после анимации
+  // Reward display с автоочисткой после анимации
   useEffect(() => {
-    if (!feedback || feedback.xpEarned <= 0) return;
+    if (!feedback || !feedback.isCorrect) return;
 
-    xpKeyRef.current += 1;
-    setXpDisplay({ xp: feedback.xpEarned, levelUp: feedback.levelUp, key: xpKeyRef.current });
+    rewardKeyRef.current += 1;
 
-    // Очищаем после завершения анимации (1.4s)
-    const clearTimer = setTimeout(() => setXpDisplay(null), 1400);
+    // Используем модификаторы с сервера (в процентах: 100 = x1.0)
+    // Конвертируем в дробный множитель для отображения
+    const xpMultiplier = (feedback.xpModifier ?? 100) / 100;
+    const lpMultiplier = (feedback.lpModifier ?? 100) / 100;
+
+    setRewardDisplay({
+      xp: feedback.xpEarned,
+      xpMultiplier,
+      lp: feedback.lpEarned,
+      lpMultiplier,
+      levelUp: feedback.levelUp,
+      key: rewardKeyRef.current,
+    });
+
+    // Очищаем после завершения анимации LP (1.8s — самая долгая)
+    const clearTimer = setTimeout(() => setRewardDisplay(null), 1900);
 
     return () => clearTimeout(clearTimer);
   }, [feedback]);
@@ -239,7 +257,7 @@ export function Home() {
                       <div className="streak-glow" />
                       <motion.div
                         key={streakBounceKey}
-                        className="relative z-10 flex h-8 items-center justify-center gap-0.5 rounded-full border border-orange-500/20 bg-orange-950/80 pl-2.5 pr-3.5 shadow-[inset_0_0_10px_rgba(251,146,60,0.15),inset_0_1px_0_rgba(255,255,255,0.06)]"
+                        className="relative z-10 flex h-8 items-center justify-center rounded-full border border-orange-500/20 bg-orange-950/80 px-3.5 shadow-[inset_0_0_10px_rgba(251,146,60,0.15),inset_0_1px_0_rgba(255,255,255,0.06)]"
                         initial={false}
                         animate={streakBounceKey === 0 ? {} : {
                           scaleX: [1, 1.15, 0.95, 1],
@@ -248,7 +266,6 @@ export function Home() {
                         }}
                         transition={{ duration: 0.35, ease: 'easeOut' }}
                       >
-                        <Lottie animationData={fireStreakData} loop autoplay className="relative -top-0.5 h-5 w-5 shrink-0" />
                         <span className="whitespace-nowrap text-xs font-medium tracking-wide text-[var(--red-11)]">
                           {streak} подряд!
                         </span>
@@ -257,37 +274,77 @@ export function Home() {
                   )}
                 </AnimatePresence>
                 <AnimatePresence mode="wait">
-                  <motion.h2
+                  <motion.div
                     key={currentQuestion.meaningId}
-                    className="text-4xl font-bold text-center"
-                    style={{
-                      // Уменьшаем шрифт для длинных слов (больше 10 символов)
-                      fontSize: currentQuestion.word.length > 14
-                        ? `${Math.max(1.5, 2.25 - (currentQuestion.word.length - 14) * 0.08)}rem`
-                        : currentQuestion.word.length > 10
-                          ? `${2.25 - (currentQuestion.word.length - 10) * 0.05}rem`
-                          : undefined,
-                    }}
+                    className="flex flex-col items-center"
                     // Не анимируем первый вопрос
                     initial={currentQuestion.meaningId === firstMeaningIdRef.current ? false : { opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
                     transition={{ duration: 0.2 }}
                   >
-                    {currentQuestion.word}
-                  </motion.h2>
+                    {/* Оригинальная форма сверху мелко (shoes при word=shoe) */}
+                    {currentQuestion.originalForm && (
+                      <span className="mb-1 text-xs text-[var(--gray-10)]">
+                        {currentQuestion.originalForm}
+                      </span>
+                    )}
+                    <h2
+                      className="max-w-full break-words px-4 text-center font-bold"
+                      style={{
+                        // Адаптивный размер: clamp(min, preferred, max)
+                        // Для длинных слов уменьшаем preferred и max
+                        fontSize: currentQuestion.word.length > 14
+                          ? `clamp(1.25rem, 8vw, ${Math.max(1.5, 2.25 - (currentQuestion.word.length - 14) * 0.08)}rem)`
+                          : currentQuestion.word.length > 10
+                            ? `clamp(1.5rem, 9vw, ${2.25 - (currentQuestion.word.length - 10) * 0.05}rem)`
+                            : 'clamp(1.75rem, 10vw, 2.25rem)',
+                      }}
+                    >
+                      {currentQuestion.word}
+                    </h2>
+                    {currentQuestion.transcription && (
+                      <span className="mt-1 text-sm text-[var(--gray-10)]">
+                        [{currentQuestion.transcription}]
+                      </span>
+                    )}
+                  </motion.div>
                 </AnimatePresence>
               </div>
 
-              {/* XP feedback — absolute so it doesn't shift the word */}
-              {xpDisplay && (
-                <div key={xpDisplay.key} className="absolute bottom-0 left-1/2 flex -translate-x-1/2 -translate-y-4 flex-col items-center">
-                  <span className="animate-xp-float text-sm font-semibold text-[var(--green-11)]">
-                    +{xpDisplay.xp} XP
-                  </span>
-                  {xpDisplay.levelUp && (
-                    <span className="animate-xp-float text-sm font-bold text-[var(--accent-9)]">
-                      Уровень {xpDisplay.levelUp}!
+              {/* Reward feedback — absolute so it doesn't shift the word */}
+              {rewardDisplay && (
+                <div key={rewardDisplay.key} className="absolute bottom-0 left-1/2 flex -translate-x-1/2 -translate-y-4 flex-col items-center gap-1">
+                  {/* XP group — value + multiplier animate together */}
+                  <div className="animate-reward-group flex items-center gap-1.5">
+                    <span className="text-sm font-semibold text-[var(--green-11)]">
+                      +{rewardDisplay.xp} XP
+                    </span>
+                    {rewardDisplay.xpMultiplier > 1 && (
+                      <span className="animate-multiplier-pop text-xs font-bold text-[var(--orange-10)]">
+                        x{rewardDisplay.xpMultiplier.toFixed(1)}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* LP group — value + multiplier, slower animation */}
+                  {rewardDisplay.lp > 0 && (
+                    <div className="animate-reward-group-slow flex items-center gap-1.5">
+                      <span className="text-xs font-medium text-[var(--amber-11)]">
+                        +{rewardDisplay.lp} LP
+                      </span>
+                      {rewardDisplay.lpMultiplier > 1 && (
+                        <span className="animate-multiplier-pop-slow text-xs font-bold text-[var(--red-10)]">
+                          x{rewardDisplay.lpMultiplier.toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Level up notification */}
+                  {rewardDisplay.levelUp && (
+                    <span className="animate-reward-group text-sm font-bold text-[var(--accent-9)]">
+                      Уровень {rewardDisplay.levelUp}!
                     </span>
                   )}
                 </div>
@@ -314,7 +371,7 @@ export function Home() {
                     disabled={showResult && !isSelected && !isCorrectOption}
                     onClick={() => handleAnswer(option)}
                     className={cn(
-                      'h-14 px-4 text-center text-sm',
+                      'h-auto min-h-14 whitespace-normal px-4 py-2 text-center text-sm leading-tight',
                       showResult && 'pointer-events-none',
                       showResult && isCorrectOption && !feedback?.isCorrect && 'bg-[var(--green-3)] text-[var(--green-12)]',
                     )}

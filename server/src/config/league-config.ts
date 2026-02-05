@@ -53,20 +53,27 @@ export const LEAGUE_NAMES: Record<LeagueTier, string> = {
 // Лиги без понижения (защита новичков)
 export const PROTECTED_TIERS: LeagueTier[] = ['bronze', 'silver', 'gold'];
 
-// LP за действия
-export const LP_CORRECT_ANSWER = 10;
-export const LP_QUIZ_COMPLETE = 50;
-export const LP_DUEL_WIN = 100;
-export const LP_STREAK_MULTIPLIER = 20;
+// LP за действия (базовые значения в увеличенной разрядности для точных модификаторов)
+export const LP_CORRECT_ANSWER = 100;
+export const LP_QUIZ_COMPLETE = 500;
+export const LP_DUEL_WIN = 1000;
+export const LP_STREAK_DAYS_MULTIPLIER = 200; // бонус за streak дней
 
-// Пороги LP для результатов недели
+// Re-export streak modifiers from progression-config (single source of truth)
+export {
+  getXpModifier,
+  getLpModifier,
+  applyModifier,
+} from './progression-config.js';
+
+// Пороги LP для результатов недели (увеличены x10 под новую разрядность)
 export const LP_THRESHOLDS = {
-  DEMOTION_2: { max: 99 },
-  DEMOTION_1: { min: 100, max: 199 },
-  MAINTAIN: { min: 200, max: 399 },
-  PROMOTION_1: { min: 400, max: 699 },
-  PROMOTION_2: { min: 700, max: 999 },
-  PROMOTION_3: { min: 1000 },
+  DEMOTION_2: { max: 999 },
+  DEMOTION_1: { min: 1000, max: 1999 },
+  MAINTAIN: { min: 2000, max: 3999 },
+  PROMOTION_1: { min: 4000, max: 6999 },
+  PROMOTION_2: { min: 7000, max: 9999 },
+  PROMOTION_3: { min: 10000 },
 } as const;
 
 // Лимиты для групп понижения

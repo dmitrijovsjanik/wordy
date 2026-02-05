@@ -1,6 +1,6 @@
 import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { topics, wordMeaningTopics, words, wordMeanings } from '../schema.js';
 import { topicDefs } from './topics.js';
 
