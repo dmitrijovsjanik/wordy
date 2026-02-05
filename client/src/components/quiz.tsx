@@ -1,12 +1,9 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { VolumeHighIcon } from '@hugeicons/core-free-icons';
 import { useGameStore } from '@/stores/game-store';
 import { useUserStore } from '@/stores/user-store';
 import { useBackButton } from '@/hooks/use-back-button';
 import { useTelegram } from '@/hooks/use-telegram';
-import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BackButton } from '@/components/ui/back-button';
 
@@ -142,17 +139,10 @@ export function Quiz() {
             transcription={question.transcription}
             meaningId={question.meaningId}
             skipInitialAnimation={question.meaningId === firstMeaningIdRef.current}
+            showSpeaker={question.direction === 'en-ru'}
           />
         )}
       </div>
-
-      {/* Listen button — only for English words */}
-      {question?.direction === 'en-ru' && (
-        <Button variant="ghost" size="sm" className="mb-6" disabled>
-          <HugeiconsIcon strokeWidth={2} icon={VolumeHighIcon} size={20} />
-          Прослушать
-        </Button>
-      )}
 
       {/* Multiple choice options */}
       {question && (

@@ -11,6 +11,7 @@ import Lottie from 'lottie-react';
 import fireStreakData from '@/assets/fire-streak.json';
 import { cn } from '@/lib/utils';
 import { LP_THRESHOLDS, PROTECTED_TIERS } from '@/lib/league-config';
+import { xpForLevel } from '@/lib/progression-config';
 import type { LeagueTier } from '@/types/api';
 
 const LEAGUE_NAMES: Record<LeagueTier, string> = {
@@ -107,9 +108,6 @@ function getLeagueZoneInfo(position: number, total: number, leaguePoints: number
   return { positionPercent, zone, result };
 }
 
-function xpForLevel(level: number) {
-  return (level - 1) * (level - 1) * 100;
-}
 
 type PlayerStatusCardProps = {
   user: {

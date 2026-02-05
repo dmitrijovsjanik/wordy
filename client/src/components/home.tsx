@@ -236,6 +236,7 @@ export function Home() {
                   transcription={currentQuestion.transcription}
                   meaningId={currentQuestion.meaningId}
                   skipInitialAnimation={currentQuestion.meaningId === firstMeaningIdRef.current}
+                  showSpeaker={currentQuestion.direction === 'en-ru'}
                 />
               </div>
 
