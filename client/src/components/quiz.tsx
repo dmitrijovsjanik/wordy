@@ -9,7 +9,11 @@ import { useTelegram } from '@/hooks/use-telegram';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BackButton } from '@/components/ui/back-button';
-import { cn } from '@/lib/utils';
+
+// Новые модульные компоненты
+import { WordDisplay } from '@/components/game/word-display';
+import { MultipleChoice } from '@/components/game/question-types/multiple-choice';
+import type { AnswerFeedback } from '@/types/game';
 
 export function Quiz() {
   const navigate = useNavigate();
@@ -28,6 +32,7 @@ export function Quiz() {
 
   const answerStartTime = useRef(Date.now());
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const firstMeaningIdRef = useRef<number | null>(null);
 
   useBackButton(useCallback(() => {
     reset();
@@ -45,6 +50,11 @@ export function Quiz() {
       setSelectedOption(null);
     }
   }, [currentQuestion]);
+
+  // Запоминаем ID первого вопроса
+  if (currentQuestion && firstMeaningIdRef.current === null) {
+    firstMeaningIdRef.current = currentQuestion.meaningId;
+  }
 
   useEffect(() => {
     if (result) {
@@ -79,13 +89,15 @@ export function Quiz() {
 
   useEffect(() => {
     if (answerFeedback) {
-      if (answerFeedback.isCorrect) {
-        hapticNotification('success');
-      } else {
-        hapticNotification('error');
-      }
+      hapticNotification(answerFeedback.isCorrect ? 'success' : 'error');
     }
   }, [answerFeedback, hapticNotification]);
+
+  // Преобразуем answerFeedback в AnswerFeedback для компонента
+  const feedback: AnswerFeedback | null = answerFeedback ? {
+    isCorrect: answerFeedback.isCorrect,
+    correctAnswer: answerFeedback.correctTranslation,
+  } : null;
 
   if (!currentQuestion && !answerFeedback) {
     return (
@@ -122,13 +134,15 @@ export function Quiz() {
         <span className="mb-2 text-xs text-[var(--gray-11)]">
           {question?.direction === 'ru-en' ? 'Переведите на английский' : 'Переведите на русский'}
         </span>
-        {/* Оригинальная форма сверху мелко (shoes при word=shoe) */}
-        {question?.originalForm && (
-          <span className="mb-1 text-xs text-[var(--gray-10)]">{question.originalForm}</span>
-        )}
-        <h2 className="text-4xl font-bold">{question?.word}</h2>
-        {question?.transcription && (
-          <span className="mt-1 text-sm text-[var(--gray-10)]">[{question.transcription}]</span>
+
+        {question && (
+          <WordDisplay
+            word={question.word}
+            originalForm={question.originalForm}
+            transcription={question.transcription}
+            meaningId={question.meaningId}
+            skipInitialAnimation={question.meaningId === firstMeaningIdRef.current}
+          />
         )}
       </div>
 
@@ -140,50 +154,19 @@ export function Quiz() {
         </Button>
       )}
 
-      {/* Options grid 2x2 */}
-      <div className="grid w-full grid-cols-2 gap-3">
-        {question?.options.map((option) => {
-          const isSelected = selectedOption === option;
-          const showResult = answerFeedback !== null;
-          const isCorrectOption = option === answerFeedback?.correctTranslation;
-          const isWrongSelected = isSelected && !isCorrectOption;
-
-          return (
-            <Button
-              key={`${questionIndex}-${option}`}
-              variant={
-                !showResult ? 'secondary' :
-                isCorrectOption ? 'success' :
-                isWrongSelected ? 'destructive' :
-                'secondary'
-              }
-              disabled={showResult && !isSelected && !isCorrectOption}
-              onClick={() => handleAnswer(option)}
-              className={cn(
-                'whitespace-normal px-4 text-center text-sm leading-tight',
-                showResult && 'pointer-events-none',
-                showResult && isCorrectOption && !answerFeedback?.isCorrect && 'bg-[var(--green-3)] text-[var(--green-12)]',
-              )}
-            >
-              {option}
-            </Button>
-          );
-        })}
-      </div>
-
-      {/* Skip button */}
-      <Button
-        variant="link"
-        size="sm"
-        disabled={answerFeedback !== null || isLoading}
-        onClick={handleSkip}
-        className={cn(
-          'mt-5',
-          (answerFeedback !== null || isLoading) && 'opacity-40',
-        )}
-      >
-        Не знаю
-      </Button>
+      {/* Multiple choice options */}
+      {question && (
+        <MultipleChoice
+          options={question.options}
+          questionKey={`${questionIndex}-${question.meaningId}`}
+          selectedAnswer={selectedOption}
+          feedback={feedback}
+          disabled={isLoading}
+          onAnswer={handleAnswer}
+          onSkip={handleSkip}
+          showSkip
+        />
+      )}
     </div>
   );
 }
