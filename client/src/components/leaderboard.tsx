@@ -8,10 +8,8 @@ import { LeagueScroll } from '@/components/ui/league-scroll';
 import { LeagueProgress } from '@/components/ui/league-progress';
 import { BackButton } from '@/components/ui/back-button';
 import { cn } from '@/lib/utils';
+import { LP_THRESHOLDS, PROTECTED_TIERS, formatLpBoundary } from '@/lib/league-config';
 import type { LeagueTier } from '@/types/api';
-
-// Лиги без понижения
-const PROTECTED_TIERS: LeagueTier[] = ['bronze', 'silver', 'gold'];
 
 type Zone = {
   id: string;
@@ -23,9 +21,27 @@ type Zone = {
 
 function getZones(isProtected: boolean): Zone[] {
   const zones: Zone[] = [
-    { id: 'promotion_x3', label: 'x3 продвижение', lpBoundary: '1000+ LP', color: 'var(--violet-9)', placeholder: 'Пока никого' },
-    { id: 'promotion_x2', label: 'x2 продвижение', lpBoundary: '700-999 LP', color: 'var(--blue-9)', placeholder: 'Пока никого' },
-    { id: 'promotion_x1', label: 'x1 продвижение', lpBoundary: '400-699 LP', color: 'var(--green-9)', placeholder: 'Пока никого' },
+    {
+      id: 'promotion_x3',
+      label: 'x3 продвижение',
+      lpBoundary: formatLpBoundary(LP_THRESHOLDS.PROMOTION_3.min, Infinity),
+      color: 'var(--violet-9)',
+      placeholder: 'Пока никого',
+    },
+    {
+      id: 'promotion_x2',
+      label: 'x2 продвижение',
+      lpBoundary: formatLpBoundary(LP_THRESHOLDS.PROMOTION_2.min, LP_THRESHOLDS.PROMOTION_2.max),
+      color: 'var(--blue-9)',
+      placeholder: 'Пока никого',
+    },
+    {
+      id: 'promotion_x1',
+      label: 'x1 продвижение',
+      lpBoundary: formatLpBoundary(LP_THRESHOLDS.PROMOTION_1.min, LP_THRESHOLDS.PROMOTION_1.max),
+      color: 'var(--green-9)',
+      placeholder: 'Пока никого',
+    },
     { id: 'safe', label: 'Безопасная зона', lpBoundary: '', color: 'var(--gray-9)', placeholder: 'Пока никого' },
   ];
 
@@ -72,14 +88,14 @@ function groupByZones(entries: LeaderboardEntry[], isProtected: boolean): Groupe
   for (const entry of entries) {
     if (entry.position <= promotionEnd) {
       // В зоне повышения — группируем по LP
-      if (entry.leaguePoints >= 1000) {
+      if (entry.leaguePoints >= LP_THRESHOLDS.PROMOTION_3.min) {
         promotion_x3.push(entry);
-      } else if (entry.leaguePoints >= 700) {
+      } else if (entry.leaguePoints >= LP_THRESHOLDS.PROMOTION_2.min) {
         promotion_x2.push(entry);
-      } else if (entry.leaguePoints >= 400) {
+      } else if (entry.leaguePoints >= LP_THRESHOLDS.PROMOTION_1.min) {
         promotion_x1.push(entry);
       } else {
-        // Меньше 400 LP, но в топ-20% — всё равно x1
+        // Меньше порога, но в топ-20% — всё равно x1
         promotion_x1.push(entry);
       }
     } else if (!isProtected && entry.position >= demotionStart) {

@@ -1,26 +1,7 @@
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { LP_ZONES_FULL, LP_ZONES_PROTECTED, PROTECTED_TIERS } from '@/lib/league-config';
 import type { UserSeasonStats, LeagueTier } from '@/types/api';
-
-// Лиги без понижения (защита новичков)
-const PROTECTED_TIERS: LeagueTier[] = ['bronze', 'silver', 'gold'];
-
-const LP_THRESHOLDS_FULL = [
-  { min: 0, max: 99, label: 'Понижение', color: 'var(--red-9)' },
-  { min: 100, max: 199, label: 'Риск', color: 'var(--amber-9)' },
-  { min: 200, max: 399, label: 'Безопасно', color: 'var(--gray-9)' },
-  { min: 400, max: 699, label: '+1 дивизион', color: 'var(--green-9)' },
-  { min: 700, max: 999, label: '+2 дивизиона', color: 'var(--blue-9)' },
-  { min: 1000, max: Infinity, label: '+3 дивизиона', color: 'var(--violet-9)' },
-];
-
-// Для защищённых лиг — нет понижения
-const LP_THRESHOLDS_PROTECTED = [
-  { min: 0, max: 399, label: 'Безопасно', color: 'var(--gray-9)' },
-  { min: 400, max: 699, label: '+1 дивизион', color: 'var(--green-9)' },
-  { min: 700, max: 999, label: '+2 дивизиона', color: 'var(--blue-9)' },
-  { min: 1000, max: Infinity, label: '+3 дивизиона', color: 'var(--violet-9)' },
-];
 
 type LeagueProgressProps = {
   stats: UserSeasonStats;
@@ -30,7 +11,7 @@ type LeagueProgressProps = {
 
 export function LeagueProgress({ stats, tier, position }: LeagueProgressProps) {
   const isProtected = PROTECTED_TIERS.includes(tier);
-  const thresholds = isProtected ? LP_THRESHOLDS_PROTECTED : LP_THRESHOLDS_FULL;
+  const thresholds = isProtected ? LP_ZONES_PROTECTED : LP_ZONES_FULL;
 
   const currentThreshold = thresholds.find(
     (t) => stats.leaguePoints >= t.min && stats.leaguePoints <= t.max,

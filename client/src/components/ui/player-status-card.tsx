@@ -10,6 +10,7 @@ import { Clock01Icon } from '@hugeicons/core-free-icons';
 import Lottie from 'lottie-react';
 import fireStreakData from '@/assets/fire-streak.json';
 import { cn } from '@/lib/utils';
+import { LP_THRESHOLDS, PROTECTED_TIERS } from '@/lib/league-config';
 import type { LeagueTier } from '@/types/api';
 
 const LEAGUE_NAMES: Record<LeagueTier, string> = {
@@ -38,30 +39,72 @@ function formatTimeLeft(endDate: Date): string {
   return `${hours}ч`;
 }
 
-function getLeagueZoneInfo(position: number, total: number) {
-  // Зоны: топ-20% повышение (зелёный), низ-20% понижение (красный), остальные — безопасная зона (серый)
+type LeagueZone = 'promotion_x3' | 'promotion_x2' | 'promotion_x1' | 'safe' | 'demotion';
+
+function getLeagueZoneInfo(position: number, total: number, leaguePoints: number, isProtected: boolean) {
+  // Реальные пороги по позиции: топ-20% повышение, низ-20% понижение
   const promotionThreshold = Math.max(1, Math.ceil(total * 0.2));
   const demotionThreshold = Math.floor(total * 0.8);
 
-  const promotionPercent = (promotionThreshold / total) * 100;
-  const demotionPercent = ((total - demotionThreshold) / total) * 100;
-  const safePercent = 100 - promotionPercent - demotionPercent;
-
-  // Позиция игрока в процентах (1 = 100%, total = 0%)
-  const positionPercent = ((total - position + 1) / total) * 100;
-
-  let zone: 'promotion' | 'safe' | 'demotion' = 'safe';
+  let zone: LeagueZone = 'safe';
   let result = 0;
 
+  // Определяем зону и результат
   if (position <= promotionThreshold) {
-    zone = 'promotion';
-    result = 1; // +1 дивизион
-  } else if (position > demotionThreshold) {
+    if (leaguePoints >= LP_THRESHOLDS.PROMOTION_3.min) {
+      zone = 'promotion_x3';
+      result = 3;
+    } else if (leaguePoints >= LP_THRESHOLDS.PROMOTION_2.min) {
+      zone = 'promotion_x2';
+      result = 2;
+    } else if (leaguePoints >= LP_THRESHOLDS.PROMOTION_1.min) {
+      zone = 'promotion_x1';
+      result = 1;
+    } else {
+      zone = 'promotion_x1';
+      result = 1;
+    }
+  } else if (!isProtected && position > demotionThreshold) {
     zone = 'demotion';
-    result = -1; // -1 дивизион
+    result = -1;
   }
 
-  return { promotionPercent, safePercent, demotionPercent, positionPercent, zone, result };
+  // Рассчитываем позицию маркера для равномерных секторов на баре
+  // Бар: [понижение 1/3 | безопасно 1/3 | повышение 1/3] или [безопасно 1/2 | повышение 1/2]
+  let positionPercent: number;
+
+  if (isProtected) {
+    // Без понижения: [безопасно 0-50% | повышение 50-100%]
+    if (position <= promotionThreshold) {
+      // В зоне повышения: маппим 1..promotionThreshold → 100%..50%
+      const progressInZone = (promotionThreshold - position) / Math.max(1, promotionThreshold - 1);
+      positionPercent = 50 + progressInZone * 50;
+    } else {
+      // Безопасная зона: маппим promotionThreshold+1..total → 50%..0%
+      const safeZoneSize = total - promotionThreshold;
+      const posInSafe = position - promotionThreshold;
+      positionPercent = 50 - (posInSafe / safeZoneSize) * 50;
+    }
+  } else {
+    // С понижением: [понижение 0-33% | безопасно 33-66% | повышение 66-100%]
+    if (position <= promotionThreshold) {
+      // Повышение: маппим 1..promotionThreshold → 100%..66.6%
+      const progressInZone = (promotionThreshold - position) / Math.max(1, promotionThreshold - 1);
+      positionPercent = 66.6 + progressInZone * 33.3;
+    } else if (position > demotionThreshold) {
+      // Понижение: маппим demotionThreshold+1..total → 33.3%..0%
+      const demotionZoneSize = total - demotionThreshold;
+      const posInDemotion = position - demotionThreshold;
+      positionPercent = 33.3 - (posInDemotion / demotionZoneSize) * 33.3;
+    } else {
+      // Безопасная зона: маппим promotionThreshold+1..demotionThreshold → 66.6%..33.3%
+      const safeZoneSize = demotionThreshold - promotionThreshold;
+      const posInSafe = position - promotionThreshold;
+      positionPercent = 66.6 - (posInSafe / safeZoneSize) * 33.3;
+    }
+  }
+
+  return { positionPercent, zone, result };
 }
 
 function xpForLevel(level: number) {
@@ -107,8 +150,9 @@ export function PlayerStatusCard({ user, className }: PlayerStatusCardProps) {
     return <Skeleton className={cn('h-24 w-full rounded-2xl', className)} />;
   }
 
+  const isProtected = PROTECTED_TIERS.includes(progress.tier);
   const leagueZone = position && position.total > 0
-    ? getLeagueZoneInfo(position.position, position.total)
+    ? getLeagueZoneInfo(position.position, position.total, stats?.leaguePoints ?? 0, isProtected)
     : null;
 
   return (
@@ -151,7 +195,9 @@ export function PlayerStatusCard({ user, className }: PlayerStatusCardProps) {
               <span
                 className={cn(
                   'ml-auto text-sm font-medium',
-                  leagueZone.zone === 'promotion' && 'text-[var(--green-11)]',
+                  leagueZone.zone === 'promotion_x3' && 'text-[var(--violet-11)]',
+                  leagueZone.zone === 'promotion_x2' && 'text-[var(--blue-11)]',
+                  leagueZone.zone === 'promotion_x1' && 'text-[var(--green-11)]',
                   leagueZone.zone === 'demotion' && 'text-[var(--red-11)]',
                   leagueZone.zone === 'safe' && 'text-[var(--gray-11)]',
                 )}
@@ -167,14 +213,61 @@ export function PlayerStatusCard({ user, className }: PlayerStatusCardProps) {
           {/* Середина: прогресс-бар с зонами */}
           <div className="mt-2">
             <div className="relative h-2 w-full">
-              {/* Зоны */}
+              {/*
+                Зоны равномерно делят бар:
+                - С понижением: 33.3% понижение | 33.3% безопасно | 33.3% повышение (по 11.1% на x1/x2/x3)
+                - Без понижения: 50% безопасно | 50% повышение (по 16.6% на x1/x2/x3)
+                Фон: step-3, текущая зона: step-9
+              */}
               <div className="absolute inset-0 flex overflow-hidden rounded-full">
-                {/* Зона понижения (красная) — слева */}
-                <div className="h-full w-[20%] bg-[var(--red-9)] opacity-60" />
-                {/* Безопасная зона (серая) — середина */}
-                <div className="h-full w-[60%] bg-[var(--gray-6)]" />
-                {/* Зона повышения (зелёная) — справа */}
-                <div className="h-full w-[20%] bg-[var(--green-9)] opacity-60" />
+                {!isProtected ? (
+                  <>
+                    {/* Понижение — 1/3 */}
+                    <div
+                      className="h-full w-1/3"
+                      style={{ backgroundColor: leagueZone?.zone === 'demotion' ? 'var(--red-9)' : 'var(--red-6)' }}
+                    />
+                    {/* Безопасно — 1/3 */}
+                    <div
+                      className="h-full w-1/3"
+                      style={{ backgroundColor: leagueZone?.zone === 'safe' ? 'var(--gray-9)' : 'var(--gray-6)' }}
+                    />
+                    {/* Повышение — 1/3 разбито на 3 равные части */}
+                    <div
+                      className="h-full w-[11.1%]"
+                      style={{ backgroundColor: leagueZone?.zone === 'promotion_x1' ? 'var(--green-9)' : 'var(--green-6)' }}
+                    />
+                    <div
+                      className="h-full w-[11.1%]"
+                      style={{ backgroundColor: leagueZone?.zone === 'promotion_x2' ? 'var(--blue-9)' : 'var(--blue-6)' }}
+                    />
+                    <div
+                      className="h-full w-[11.1%]"
+                      style={{ backgroundColor: leagueZone?.zone === 'promotion_x3' ? 'var(--violet-9)' : 'var(--violet-6)' }}
+                    />
+                  </>
+                ) : (
+                  <>
+                    {/* Безопасно — 1/2 */}
+                    <div
+                      className="h-full w-1/2"
+                      style={{ backgroundColor: leagueZone?.zone === 'safe' ? 'var(--gray-9)' : 'var(--gray-6)' }}
+                    />
+                    {/* Повышение — 1/2 разбито на 3 равные части */}
+                    <div
+                      className="h-full w-[16.6%]"
+                      style={{ backgroundColor: leagueZone?.zone === 'promotion_x1' ? 'var(--green-9)' : 'var(--green-6)' }}
+                    />
+                    <div
+                      className="h-full w-[16.6%]"
+                      style={{ backgroundColor: leagueZone?.zone === 'promotion_x2' ? 'var(--blue-9)' : 'var(--blue-6)' }}
+                    />
+                    <div
+                      className="h-full w-[16.7%]"
+                      style={{ backgroundColor: leagueZone?.zone === 'promotion_x3' ? 'var(--violet-9)' : 'var(--violet-6)' }}
+                    />
+                  </>
+                )}
               </div>
               {/* Маркер позиции игрока */}
               {leagueZone && (
