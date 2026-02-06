@@ -13,6 +13,7 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
 
   useEffect(() => {
     telegram.expand();
+    telegram.requestFullscreen();
     init();
   }, [init]);
 

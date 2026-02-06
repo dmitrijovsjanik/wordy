@@ -55,7 +55,7 @@ function DrawerContent({
       <DrawerPrimitive.Content
         data-slot="drawer-content"
         className={cn(
-          "group/drawer-content bg-background fixed inset-x-0 bottom-0 z-50 flex h-auto max-h-[80vh] flex-col rounded-t-3xl",
+          "group/drawer-content bg-background fixed inset-x-0 bottom-0 z-50 mx-auto flex h-auto max-h-[80vh] max-w-md flex-col rounded-t-3xl",
           className
         )}
         {...props}
@@ -79,7 +79,7 @@ function DrawerHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="drawer-header"
-      className={cn("flex flex-col gap-1.5 p-4 text-center", className)}
+      className={cn("flex flex-col gap-1.5 px-8 py-4 text-center", className)}
       {...props}
     />
   )

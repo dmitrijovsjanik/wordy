@@ -19,8 +19,9 @@ import { BackButton } from '@/components/ui/back-button';
 import { Switch } from '@/components/ui/switch';
 import { LeagueCard } from '@/components/ui/league-card';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Fire02Icon, Target02Icon, GameController01Icon, Award01Icon, Sun01Icon, Moon02Icon, ComputerIcon } from '@hugeicons/core-free-icons';
+import { Fire02Icon, Target02Icon, GameController01Icon, Award01Icon, Sun01Icon, Moon02Icon, ComputerIcon, UserGroupIcon, ArrowRight01Icon } from '@hugeicons/core-free-icons';
 import { useThemeStore } from '@/stores/theme-store';
+import { useFriendStore } from '@/stores/friend-store';
 import { cn } from '@/lib/utils';
 
 const LANGUAGES = [
@@ -88,12 +89,15 @@ export function Profile() {
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
   const [stats, setStats] = useState<UserStats | null>(null);
+  const requestCount = useFriendStore((s) => s.requestCount);
+  const fetchRequests = useFriendStore((s) => s.fetchRequests);
 
   useBackButton(useCallback(() => navigate('/'), [navigate]));
 
   useEffect(() => {
     getMyStats().then(setStats).catch(() => {});
-  }, []);
+    fetchRequests();
+  }, [fetchRequests]);
 
   if (!user) return null;
 
@@ -134,6 +138,25 @@ export function Profile() {
 
       {/* League */}
       <LeagueCard className="mt-4" />
+
+      {/* Friends */}
+      <Card className="mt-4">
+        <button
+          onClick={() => navigate('/friends')}
+          className="flex w-full items-center justify-between"
+        >
+          <div className="flex items-center gap-3">
+            <HugeiconsIcon strokeWidth={2} icon={UserGroupIcon} size={20} className="text-[var(--gray-11)]" />
+            <span className="text-sm font-medium">Друзья</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {requestCount > 0 && (
+              <Badge variant="destructive" className="text-[10px]">{requestCount}</Badge>
+            )}
+            <HugeiconsIcon icon={ArrowRight01Icon} size={16} strokeWidth={2} className="text-[var(--gray-11)]" />
+          </div>
+        </button>
+      </Card>
 
       {/* Theme */}
       <Card className="mt-4">

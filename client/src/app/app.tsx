@@ -1,8 +1,11 @@
-import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { lazy, Suspense, useEffect, useRef } from 'react';
+import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { TelegramProvider } from '@/components/telegram-provider';
 import { BottomTabs } from '@/components/bottom-tabs';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useUserStore } from '@/stores/user-store';
+import { telegram } from '@/lib/telegram';
+import { acceptInvite, sendFriendRequest } from '@/lib/api';
 
 const Home = lazy(() => import('@/components/home').then((m) => ({ default: m.Home })));
 const Collections = lazy(() => import('@/components/collections').then((m) => ({ default: m.Collections })));
@@ -17,6 +20,34 @@ const Leaderboard = lazy(() => import('@/components/leaderboard'));
 const Modes = lazy(() => import('@/components/modes').then((m) => ({ default: m.Modes })));
 const Shop = lazy(() => import('@/components/shop').then((m) => ({ default: m.Shop })));
 const TestHeader = lazy(() => import('@/components/test-header').then((m) => ({ default: m.TestHeader })));
+const FriendsPage = lazy(() => import('@/components/friends').then((m) => ({ default: m.Friends })));
+
+function DeepLinkHandler() {
+  const navigate = useNavigate();
+  const isAuthenticated = useUserStore((s) => s.isAuthenticated);
+  const processed = useRef(false);
+
+  useEffect(() => {
+    if (!isAuthenticated || processed.current) return;
+
+    const startParam = telegram.startParam;
+    if (startParam?.startsWith('invite_')) {
+      processed.current = true;
+      const token = startParam.slice(7);
+      acceptInvite(token)
+        .then(() => navigate('/friends', { replace: true }))
+        .catch(() => {});
+    } else if (startParam?.startsWith('friend_')) {
+      processed.current = true;
+      const code = startParam.slice(7);
+      sendFriendRequest(code)
+        .then(() => navigate('/friends', { replace: true }))
+        .catch(() => {});
+    }
+  }, [isAuthenticated, navigate]);
+
+  return null;
+}
 
 function PageSkeleton() {
   return (
@@ -32,6 +63,7 @@ export function App() {
   return (
     <BrowserRouter>
       <TelegramProvider>
+        <DeepLinkHandler />
         <div className="mx-auto flex h-dvh max-w-md flex-col">
           <main className="flex-1 overflow-y-auto">
             <Suspense fallback={<PageSkeleton />}>
@@ -48,6 +80,7 @@ export function App() {
                 <Route path="/leaderboard" element={<Leaderboard />} />
                 <Route path="/modes" element={<Modes />} />
                 <Route path="/shop" element={<Shop />} />
+                <Route path="/friends" element={<FriendsPage />} />
                 <Route path="/test-header" element={<TestHeader />} />
               </Routes>
             </Suspense>

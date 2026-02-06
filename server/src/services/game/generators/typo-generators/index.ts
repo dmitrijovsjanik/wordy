@@ -4,6 +4,7 @@ import { PhoneticGenerator } from './phonetic.js';
 import { TranspositionGenerator } from './transposition.js';
 import { SuffixGenerator } from './suffix.js';
 import { SilentLetterGenerator } from './silent-letter.js';
+import { findAllAxes, selectTwoAxes, generateMatrix } from './axis-finder.js';
 
 // Реэкспорт типов
 export * from './types.js';
@@ -89,25 +90,79 @@ export function generateTypoVariants(
 }
 
 /**
+ * Генерирует варианты с использованием 2-осевой стратегии (2x2 матрица)
+ * Каждый признак ошибки встречается в ≥2 вариантах → нельзя определить правильный по одному признаку
+ *
+ * @returns 4 варианта (включая правильный) или null если не хватает осей
+ */
+function generatePairedOptions(correctWord: string): string[] | null {
+  const axes = findAllAxes(correctWord);
+  const pair = selectTwoAxes(axes);
+
+  if (!pair) return null;
+
+  const [axisA, axisB] = pair;
+  const [correct, wrongA, wrongB, wrongAB] = generateMatrix(correctWord, axisA, axisB);
+
+  // Проверяем уникальность всех 4 вариантов
+  const uniqueSet = new Set([correct, wrongA, wrongB, wrongAB].map(s => s.toLowerCase()));
+  if (uniqueSet.size < 4) return null;
+
+  return [correct, wrongA, wrongB, wrongAB];
+}
+
+/**
  * Генерирует полный набор вариантов для spelling quiz
- * Включает правильный ответ и перемешивает
+ * Использует 2-осевую стратегию (paired), с fallback на старый алгоритм
  *
  * @param correctWord - Правильное написание
- * @param totalOptions - Общее количество вариантов включая правильный (default: 6)
+ * @param totalOptions - Общее количество вариантов включая правильный (default: 4)
  * @param seed - Опциональный seed для детерминизма
  * @returns Перемешанный массив вариантов
  */
 export function generateSpellingOptions(
   correctWord: string,
-  totalOptions: number = 6,
+  totalOptions: number = 4,
   seed?: number,
 ): string[] {
+  // 1. Пробуем 2-осевую стратегию
+  const paired = generatePairedOptions(correctWord);
+  if (paired) {
+    return shuffle(paired, seed);
+  }
+
+  // 2. Fallback: 1 ось + старый генератор
+  const axes = findAllAxes(correctWord);
+  if (axes.length > 0) {
+    const axis = axes[0]!;
+    const wrongVariant = correctWord.slice(0, axis.start) + axis.wrong + correctWord.slice(axis.end);
+
+    // Добираем из старого генератора
+    const oldTypos = generateTypoVariants(correctWord, {
+      totalVariants: totalOptions - 1,
+      seed,
+    });
+
+    // Убираем дубликаты с осевым вариантом
+    const filtered = oldTypos.filter(t => t.toLowerCase() !== wrongVariant.toLowerCase());
+    const needed = totalOptions - 2; // -1 correct -1 axis variant
+    const extras = filtered.slice(0, needed);
+
+    const options = [correctWord, wrongVariant, ...extras];
+    // Если всё ещё не хватает — добираем из оставшихся
+    if (options.length < totalOptions) {
+      const remaining = filtered.slice(needed, needed + (totalOptions - options.length));
+      options.push(...remaining);
+    }
+    return shuffle(options.slice(0, totalOptions), seed);
+  }
+
+  // 3. Полный fallback на старый алгоритм
   const typos = generateTypoVariants(correctWord, {
     totalVariants: totalOptions - 1,
     seed,
   });
 
-  // Добавляем правильный ответ и перемешиваем
   const options = [correctWord, ...typos];
   return shuffle(options, seed);
 }

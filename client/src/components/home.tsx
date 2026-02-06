@@ -16,6 +16,7 @@ import { RewardFeedback } from '@/components/game/reward-feedback';
 import { StreakIndicator } from '@/components/game/streak-indicator';
 import { QuizContainer } from '@/components/game/quiz-container';
 import { StreakDaysIndicator } from '@/components/ui/streak-days-indicator';
+import { StreakInfoSheet } from '@/components/ui/streak-info-sheet';
 import { GemsIndicator } from '@/components/ui/gems-indicator';
 import { Avatar } from '@/components/ui/avatar';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -79,6 +80,9 @@ export function Home() {
   const initialStreakRef = useRef(streak);
   const prevStreakRef = useRef(streak);
   const firstMeaningIdRef = useRef<number | null>(null);
+
+  // Streak info sheet
+  const [streakSheetOpen, setStreakSheetOpen] = useState(false);
 
   // Streak particles state
   const [particleBurst, setParticleBurst] = useState(false);
@@ -191,14 +195,14 @@ export function Home() {
       {/* Row 1: Avatar + name | freeze + gems + notifications */}
       <div className="mb-2 flex items-center gap-3">
         <button onClick={() => navigate('/profile')} className="shrink-0">
-          <Avatar src={user.avatarUrl} fallback={user.firstName} size={48} />
+          <Avatar src={user.avatarUrl} fallback={user.firstName} size={56} />
         </button>
-        <StreakDaysIndicator count={user.streakDays} />
+        <StreakDaysIndicator count={user.streakDays} onClick={() => setStreakSheetOpen(true)} />
         <div className="flex-1" />
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-3">
           <GemsIndicator gems={user.gems} freezes={user.streakFreezes} onClick={() => navigate('/shop')} />
-          <button className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--gray-3)]">
-            <HugeiconsIcon icon={Notification03Icon} size={22} className="text-[var(--gray-11)]" />
+          <button className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--gray-3)]">
+            <HugeiconsIcon icon={Notification03Icon} size={24} className="text-[var(--gray-11)]" />
           </button>
         </div>
       </div>
@@ -348,6 +352,12 @@ export function Home() {
         )}
       </div>
 
+      <StreakInfoSheet
+        open={streakSheetOpen}
+        onOpenChange={setStreakSheetOpen}
+        streakDays={user.streakDays}
+        createdAt={user.createdAt}
+      />
     </div>
   );
 }

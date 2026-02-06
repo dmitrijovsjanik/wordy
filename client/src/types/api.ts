@@ -12,6 +12,7 @@ export type User = {
   learningLanguage: string;
   repeatMastered: boolean;
   lastActivityAt: string | null;
+  createdAt: string;
 };
 
 export type AuthResponse = {
@@ -330,4 +331,41 @@ export type LeagueHistoryEntry = {
   tierAtEnd: LeagueTier | null;
   divisionAtEnd: number | null;
   divisionChange: number | null;
+};
+
+// ─── Streak Calendar ─────────────────────────────────────────────────────────
+
+export type StreakActivityDay = {
+  date: string; // 'YYYY-MM-DD'
+  type: 'play' | 'freeze';
+};
+
+export type StreakCalendarResponse = {
+  streakDays: number;
+  activityDays: StreakActivityDay[];
+};
+
+// ─── Friends ──────────────────────────────────────────────────────────────────
+
+export type FriendInfo = {
+  id: number;
+  firstName: string;
+  username: string | null;
+  avatarUrl: string | null;
+  level: number;
+  streakDays: number;
+  league: { tier: LeagueTier; division: number } | null;
+  friendSince: string | null;
+};
+
+export type FriendRequestInfo = {
+  id: number;
+  fromUser: {
+    id: number;
+    firstName: string;
+    username: string | null;
+    avatarUrl: string | null;
+    level: number;
+  };
+  createdAt: string;
 };

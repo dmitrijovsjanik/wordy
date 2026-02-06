@@ -62,3 +62,18 @@ export type CombinatorConfig = {
   filterRealWords?: boolean;   // Исключать реальные слова (default: false)
   seed?: number;               // Seed для воспроизводимости
 };
+
+// ─── Axis Types (для 2-осевой генерации) ─────────────────────────────────────
+
+/**
+ * Ось путаницы — конкретная точка в слове с двумя вариантами написания
+ * Используется для 2x2 матрицы: 4 варианта из комбинации 2 осей
+ */
+export type Axis = {
+  start: number;       // Позиция начала в слове
+  end: number;         // Позиция конца (exclusive)
+  correct: string;     // Верные символы (из оригинала)
+  wrong: string;       // Ошибочная замена
+  confidence: number;  // 0-1
+  type: string;        // Для отладки ('phonetic', 'double', 'suffix', 'silent-e', 'vowel')
+};

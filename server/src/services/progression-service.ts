@@ -7,7 +7,7 @@
 
 import { eq, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { users } from '../db/schema.js';
+import { users, streakActivityDays } from '../db/schema.js';
 import {
   XP_CORRECT_ANSWER,
   XP_STREAK_DAYS_BONUS,
@@ -292,6 +292,30 @@ export async function updateStreakDays(userId: number): Promise<StreakUpdateResu
   // Начисляем гемы
   if (gemsEarned > 0) {
     await addGems(userId, gemsEarned);
+  }
+
+  // Записываем активность в историю стрика
+  await db
+    .insert(streakActivityDays)
+    .values({ userId, date: todayStart, type: 'play' })
+    .onConflictDoNothing();
+
+  // Если использовались заморозки — записываем freeze-дни
+  if (freezesUsed > 0 && lastLogin) {
+    const lastLoginStart = new Date(
+      Date.UTC(lastLogin.getUTCFullYear(), lastLogin.getUTCMonth(), lastLogin.getUTCDate())
+    );
+    const freezeRecords: { userId: number; date: Date; type: string }[] = [];
+    for (let i = 1; i <= freezesUsed; i++) {
+      const freezeDate = new Date(lastLoginStart.getTime() + i * 24 * 60 * 60 * 1000);
+      freezeRecords.push({ userId, date: freezeDate, type: 'freeze' });
+    }
+    if (freezeRecords.length > 0) {
+      await db
+        .insert(streakActivityDays)
+        .values(freezeRecords)
+        .onConflictDoNothing();
+    }
   }
 
   return { streakDays: newStreakDays, gemsEarned, freezeUsed: freezesUsed > 0 };

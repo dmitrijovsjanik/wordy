@@ -1,6 +1,6 @@
-import { eq, and, gte } from 'drizzle-orm';
+import { eq, and, gte, asc } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { users, quizSessions, duels } from '../db/schema.js';
+import { users, quizSessions, duels, streakActivityDays } from '../db/schema.js';
 import { STREAK_FREEZE_COST, MAX_STREAK_FREEZES } from '../config/gems-config.js';
 
 export async function getProfile(userId: number) {
@@ -20,6 +20,7 @@ export async function getProfile(userId: number) {
       learningLanguage: true,
       repeatMastered: true,
       lastActivityAt: true,
+      createdAt: true,
     },
   });
 
@@ -140,4 +141,53 @@ export async function purchaseStreakFreeze(userId: number) {
     .returning({ gems: users.gems, streakFreezes: users.streakFreezes });
 
   return { gems: updated.gems, streakFreezes: updated.streakFreezes };
+}
+
+export async function getStreakCalendar(userId: number, months: number) {
+  const now = new Date();
+  const startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - months + 1, 1));
+
+  // Запрашиваем трекинговые дни из БД
+  const trackedDays = await db.query.streakActivityDays.findMany({
+    where: and(
+      eq(streakActivityDays.userId, userId),
+      gte(streakActivityDays.date, startDate),
+    ),
+    columns: { date: true, type: true },
+    orderBy: [asc(streakActivityDays.date)],
+  });
+
+  // Получаем данные пользователя для вывода прошлых дней из текущего стрика
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, userId),
+    columns: { streakDays: true, lastLoginDate: true, createdAt: true },
+  });
+
+  const result = trackedDays.map((d) => ({
+    date: d.date.toISOString().slice(0, 10),
+    type: d.type,
+  }));
+
+  // Для дат ДО начала трекинга — выводим из текущего стрика
+  if (user && user.streakDays > 0 && user.lastLoginDate) {
+    const trackedDateSet = new Set(result.map((d) => d.date));
+
+    for (let i = 0; i < user.streakDays; i++) {
+      const d = new Date(user.lastLoginDate);
+      d.setUTCDate(d.getUTCDate() - i);
+      const dateStr = d.toISOString().slice(0, 10);
+
+      if (!trackedDateSet.has(dateStr) && d >= startDate && d >= user.createdAt) {
+        result.push({ date: dateStr, type: 'play' });
+        trackedDateSet.add(dateStr);
+      }
+    }
+  }
+
+  result.sort((a, b) => a.date.localeCompare(b.date));
+
+  return {
+    streakDays: user?.streakDays ?? 0,
+    activityDays: result,
+  };
 }

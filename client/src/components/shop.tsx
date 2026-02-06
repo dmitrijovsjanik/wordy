@@ -1,12 +1,14 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Lottie from 'lottie-react';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { HeartCheckIcon, UserIcon, Award01Icon, InformationCircleIcon, Tick01Icon } from '@hugeicons/core-free-icons';
+import { HeartCheckIcon, UserIcon, Award01Icon, InformationCircleIcon, Clock01Icon } from '@hugeicons/core-free-icons';
 import { useUserStore } from '@/stores/user-store';
 import { useBackButton } from '@/hooks/use-back-button';
+import { useResetTimer } from '@/hooks/use-reset-timer';
 import { StreakFreezeDialog } from '@/components/ui/streak-freeze-dialog';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { getDailyRewards, type DailyRewardsResponse } from '@/lib/api';
 import {
   Drawer,
@@ -89,14 +91,10 @@ function ItemIcon({ type, className }: { type: ShopItem['icon']; className?: str
 
 function DailyRewardRow({ label, value, done }: { label: string; value: string; done?: boolean }) {
   return (
-    <div className="flex items-center justify-between rounded-xl bg-[var(--gray-2)] px-4 py-2.5">
-      <span className={`text-sm ${done ? 'text-[var(--gray-9)] line-through' : 'text-[var(--gray-11)]'}`}>{label}</span>
-      <div className="flex items-center gap-1.5">
-        {done && (
-          <HugeiconsIcon icon={Tick01Icon} size={14} className="text-[var(--green-9)]" strokeWidth={2} />
-        )}
-        <span className={`text-sm font-semibold ${done ? 'text-[var(--gray-9)]' : ''}`}>{value}</span>
-      </div>
+    <div className="flex items-center gap-3 rounded-xl bg-[var(--gray-2)] px-4 py-2.5">
+      <Checkbox checked={!!done} className="pointer-events-none" />
+      <span className={`flex-1 text-sm ${done ? 'text-[var(--gray-9)] line-through' : 'text-[var(--gray-11)]'}`}>{label}</span>
+      <span className={`text-sm font-semibold ${done ? 'text-[var(--gray-9)]' : ''}`}>{value}</span>
     </div>
   );
 }
@@ -110,24 +108,14 @@ function ResourceInfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function useResetTimer() {
-  const [timeLeft, setTimeLeft] = useState('');
-
-  useEffect(() => {
-    function update() {
-      const now = new Date();
-      const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
-      const diff = tomorrow.getTime() - now.getTime();
-      const h = Math.floor(diff / 3600000);
-      const m = Math.floor((diff % 3600000) / 60000);
-      setTimeLeft(`${h}ч ${m}м`);
-    }
-    update();
-    const interval = setInterval(update, 60000);
-    return () => clearInterval(interval);
-  }, []);
-
-  return timeLeft;
+function getStreakMilestonesToday(): Set<number> {
+  const raw = localStorage.getItem('wordy:streak_milestones');
+  if (!raw) return new Set();
+  try {
+    const data = JSON.parse(raw) as { date: string; done: number[] };
+    if (data.date === new Date().toISOString().slice(0, 10)) return new Set(data.done);
+  } catch { /* ignore */ }
+  return new Set();
 }
 
 export function Shop() {
@@ -138,6 +126,17 @@ export function Shop() {
   const [resourceInfoType, setResourceInfoType] = useState<'gems' | 'freezes' | null>(null);
   const [dailyRewards, setDailyRewards] = useState<DailyRewardsResponse | null>(null);
   const resetTimer = useResetTimer();
+  const streakMilestones = getStreakMilestonesToday();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollUp, setCanScrollUp] = useState(false);
+  const [canScrollDown, setCanScrollDown] = useState(false);
+
+  const updateScrollState = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollUp(el.scrollTop > 4);
+    setCanScrollDown(el.scrollTop + el.clientHeight < el.scrollHeight - 4);
+  }, []);
 
   useBackButton(useCallback(() => navigate(-1), [navigate]));
 
@@ -251,21 +250,38 @@ export function Shop() {
             </DrawerDescription>
           </DrawerHeader>
 
-          <div className="flex-1 overflow-y-auto px-4 py-4">
+          {/* Таймер — вне скролла */}
+          {resourceInfoType === 'gems' && (
+            <div className="px-4 py-2">
+              <div className="flex items-center justify-center gap-2 rounded-xl bg-[var(--blue-3)] px-4 py-2.5">
+                <HugeiconsIcon icon={Clock01Icon} size={16} className="text-[var(--blue-9)]" strokeWidth={2} />
+                <span className="text-sm text-[var(--blue-11)]">
+                  Сброс наград через <span className="font-semibold">{resetTimer}</span>
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div
+            ref={scrollRef}
+            onScroll={updateScrollState}
+            className="flex-1 overflow-y-auto px-4 py-4"
+            style={{
+              maskImage: `linear-gradient(to bottom, ${canScrollUp ? 'transparent' : 'black'} 0%, black ${canScrollUp ? '24px' : '0px'}, black calc(100% - ${canScrollDown ? '24px' : '0px'}), ${canScrollDown ? 'transparent' : 'black'} 100%)`,
+              WebkitMaskImage: `linear-gradient(to bottom, ${canScrollUp ? 'transparent' : 'black'} 0%, black ${canScrollUp ? '24px' : '0px'}, black calc(100% - ${canScrollDown ? '24px' : '0px'}), ${canScrollDown ? 'transparent' : 'black'} 100%)`,
+            }}
+          >
             <div className="flex flex-col gap-3">
               {resourceInfoType === 'gems' ? (
                 <>
                   {/* Ежедневные награды */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-[var(--gray-9)]">Ежедневные награды</span>
-                    <span className="text-[11px] text-[var(--gray-9)]">сброс через {resetTimer}</span>
-                  </div>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-[var(--gray-9)]">Ежедневные награды</span>
                   <div className="flex flex-col gap-1.5">
                     <DailyRewardRow label="Первая игра за день" value="+5" done={dailyRewards?.dailyPlayDone} />
                     <DailyRewardRow label="Первая победа в дуэли" value="+15" done={dailyRewards?.duelWinDone} />
-                    <DailyRewardRow label="10 ответов подряд" value="+5" />
-                    <DailyRewardRow label="20 ответов подряд" value="+10" />
-                    <DailyRewardRow label="30 ответов подряд" value="+20" />
+                    <DailyRewardRow label="10 ответов подряд" value="+5" done={streakMilestones.has(10)} />
+                    <DailyRewardRow label="20 ответов подряд" value="+10" done={streakMilestones.has(20)} />
+                    <DailyRewardRow label="30 ответов подряд" value="+20" done={streakMilestones.has(30)} />
                   </div>
 
                   {/* Прогресс */}
@@ -285,8 +301,7 @@ export function Shop() {
             </div>
           </div>
 
-          <DrawerFooter className="relative">
-            <div className="pointer-events-none absolute -top-8 right-0 left-0 h-8 bg-gradient-to-t from-[var(--gray-1)] to-transparent" />
+          <DrawerFooter>
             <Button variant="secondary" onClick={() => setResourceInfoType(null)} className="w-full">
               Понятно
             </Button>

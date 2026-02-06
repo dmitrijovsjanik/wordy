@@ -21,6 +21,9 @@ import type {
   LeaderboardEntry,
   LeagueNotification,
   LeagueHistoryEntry,
+  FriendInfo,
+  FriendRequestInfo,
+  StreakCalendarResponse,
 } from '@/types/api';
 
 const TOKEN_KEY = 'wordy_token';
@@ -154,6 +157,10 @@ export function purchaseStreakFreeze() {
   );
 }
 
+export function getStreakCalendar(months = 6) {
+  return fetchApi<StreakCalendarResponse>('GET', `/api/users/me/streak-calendar?months=${months}`);
+}
+
 // Collections
 export function getMarketplace() {
   return fetchApi<{ groups: CollectionGroup[] }>('GET', '/api/collections/marketplace');
@@ -282,4 +289,41 @@ export function markLeagueNotificationsRead(ids: number[]) {
 
 export function getLeagueHistory() {
   return fetchApi<{ history: LeagueHistoryEntry[] }>('GET', '/api/leagues/history');
+}
+
+// Friends
+export function getFriendsList() {
+  return fetchApi<{ friends: FriendInfo[] }>('GET', '/api/friends');
+}
+
+export function getMyFriendCode() {
+  return fetchApi<{ friendCode: string }>('GET', '/api/friends/my-code');
+}
+
+export function getInviteToken() {
+  return fetchApi<{ token: string }>('GET', '/api/friends/invite-token');
+}
+
+export function sendFriendRequest(friendCode: string) {
+  return fetchApi<{ success: boolean; requestId: number }>('POST', '/api/friends/request', { friendCode });
+}
+
+export function getIncomingFriendRequests() {
+  return fetchApi<{ requests: FriendRequestInfo[]; count: number }>('GET', '/api/friends/requests');
+}
+
+export function acceptFriendRequest(requestId: number) {
+  return fetchApi<{ success: boolean }>('POST', `/api/friends/requests/${requestId}/accept`);
+}
+
+export function declineFriendRequest(requestId: number) {
+  return fetchApi<{ success: boolean }>('POST', `/api/friends/requests/${requestId}/decline`);
+}
+
+export function acceptInvite(token: string) {
+  return fetchApi<{ success: boolean; friendId: number }>('POST', '/api/friends/accept-invite', { token });
+}
+
+export function removeFriend(friendId: number) {
+  return fetchApi<{ success: boolean }>('DELETE', `/api/friends/${friendId}`);
 }

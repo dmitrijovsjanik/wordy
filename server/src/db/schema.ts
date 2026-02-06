@@ -82,11 +82,31 @@ export const users = pgTable('users', {
   nativeLanguage: varchar('native_language', { length: 10 }).default('ru').notNull(),
   learningLanguage: varchar('learning_language', { length: 10 }).default('en').notNull(),
   repeatMastered: boolean('repeat_mastered').default(false).notNull(),
+  friendCode: varchar('friend_code', { length: 12 }).unique(),
   lastActivityAt: timestamp('last_activity_at'),
   lastLoginDate: timestamp('last_login_date'), // Дата последнего входа для streak (без времени)
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
+
+// ─── Streak Activity Days ────────────────────────────────────────────────────
+
+export const streakActivityDays = pgTable(
+  'streak_activity_days',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    date: timestamp('date').notNull(),
+    type: varchar('type', { length: 10 }).notNull(), // 'play' | 'freeze'
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('streak_activity_day_uniq').on(table.userId, table.date),
+    index('streak_activity_days_user_date_idx').on(table.userId, table.date),
+  ],
+);
 
 // ─── Words ───────────────────────────────────────────────────────────────────
 
@@ -376,6 +396,67 @@ export const userCustomWordProgress = pgTable(
   ],
 );
 
+// ─── Friend Requests ────────────────────────────────────────────────────────
+
+export const friendRequestStatusEnum = pgEnum('friend_request_status', [
+  'pending',
+  'accepted',
+  'declined',
+]);
+
+export const friendRequests = pgTable(
+  'friend_requests',
+  {
+    id: serial('id').primaryKey(),
+    fromUserId: integer('from_user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    toUserId: integer('to_user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    status: friendRequestStatusEnum('status').default('pending').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('friend_request_pair_uniq').on(table.fromUserId, table.toUserId),
+    index('friend_requests_to_user_idx').on(table.toUserId, table.status),
+  ],
+);
+
+// ─── Friendships ────────────────────────────────────────────────────────────
+
+export const friendships = pgTable(
+  'friendships',
+  {
+    id: serial('id').primaryKey(),
+    userId1: integer('user_id_1')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    userId2: integer('user_id_2')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('friendship_pair_uniq').on(table.userId1, table.userId2),
+    index('friendships_user1_idx').on(table.userId1),
+    index('friendships_user2_idx').on(table.userId2),
+  ],
+);
+
+// ─── Invite Tokens ──────────────────────────────────────────────────────────
+
+export const inviteTokens = pgTable('invite_tokens', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id')
+    .references(() => users.id, { onDelete: 'cascade' })
+    .unique()
+    .notNull(),
+  token: varchar('token', { length: 64 }).unique().notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // ─── Relations ──────────────────────────────────────────────────────────────
 
 export const wordsRelations = relations(words, ({ many }) => ({
@@ -398,8 +479,17 @@ export const wordMeaningTopicsRelations = relations(wordMeaningTopics, ({ one })
 
 export const usersRelations = relations(users, ({ many }) => ({
   quizSessions: many(quizSessions),
+  streakActivityDays: many(streakActivityDays),
   challengedDuels: many(duels, { relationName: 'duelChallenger' }),
   opponentDuels: many(duels, { relationName: 'duelOpponent' }),
+  sentFriendRequests: many(friendRequests, { relationName: 'sentRequests' }),
+  receivedFriendRequests: many(friendRequests, { relationName: 'receivedRequests' }),
+  friendshipsAsUser1: many(friendships, { relationName: 'friendshipUser1' }),
+  friendshipsAsUser2: many(friendships, { relationName: 'friendshipUser2' }),
+}));
+
+export const streakActivityDaysRelations = relations(streakActivityDays, ({ one }) => ({
+  user: one(users, { fields: [streakActivityDays.userId], references: [users.id] }),
 }));
 
 export const quizSessionsRelations = relations(quizSessions, ({ one, many }) => ({
@@ -581,4 +671,20 @@ export const leagueNotificationsRelations = relations(leagueNotifications, ({ on
 export const dailyLeagueSnapshotsRelations = relations(dailyLeagueSnapshots, ({ one }) => ({
   user: one(users, { fields: [dailyLeagueSnapshots.userId], references: [users.id] }),
   season: one(leagueSeasons, { fields: [dailyLeagueSnapshots.seasonId], references: [leagueSeasons.id] }),
+}));
+
+// ─── Friends Relations ──────────────────────────────────────────────────────
+
+export const friendRequestsRelations = relations(friendRequests, ({ one }) => ({
+  fromUser: one(users, { fields: [friendRequests.fromUserId], references: [users.id], relationName: 'sentRequests' }),
+  toUser: one(users, { fields: [friendRequests.toUserId], references: [users.id], relationName: 'receivedRequests' }),
+}));
+
+export const friendshipsRelations = relations(friendships, ({ one }) => ({
+  user1: one(users, { fields: [friendships.userId1], references: [users.id], relationName: 'friendshipUser1' }),
+  user2: one(users, { fields: [friendships.userId2], references: [users.id], relationName: 'friendshipUser2' }),
+}));
+
+export const inviteTokensRelations = relations(inviteTokens, ({ one }) => ({
+  user: one(users, { fields: [inviteTokens.userId], references: [users.id] }),
 }));

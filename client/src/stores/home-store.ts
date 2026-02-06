@@ -6,6 +6,8 @@ import { useLeagueStore } from './league-store';
 const MAX_RECENT = 20;
 const MAX_RECENT_GENERATORS = 10;
 const STREAK_KEY = 'wordy:streak';
+const MILESTONES_KEY = 'wordy:streak_milestones';
+const STREAK_MILESTONES = [10, 20, 30];
 const QUESTION_KEY = 'wordy:currentQuestion';
 
 function loadStreak(): number {
@@ -15,6 +17,19 @@ function loadStreak(): number {
 
 function saveStreak(value: number) {
   localStorage.setItem(STREAK_KEY, String(value));
+  if (STREAK_MILESTONES.includes(value)) {
+    const today = new Date().toISOString().slice(0, 10);
+    const raw = localStorage.getItem(MILESTONES_KEY);
+    let data: { date: string; done: number[] } = { date: today, done: [] };
+    if (raw) {
+      try { data = JSON.parse(raw); } catch { /* ignore */ }
+    }
+    if (data.date !== today) data = { date: today, done: [] };
+    if (!data.done.includes(value)) {
+      data.done.push(value);
+      localStorage.setItem(MILESTONES_KEY, JSON.stringify(data));
+    }
+  }
 }
 
 function loadQuestion(): QuizQuestion | null {

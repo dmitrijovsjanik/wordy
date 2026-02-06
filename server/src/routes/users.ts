@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { getProfile, getStats, getDailyRewards, updateLanguages, updateSettings, purchaseStreakFreeze } from '../services/user-service.js';
+import { getProfile, getStats, getDailyRewards, updateLanguages, updateSettings, purchaseStreakFreeze, getStreakCalendar } from '../services/user-service.js';
 
 export default async function userRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
@@ -27,6 +27,13 @@ export default async function userRoutes(app: FastifyInstance) {
     Body: { repeatMastered?: boolean };
   }>('/api/users/me/settings', async (request) => {
     return updateSettings(request.user.id, request.body);
+  });
+
+  app.get<{
+    Querystring: { months?: string };
+  }>('/api/users/me/streak-calendar', async (request) => {
+    const months = Math.min(Math.max(Number(request.query.months) || 3, 1), 12);
+    return getStreakCalendar(request.user.id, months);
   });
 
   app.post('/api/users/me/streak-freeze/purchase', async (request, reply) => {

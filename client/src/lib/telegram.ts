@@ -45,6 +45,12 @@ export const telegram = {
     }
   },
 
+  requestFullscreen() {
+    if (isAvailable() && window.Telegram.WebApp.requestFullscreen) {
+      window.Telegram.WebApp.requestFullscreen();
+    }
+  },
+
   hapticImpact(style: HapticStyle) {
     if (isAvailable()) {
       window.Telegram.WebApp.HapticFeedback.impactOccurred(style);
@@ -63,6 +69,13 @@ export const telegram = {
     }
     return null;
   },
+
+  get startParam(): string | null {
+    if (isAvailable()) {
+      return window.Telegram.WebApp.initDataUnsafe?.start_param ?? null;
+    }
+    return null;
+  },
 };
 
 declare global {
@@ -71,7 +84,11 @@ declare global {
       WebApp: {
         themeParams: Record<string, string>;
         expand: () => void;
+        requestFullscreen?: () => void;
         initData: string;
+        initDataUnsafe?: { start_param?: string };
+        safeAreaInset?: { top: number; bottom: number; left: number; right: number };
+        contentSafeAreaInset?: { top: number; bottom: number; left: number; right: number };
         HapticFeedback: {
           impactOccurred: (style: HapticStyle) => void;
           notificationOccurred: (type: HapticNotification) => void;

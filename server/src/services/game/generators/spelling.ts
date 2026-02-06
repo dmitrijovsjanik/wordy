@@ -35,7 +35,7 @@ export function generateSpellingFromMeaning(
     return null;
   }
 
-  const options = generateSpellingOptions(englishWord, 6, seed);
+  const options = generateSpellingOptions(englishWord, 4, seed);
 
   return {
     type: 'spelling',
@@ -61,7 +61,7 @@ export function generateSpellingFromCustomWord(
     return null;
   }
 
-  const options = generateSpellingOptions(correct.wordText, 6, seed);
+  const options = generateSpellingOptions(correct.wordText, 4, seed);
 
   return {
     type: 'spelling',

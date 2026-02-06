@@ -8,6 +8,7 @@ import duelRoutes from './routes/duels.js';
 import collectionRoutes from './routes/collections.js';
 import dictionaryRoutes from './routes/dictionary.js';
 import leagueRoutes from './routes/leagues.js';
+import friendRoutes from './routes/friends.js';
 import './cron/league-cron.js';
 
 const isDev = process.env.NODE_ENV !== 'production';
@@ -31,6 +32,7 @@ await app.register(duelRoutes);
 await app.register(collectionRoutes);
 await app.register(dictionaryRoutes);
 await app.register(leagueRoutes);
+await app.register(friendRoutes);
 
 const port = Number(process.env.PORT) || 3000;
 
