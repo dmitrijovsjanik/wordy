@@ -27,6 +27,21 @@ set +a
 cd "$RELEASE_DIR/server"
 npx drizzle-kit push --force
 
+# Seed database if empty (one-time import)
+WORD_COUNT=$(psql "$DATABASE_URL" -t -c "SELECT COUNT(*) FROM words;" 2>/dev/null | tr -d ' ')
+if [ "$WORD_COUNT" = "0" ] || [ -z "$WORD_COUNT" ]; then
+  SEED_FILE="$RELEASE_DIR/server/src/db/seed/wordy-seed-data.sql.gz"
+  if [ -f "$SEED_FILE" ]; then
+    echo "==> Database is empty, importing seed data..."
+    gunzip -c "$SEED_FILE" | psql "$DATABASE_URL"
+    echo "==> Seed import complete!"
+  else
+    echo "==> Database is empty but no seed file found, skipping"
+  fi
+else
+  echo "==> Database already has $WORD_COUNT words, skipping seed"
+fi
+
 # Restart or start PM2 process
 cd "$RELEASE_DIR"
 if pm2 describe wordy > /dev/null 2>&1; then
