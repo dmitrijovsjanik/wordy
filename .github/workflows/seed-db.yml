@@ -1,0 +1,35 @@
+name: Seed Database
+
+on:
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Upload and import seed data
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          SSH_CMD="ssh -i ~/.ssh/deploy_key root@$SSH_HOST"
+
+          # Copy compressed dump to server
+          scp -i ~/.ssh/deploy_key \
+            server/src/db/seed/wordy-seed-data.sql.gz \
+            root@$SSH_HOST:/tmp/wordy-seed-data.sql.gz
+
+          # Decompress and import
+          $SSH_CMD "gunzip -f /tmp/wordy-seed-data.sql.gz && \
+            source /var/www/wordy/shared/.env && \
+            psql \$DATABASE_URL < /tmp/wordy-seed-data.sql && \
+            rm /tmp/wordy-seed-data.sql && \
+            echo '==> Seed complete!'"
