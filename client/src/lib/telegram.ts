@@ -27,6 +27,11 @@ function isAvailable() {
   return !isDev && typeof window !== 'undefined' && window.Telegram?.WebApp != null;
 }
 
+/** Safe wrapper — never throws */
+function safeCall(fn: () => void) {
+  try { fn(); } catch { /* Telegram SDK version mismatch */ }
+}
+
 export const telegram = {
   get isAvailable() {
     return isAvailable();
@@ -40,36 +45,34 @@ export const telegram = {
   },
 
   expand() {
-    if (isAvailable()) {
-      window.Telegram.WebApp.expand();
-    }
+    safeCall(() => {
+      if (isAvailable()) window.Telegram.WebApp.expand();
+    });
   },
 
   requestFullscreen() {
-    try {
+    safeCall(() => {
       if (isAvailable() && window.Telegram.WebApp.requestFullscreen) {
         window.Telegram.WebApp.requestFullscreen();
       }
-    } catch {
-      // WebAppMethodUnsupported — older Telegram versions
-    }
+    });
   },
 
   hapticImpact(style: HapticStyle) {
-    if (isAvailable()) {
-      window.Telegram.WebApp.HapticFeedback.impactOccurred(style);
-    }
+    safeCall(() => {
+      if (isAvailable()) window.Telegram.WebApp.HapticFeedback.impactOccurred(style);
+    });
   },
 
   hapticNotification(type: HapticNotification) {
-    if (isAvailable()) {
-      window.Telegram.WebApp.HapticFeedback.notificationOccurred(type);
-    }
+    safeCall(() => {
+      if (isAvailable()) window.Telegram.WebApp.HapticFeedback.notificationOccurred(type);
+    });
   },
 
   get initData(): string | null {
     if (isAvailable()) {
-      return window.Telegram.WebApp.initData;
+      return window.Telegram.WebApp.initData || null;
     }
     return null;
   },
