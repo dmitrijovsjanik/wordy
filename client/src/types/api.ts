@@ -6,6 +6,8 @@ export type User = {
   xp: number;
   level: number;
   streakDays: number;
+  streakFreezes: number;
+  gems: number;
   nativeLanguage: string;
   learningLanguage: string;
   repeatMastered: boolean;
@@ -24,11 +26,13 @@ export type AuthResponse = {
 };
 
 export type QuizQuestion = {
+  type?: 'multiple-choice' | 'spelling'; // Тип вопроса (по умолчанию multiple-choice для совместимости)
   meaningId: number;
   word: string;
   originalForm: string | null; // Оригинальная форма если word — лемма (shoes при word=shoe)
   transcription: string | null;
-  correctTranslation: string;
+  correctTranslation?: string; // Для multiple-choice
+  correctSpelling?: string; // Для spelling
   options: string[];
   direction: string;
 };
@@ -160,7 +164,11 @@ export type CollectionWord = {
   alternativeTranslations?: string[];
   partOfSpeech: string;
   contextExample?: string;
-  srsStage: number;
+  examples?: { text: string; translation: string }[];
+  synonyms?: string[];
+  meaningHints?: string[];
+  frequency?: number;
+  srsStage: number | null; // null = не встречалось, отрицательное = долг
   popularityRank?: number;
 };
 
@@ -169,15 +177,25 @@ export type CollectionDetail = {
   words: CollectionWord[];
 };
 
+export type ErrorsCollectionMeta = {
+  id: 'errors';
+  type: 'auto';
+  title: string;
+  description: string;
+  iconName: string;
+};
+
 export type DifficultWordsResponse = {
   totalWords: number;
   words: {
     meaningId: number;
     correctCount: number;
     incorrectCount: number;
+    srsStage: number;
     word: string;
     translation: string;
   }[];
+  collection: ErrorsCollectionMeta;
 };
 
 export type AllWordsResponse = {
@@ -225,6 +243,7 @@ export type InfiniteAnswerResponse = {
   lpEarned: number;
   lpModifier?: number; // модификатор в процентах (100 = x1.0, 105 = x1.05)
   totalLp?: number;
+  gemsEarned?: number; // гемы за стрик ответов / level-up
 };
 
 // ─── Leagues ─────────────────────────────────────────────────────────────────
@@ -270,6 +289,8 @@ export type LeaderboardEntry = {
   leaguePoints: number;
   position: number;
   isCurrentUser: boolean;
+  lpToday: number;
+  positionChange: number;
 };
 
 export type LeagueNotificationType =

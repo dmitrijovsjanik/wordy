@@ -1,10 +1,12 @@
 import { create } from 'zustand';
 import type { QuizQuestion, InfiniteAnswerResponse } from '@/types/api';
-import { quizNext, quizAnswerInfinite } from '@/lib/api';
+import { quizNext, quizAnswerInfinite, ERRORS_COLLECTION_ID } from '@/lib/api';
 import { useLeagueStore } from './league-store';
 
 const MAX_RECENT = 20;
+const MAX_RECENT_GENERATORS = 10;
 const STREAK_KEY = 'wordy:streak';
+const QUESTION_KEY = 'wordy:currentQuestion';
 
 function loadStreak(): number {
   const raw = localStorage.getItem(STREAK_KEY);
@@ -15,16 +17,49 @@ function saveStreak(value: number) {
   localStorage.setItem(STREAK_KEY, String(value));
 }
 
+function loadQuestion(): QuizQuestion | null {
+  try {
+    const raw = sessionStorage.getItem(QUESTION_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as QuizQuestion;
+  } catch {
+    return null;
+  }
+}
+
+function saveQuestion(question: QuizQuestion | null) {
+  if (question) {
+    sessionStorage.setItem(QUESTION_KEY, JSON.stringify(question));
+  } else {
+    sessionStorage.removeItem(QUESTION_KEY);
+  }
+}
+
+export type QuestionGeneratorMode =
+  | 'auto'          // Случайное направление, multiple-choice
+  | 'en-ru'         // EN → RU, multiple-choice
+  | 'ru-en'         // RU → EN, multiple-choice
+  | 'spelling';     // Spelling (всегда ru-en)
+
+/** Определяет тип генератора из ответа сервера */
+function getGeneratorTypeFromQuestion(question: QuizQuestion): string {
+  if (question.type === 'spelling') return 'spelling';
+  return question.direction; // 'en-ru' или 'ru-en'
+}
+
 type HomeState = {
   currentQuestion: QuizQuestion | null;
   recentMeaningIds: number[];
+  recentGenerators: string[];
   feedback: (InfiniteAnswerResponse & { meaningId: number }) | null;
   isLoading: boolean;
   error: string | null;
   streak: number;
-  collectionId: number | undefined;
+  collectionId: number | typeof ERRORS_COLLECTION_ID | undefined;
+  generatorMode: QuestionGeneratorMode;
 
-  setCollectionId: (id: number | undefined) => void;
+  setCollectionId: (id: number | typeof ERRORS_COLLECTION_ID | undefined) => void;
+  setGeneratorMode: (mode: QuestionGeneratorMode) => void;
   fetchNext: () => Promise<void>;
   submitAnswer: (selectedMeaningId: number | null) => Promise<void>;
   skip: () => Promise<void>;
@@ -32,24 +67,37 @@ type HomeState = {
 };
 
 export const useHomeStore = create<HomeState>()((set, get) => ({
-  currentQuestion: null,
+  currentQuestion: loadQuestion(),
   recentMeaningIds: [],
+  recentGenerators: [],
   feedback: null,
   isLoading: false,
   error: null,
   streak: loadStreak(),
   collectionId: undefined,
+  generatorMode: 'auto',
 
-  setCollectionId: (id) => set({ collectionId: id, recentMeaningIds: [], currentQuestion: null, feedback: null }),
+  setCollectionId: (id) => {
+    saveQuestion(null);
+    set({ collectionId: id, recentMeaningIds: [], recentGenerators: [], currentQuestion: null, feedback: null });
+  },
+  setGeneratorMode: (mode) => set({ generatorMode: mode }),
 
   fetchNext: async () => {
     // Предотвращаем параллельные запросы (важно для React StrictMode)
     if (get().isLoading) return;
     set({ isLoading: true, error: null });
     try {
-      const { recentMeaningIds, collectionId } = get();
-      const res = await quizNext(recentMeaningIds, collectionId);
-      set({ currentQuestion: res.question, isLoading: false });
+      const { recentMeaningIds, collectionId, generatorMode, recentGenerators } = get();
+      const res = await quizNext(recentMeaningIds, collectionId, generatorMode, recentGenerators);
+
+      // Трекаем тип генератора для авто-ротации
+      const updatedGenerators = res.question
+        ? [...recentGenerators, getGeneratorTypeFromQuestion(res.question)].slice(-MAX_RECENT_GENERATORS)
+        : recentGenerators;
+
+      saveQuestion(res.question);
+      set({ currentQuestion: res.question, recentGenerators: updatedGenerators, isLoading: false });
     } catch {
       set({ isLoading: false, error: 'Не удалось загрузить вопрос' });
     }
@@ -97,9 +145,11 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
   },
 
   reset: () => {
+    saveQuestion(null);
     set({
       currentQuestion: null,
       recentMeaningIds: [],
+      recentGenerators: [],
       feedback: null,
       isLoading: false,
       error: null,

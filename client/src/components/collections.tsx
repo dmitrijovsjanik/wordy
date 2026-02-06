@@ -3,14 +3,15 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCollectionStore } from '@/stores/collection-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { WordList, countUniqueWords } from '@/components/ui/word-list';
+import { WordList } from '@/components/ui/word-list';
+import { countUniqueWords } from '@/lib/word-utils';
 import { WordViewToggle } from '@/components/ui/word-view-toggle';
 import { WordSortSelect } from '@/components/ui/word-sort-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Add01Icon, Search01Icon, Cancel01Icon } from '@hugeicons/core-free-icons';
+import { Add01Icon, Search01Icon, Cancel01Icon, Alert02Icon } from '@hugeicons/core-free-icons';
 import { Progress } from '@/components/ui/progress';
 import { ICON_MAP, DEFAULT_ICON } from '@/lib/icon-map';
 import type { MarketplaceCollection, CollectionGroup, LibraryCollection, CefrLevel } from '@/types/api';
@@ -224,11 +225,16 @@ export function Collections() {
     );
   }, [allWords, wordSearch]);
 
+  const errorsCollection = useCollectionStore((s) => s.errorsCollection);
+  const isLoadingErrors = useCollectionStore((s) => s.isLoadingErrors);
+  const fetchErrorsCollection = useCollectionStore((s) => s.fetchErrorsCollection);
+
   useEffect(() => {
     fetchLibrary();
     fetchMarketplace();
     fetchAllWords();
-  }, [fetchLibrary, fetchMarketplace, fetchAllWords]);
+    fetchErrorsCollection();
+  }, [fetchLibrary, fetchMarketplace, fetchAllWords, fetchErrorsCollection]);
 
   return (
     <div className="flex min-h-full flex-col px-4">
@@ -262,7 +268,27 @@ export function Collections() {
 
         {activeTab === 'library' && !isLoadingLibrary && (
           <>
-            {library.length === 0 && (
+            {/* Карточка "Ошибки" — показываем если есть слова с ошибками */}
+            {!isLoadingErrors && errorsCollection && errorsCollection.totalWords > 0 && (
+              <div
+                className="flex cursor-pointer items-center gap-3 rounded-xl bg-[var(--gray-2)] p-3 active:bg-[var(--gray-3)]"
+                onClick={() => navigate('/errors')}
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--tomato-4)]">
+                  <HugeiconsIcon icon={Alert02Icon} size={20} className="text-[var(--tomato-11)]" />
+                </div>
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="truncate text-sm font-medium text-[var(--gray-12)]">
+                    {errorsCollection.collection.title}
+                  </span>
+                  <span className="text-xs text-[var(--gray-11)]">
+                    {errorsCollection.totalWords} {errorsCollection.totalWords === 1 ? 'слово' : errorsCollection.totalWords < 5 ? 'слова' : 'слов'}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {library.length === 0 && (!errorsCollection || errorsCollection.totalWords === 0) && (
               <p className="mt-4 text-center text-sm text-[var(--gray-11)]">
                 Библиотека пуста. Добавьте коллекцию из каталога!
               </p>

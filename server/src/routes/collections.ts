@@ -9,7 +9,7 @@ import {
   createUserCollection,
   updateUserCollection,
   deleteUserCollection,
-  getDifficultWords,
+  getErrorsCollection,
   getAllWords,
   addWordsToCollection,
   removeWordFromCollection,
@@ -33,7 +33,12 @@ export default async function collectionRoutes(app: FastifyInstance) {
   });
 
   app.get('/api/collections/difficult', async (request) => {
-    return getDifficultWords(request.user.id);
+    return getErrorsCollection(request.user.id);
+  });
+
+  // Алиас для коллекции ошибок
+  app.get('/api/collections/errors', async (request) => {
+    return getErrorsCollection(request.user.id);
   });
 
   app.get<{ Params: { id: string } }>('/api/collections/:id', async (request) => {

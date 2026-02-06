@@ -125,6 +125,16 @@ export function getMyStats() {
   return fetchApi<UserStats>('GET', '/api/users/me/stats');
 }
 
+export type DailyRewardsResponse = {
+  dailyPlayDone: boolean;
+  duelWinDone: boolean;
+  streakDays: number;
+};
+
+export function getDailyRewards() {
+  return fetchApi<DailyRewardsResponse>('GET', '/api/users/me/daily-rewards');
+}
+
 export function updateLanguages(nativeLanguage: string, learningLanguage: string) {
   return fetchApi<{ nativeLanguage: string; learningLanguage: string }>(
     'PUT',
@@ -135,6 +145,13 @@ export function updateLanguages(nativeLanguage: string, learningLanguage: string
 
 export function updateSettings(settings: { repeatMastered?: boolean }) {
   return fetchApi<{ repeatMastered?: boolean }>('PATCH', '/api/users/me/settings', settings);
+}
+
+export function purchaseStreakFreeze() {
+  return fetchApi<{ success: boolean; gems: number; streakFreezes: number }>(
+    'POST',
+    '/api/users/me/streak-freeze/purchase',
+  );
 }
 
 // Collections
@@ -207,11 +224,33 @@ export function removeCollectionWord(collectionId: number, wordId: number, type:
   return fetchApi<{ success: boolean; deleted: number }>('DELETE', `/api/collections/${collectionId}/words/${wordId}?type=${type}`);
 }
 
+// Виртуальный ID для коллекции ошибок
+export const ERRORS_COLLECTION_ID = 'errors' as const;
+
 // Infinite Quiz
-export function quizNext(excludeIds: number[] = [], collectionId?: number) {
+export function quizNext(
+  excludeIds: number[] = [],
+  collectionId?: number | typeof ERRORS_COLLECTION_ID,
+  generatorMode?: string,
+  recentGenerators: string[] = [],
+) {
   const params = new URLSearchParams();
   if (excludeIds.length > 0) params.set('exclude', excludeIds.join(','));
   if (collectionId) params.set('collectionId', String(collectionId));
+
+  // Определяем параметры генерации
+  if (generatorMode === 'spelling') {
+    params.set('type', 'spelling');
+  } else if (generatorMode && generatorMode !== 'auto') {
+    // en-ru или ru-en — устанавливаем направление
+    params.set('lang', generatorMode);
+  }
+
+  // История генераторов для авто-ротации (только в auto режиме)
+  if (recentGenerators.length > 0 && (!generatorMode || generatorMode === 'auto')) {
+    params.set('generators', recentGenerators.join(','));
+  }
+
   const query = params.toString() ? `?${params.toString()}` : '';
   return fetchApi<{ question: QuizQuestion | null }>('GET', `/api/quiz/next${query}`);
 }

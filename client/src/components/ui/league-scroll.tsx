@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { LeagueTier } from '@/types/api';
 import { LEAGUE_ICONS } from '@/components/ui/league-icons';
@@ -39,6 +39,17 @@ export function LeagueScroll({ currentTier, currentDivision, className }: League
   const scrollRef = useRef<HTMLDivElement>(null);
   const currentItemRef = useRef<HTMLDivElement>(null);
   const currentIndex = LEAGUE_TIERS.indexOf(currentTier);
+  const [showLeftGradient, setShowLeftGradient] = useState(false);
+  const [showRightGradient, setShowRightGradient] = useState(false);
+
+  const updateGradients = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const threshold = 5;
+    setShowLeftGradient(el.scrollLeft > threshold);
+    setShowRightGradient(el.scrollLeft < el.scrollWidth - el.clientWidth - threshold);
+  }, []);
 
   const scrollToCurrentItem = useCallback(() => {
     if (currentItemRef.current && scrollRef.current) {
@@ -54,56 +65,72 @@ export function LeagueScroll({ currentTier, currentDivision, className }: League
     // Используем requestAnimationFrame для гарантии что DOM обновился
     const raf = requestAnimationFrame(() => {
       scrollToCurrentItem();
+      updateGradients();
     });
     return () => cancelAnimationFrame(raf);
-  }, [scrollToCurrentItem, currentTier]);
+  }, [scrollToCurrentItem, updateGradients, currentTier]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    el.addEventListener('scroll', updateGradients, { passive: true });
+    return () => el.removeEventListener('scroll', updateGradients);
+  }, [updateGradients]);
 
   return (
-    <div
-      ref={scrollRef}
-      className={cn(
-        'flex gap-3 overflow-x-auto scrollbar-hide px-4 -mx-4 snap-x snap-mandatory',
-        className
-      )}
-    >
-      {LEAGUE_TIERS.map((tier) => {
-        const IconComponent = LEAGUE_ICONS[tier];
-        const isCurrent = tier === currentTier;
-        const isPast = LEAGUE_TIERS.indexOf(tier) < currentIndex;
+    <div className={cn('relative -mx-4', className)}>
+      {/* Градиент слева */}
+      <div
+        className={cn(
+          'pointer-events-none absolute left-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-r from-[var(--gray-2)] to-transparent transition-opacity duration-200',
+          showLeftGradient ? 'opacity-100' : 'opacity-0'
+        )}
+      />
+      {/* Градиент справа */}
+      <div
+        className={cn(
+          'pointer-events-none absolute right-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-l from-[var(--gray-2)] to-transparent transition-opacity duration-200',
+          showRightGradient ? 'opacity-100' : 'opacity-0'
+        )}
+      />
 
-        return (
-          <div
-            key={tier}
-            ref={isCurrent ? currentItemRef : undefined}
-            className={cn(
-              'flex flex-col items-center gap-1.5 py-2 px-1 snap-center flex-shrink-0 transition-opacity',
-              !isCurrent && !isPast && 'opacity-40'
-            )}
-          >
+      <div
+        ref={scrollRef}
+        className="flex gap-3 overflow-x-auto scrollbar-hide px-4 snap-x snap-mandatory"
+      >
+        {LEAGUE_TIERS.map((tier) => {
+          const IconComponent = LEAGUE_ICONS[tier];
+          const isCurrent = tier === currentTier;
+          const isPast = LEAGUE_TIERS.indexOf(tier) < currentIndex;
+
+          return (
             <div
+              key={tier}
+              ref={isCurrent ? currentItemRef : undefined}
               className={cn(
-                'rounded-full p-1 transition-all',
-                isCurrent && 'ring-2 ring-[var(--brand-9)] ring-offset-2 ring-offset-[var(--gray-1)]'
+                'flex flex-col items-center gap-1.5 py-2 px-1 snap-center flex-shrink-0 transition-opacity',
+                !isCurrent && !isPast && 'opacity-40'
               )}
             >
-              <IconComponent size={isCurrent ? 48 : 40} />
-            </div>
-            <span
-              className={cn(
-                'text-xs font-medium whitespace-nowrap',
-                isCurrent ? 'text-[var(--gray-12)]' : 'text-[var(--gray-11)]'
-              )}
-            >
-              {LEAGUE_NAMES[tier]}
-            </span>
-            {isCurrent && (
-              <span className="text-[10px] text-[var(--gray-11)]">
-                {DIVISION_LABELS[currentDivision - 1]}
+              <IconComponent size={isCurrent ? 72 : 64} />
+              <span
+                className={cn(
+                  'text-xs font-medium whitespace-nowrap',
+                  isCurrent ? 'text-[var(--gray-12)]' : 'text-[var(--gray-11)]'
+                )}
+              >
+                {LEAGUE_NAMES[tier]}
               </span>
-            )}
-          </div>
-        );
-      })}
+              {isCurrent && (
+                <span className="text-[10px] text-[var(--gray-11)]">
+                  {DIVISION_LABELS[currentDivision - 1]}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

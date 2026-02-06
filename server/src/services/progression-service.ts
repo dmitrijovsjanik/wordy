@@ -18,6 +18,11 @@ import {
   applyModifier,
 } from '../config/progression-config.js';
 import {
+  GEMS_DAILY_PLAY,
+  GEMS_LEVEL_UP,
+  GEMS_STREAK_7_DAYS,
+} from '../config/gems-config.js';
+import {
   addLpForCorrectAnswer as addLpForCorrectAnswerInternal,
   addLpForQuizComplete,
   addLpForDuelWin,
@@ -32,6 +37,7 @@ export type XpGainResult = {
   totalXp: number;
   level: number;
   levelUp?: number; // новый уровень, если произошёл level up
+  gemsEarned: number; // гемы за level-up (0 если не было)
 };
 
 export type CorrectAnswerResult = XpGainResult & {
@@ -39,6 +45,31 @@ export type CorrectAnswerResult = XpGainResult & {
   lpModifier: number; // модификатор в процентах (100 = x1.0)
   totalLp: number;
 };
+
+export type StreakUpdateResult = {
+  streakDays: number;
+  gemsEarned: number;
+  freezeUsed: boolean;
+};
+
+// ─── Core Gems Function ─────────────────────────────────────────────────────
+
+/**
+ * Атомарно добавляет гемы пользователю.
+ * Возвращает новое значение gems.
+ */
+export async function addGems(userId: number, amount: number): Promise<number> {
+  const [result] = await db
+    .update(users)
+    .set({
+      gems: sql`${users.gems} + ${amount}`,
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, userId))
+    .returning({ gems: users.gems });
+
+  return result.gems;
+}
 
 // ─── Core XP Functions ───────────────────────────────────────────────────────
 
@@ -72,12 +103,20 @@ export async function addXp(
     })
     .where(eq(users.id, userId));
 
+  // Гемы за level-up
+  let gemsEarned = 0;
+  if (levelUp) {
+    await addGems(userId, GEMS_LEVEL_UP);
+    gemsEarned = GEMS_LEVEL_UP;
+  }
+
   return {
     xpEarned: amount,
     xpModifier: 100,
     totalXp: newXp,
     level: newLevel,
     levelUp,
+    gemsEarned,
   };
 }
 
@@ -177,45 +216,85 @@ export async function rewardQuizSessionComplete(
 
 /**
  * Обновляет streak дней пользователя.
- * Возвращает новое значение streak.
+ * Включает: заморозку стрика, гемы за первый вход, мильники стрика.
  */
-export async function updateStreakDays(userId: number): Promise<number> {
+export async function updateStreakDays(userId: number): Promise<StreakUpdateResult> {
   const user = await db.query.users.findFirst({
     where: eq(users.id, userId),
-    columns: { streakDays: true, lastActivityAt: true },
+    columns: { streakDays: true, streakFreezes: true, lastLoginDate: true },
   });
 
   if (!user) throw new Error('Пользователь не найден');
 
   const now = new Date();
-  const lastActivity = user.lastActivityAt;
+  const lastLogin = user.lastLoginDate;
   let newStreakDays = user.streakDays;
+  let freezesUsed = 0;
+  let gemsEarned = 0;
 
-  if (lastActivity) {
-    const diffMs = now.getTime() - lastActivity.getTime();
-    const diffHours = diffMs / (1000 * 60 * 60);
+  // Сбрасываем время до начала дня (UTC) для сравнения календарных дней
+  const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
-    if (diffHours >= 24 && diffHours < 48) {
+  if (lastLogin) {
+    const lastLoginStart = new Date(
+      Date.UTC(lastLogin.getUTCFullYear(), lastLogin.getUTCMonth(), lastLogin.getUTCDate())
+    );
+
+    // Разница в днях
+    const diffDays = Math.floor((todayStart.getTime() - lastLoginStart.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) {
+      // Уже заходили сегодня — streak не меняется
+      return { streakDays: user.streakDays, gemsEarned: 0, freezeUsed: false };
+    } else if (diffDays === 1) {
+      // Вчера был вход — увеличиваем streak
       newStreakDays += 1;
-    } else if (diffHours >= 48) {
-      newStreakDays = 1;
+    } else {
+      // Пропуск N дней — пробуем покрыть заморозками
+      const missedDays = diffDays - 1; // дни без активности (не считая сегодня)
+      if (user.streakFreezes >= missedDays) {
+        // Хватает заморозок — streak сохраняется
+        freezesUsed = missedDays;
+      } else {
+        // Не хватает заморозок — сброс streak
+        newStreakDays = 1;
+      }
     }
-    // < 24 часов — streak не меняется (уже играли сегодня)
   } else {
+    // Первый вход
     newStreakDays = 1;
   }
 
-  if (newStreakDays !== user.streakDays) {
-    await db
-      .update(users)
-      .set({
-        streakDays: newStreakDays,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, userId));
+  // Гемы за первый квиз за день
+  gemsEarned += GEMS_DAILY_PLAY;
+
+  // Гемы за мильник стрика (каждые 7 дней)
+  if (newStreakDays > 0 && newStreakDays % 7 === 0 && newStreakDays !== user.streakDays) {
+    gemsEarned += GEMS_STREAK_7_DAYS;
   }
 
-  return newStreakDays;
+  // Обновляем пользователя
+  const updateData: Record<string, unknown> = {
+    streakDays: newStreakDays,
+    lastLoginDate: now,
+    updatedAt: new Date(),
+  };
+
+  if (freezesUsed > 0) {
+    updateData.streakFreezes = user.streakFreezes - freezesUsed;
+  }
+
+  await db
+    .update(users)
+    .set(updateData)
+    .where(eq(users.id, userId));
+
+  // Начисляем гемы
+  if (gemsEarned > 0) {
+    await addGems(userId, gemsEarned);
+  }
+
+  return { streakDays: newStreakDays, gemsEarned, freezeUsed: freezesUsed > 0 };
 }
 
 // ─── Re-exports for convenience ──────────────────────────────────────────────

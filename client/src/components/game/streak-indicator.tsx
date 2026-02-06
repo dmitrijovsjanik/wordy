@@ -23,11 +23,10 @@ export function StreakIndicator({
     <AnimatePresence>
       <motion.div
         key="streak"
-        className="absolute left-1/2"
-        style={{ bottom: 'calc(100% + 32px)' }}
-        initial={skipInitialAnimation ? false : { opacity: 0, scaleX: 0, x: '-50%' }}
-        animate={{ opacity: 1, scaleX: 1, x: '-50%' }}
-        exit={{ opacity: 0, scale: 0.8, x: '-50%' }}
+        className="relative"
+        initial={skipInitialAnimation ? false : { opacity: 0, scaleX: 0 }}
+        animate={{ opacity: 1, scaleX: 1 }}
+        exit={{ opacity: 0, scale: 0.8 }}
         transition={{ type: 'spring', stiffness: 400, damping: 20 }}
       >
         {/* Particles */}

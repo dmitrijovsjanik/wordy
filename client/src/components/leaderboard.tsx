@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useMemo } from 'react';
+import { useEffect, useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLeagueStore } from '@/stores/league-store';
 import { useBackButton } from '@/hooks/use-back-button';
@@ -7,9 +7,23 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { LeagueScroll } from '@/components/ui/league-scroll';
 import { LeagueProgress } from '@/components/ui/league-progress';
 import { BackButton } from '@/components/ui/back-button';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { ArrowUp01Icon, ArrowDown01Icon, Clock01Icon } from '@hugeicons/core-free-icons';
 import { cn } from '@/lib/utils';
 import { LP_THRESHOLDS, PROTECTED_TIERS, formatLpBoundary } from '@/lib/league-config';
 import type { LeagueTier } from '@/types/api';
+
+function formatTimeLeft(endDate: Date): string {
+  const now = new Date();
+  const diff = endDate.getTime() - now.getTime();
+  if (diff <= 0) return '0ч';
+
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+  if (days > 0) return `${days}д ${hours}ч`;
+  return `${hours}ч`;
+}
 
 type Zone = {
   id: string;
@@ -60,6 +74,8 @@ type LeaderboardEntry = {
   leaguePoints: number;
   position: number;
   isCurrentUser: boolean;
+  lpToday: number;
+  positionChange: number;
 };
 
 type GroupedZones = {
@@ -120,6 +136,7 @@ export function Leaderboard() {
     fetchStatus,
     fetchLeaderboard,
   } = useLeagueStore();
+  const [timeLeft, setTimeLeft] = useState('');
 
   useBackButton(useCallback(() => navigate('/'), [navigate]));
 
@@ -127,6 +144,19 @@ export function Leaderboard() {
     fetchStatus();
     fetchLeaderboard();
   }, [fetchStatus, fetchLeaderboard]);
+
+  // Обновляем таймер каждую минуту
+  useEffect(() => {
+    if (!season?.startedAt) return;
+
+    const endDate = new Date(new Date(season.startedAt).getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    const updateTimer = () => setTimeLeft(formatTimeLeft(endDate));
+    updateTimer();
+
+    const interval = setInterval(updateTimer, 60 * 1000);
+    return () => clearInterval(interval);
+  }, [season?.startedAt]);
 
   if (isLoading || !progress) {
     return (
@@ -149,14 +179,17 @@ export function Leaderboard() {
       </div>
 
       {/* Текущий статус */}
-      <Card className="overflow-hidden">
-        <div className="mb-3 flex items-center justify-end">
-          {season && (
-            <span className="text-xs text-[var(--gray-11)]">
-              Неделя {season.weekNumber}
-            </span>
-          )}
-        </div>
+      <Card className="overflow-hidden pt-3">
+        {/* Заголовок сезона */}
+        {season && (
+          <div className="mb-4 flex items-center justify-between">
+            <span className="text-lg font-bold">Сезон {season.weekNumber}</span>
+            <div className="flex items-center gap-1 text-sm text-[var(--gray-11)]">
+              <HugeiconsIcon icon={Clock01Icon} size={14} />
+              <span>{timeLeft || '—'}</span>
+            </div>
+          </div>
+        )}
 
         <LeagueScroll
           currentTier={progress.tier}
@@ -226,15 +259,30 @@ function LeaderboardList({ leaderboard, tier }: { leaderboard: LeaderboardEntry[
                     entry.isCurrentUser && 'ring-2 ring-[var(--accent-7)]',
                   )}
                 >
-                  <span
-                    className={cn(
-                      'w-8 text-center font-bold',
-                      entry.position <= 5 && 'text-[var(--violet-9)]',
-                      entry.position > 5 && entry.position <= 15 && 'text-[var(--blue-9)]',
+                  {/* Позиция и изменение */}
+                  <div className="flex w-8 flex-col items-center">
+                    <span
+                      className="font-bold"
+                      style={{ color: zone.id !== 'safe' ? zone.color : undefined }}
+                    >
+                      {entry.position}
+                    </span>
+                    {entry.positionChange !== 0 && (
+                      <span
+                        className={cn(
+                          'flex items-center text-xs',
+                          entry.positionChange > 0 && 'text-[var(--green-11)]',
+                          entry.positionChange < 0 && 'text-[var(--red-11)]',
+                        )}
+                      >
+                        <HugeiconsIcon
+                          icon={entry.positionChange > 0 ? ArrowUp01Icon : ArrowDown01Icon}
+                          size={12}
+                        />
+                        {Math.abs(entry.positionChange)}
+                      </span>
                     )}
-                  >
-                    {entry.position}
-                  </span>
+                  </div>
 
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--gray-3)] text-sm font-medium">
                     {entry.firstName.charAt(0)}
@@ -242,12 +290,15 @@ function LeaderboardList({ leaderboard, tier }: { leaderboard: LeaderboardEntry[
 
                   <div className="flex flex-1 flex-col">
                     <span className="font-medium">{entry.firstName}</span>
-                    {entry.username && (
-                      <span className="text-xs text-[var(--gray-11)]">@{entry.username}</span>
-                    )}
                   </div>
 
-                  <span className="font-bold">{entry.leaguePoints} LP</span>
+                  {/* LP и сегодняшний прирост */}
+                  <div className="flex flex-col items-end">
+                    <span className="font-bold">{entry.leaguePoints} LP</span>
+                    {entry.isCurrentUser && entry.lpToday > 0 && (
+                      <span className="text-xs text-[var(--green-11)]">+{entry.lpToday}</span>
+                    )}
+                  </div>
                 </Card>
               ))
             )}

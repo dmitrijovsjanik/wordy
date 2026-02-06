@@ -5,10 +5,10 @@ import { useBackButton } from '@/hooks/use-back-button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BackButton } from '@/components/ui/back-button';
-import { DictionaryPreview } from '@/components/ui/dictionary-preview';
+import { DictionaryPreview, getMeaningIds, isAlreadyAdded } from '@/components/ui/dictionary-preview';
 import { WordList } from '@/components/ui/word-list';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Search01Icon, Cancel01Icon } from '@hugeicons/core-free-icons';
+import { Search01Icon, Cancel01Icon, Add01Icon } from '@hugeicons/core-free-icons';
 import { dictionaryLookup, addCollectionWords } from '@/lib/api';
 import type { DictionaryLookupResult } from '@/types/api';
 
@@ -36,6 +36,7 @@ export function CollectionCreate() {
   const [lookupResult, setLookupResult] = useState<DictionaryLookupResult | null>(null);
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
+  const [manualTranslation, setManualTranslation] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -190,8 +191,22 @@ export function CollectionCreate() {
         <WordList words={words} />
       </div>
 
+      {/* Оверлей при показе карточки словаря */}
+      <div
+        className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-200 ${
+          query.trim() || isLookingUp
+            ? 'opacity-100'
+            : 'pointer-events-none opacity-0'
+        }`}
+        onClick={() => {
+          setQuery('');
+          setLookupResult(null);
+          setManualTranslation('');
+        }}
+      />
+
       {/* Bottom panel */}
-      <div className="pointer-events-none sticky bottom-0 -mx-4">
+      <div className={`pointer-events-none sticky bottom-0 -mx-4 ${query.trim() || isLookingUp ? 'z-50' : ''}`}>
         <div className="h-8 bg-gradient-to-t from-[var(--gray-1)] to-transparent" />
         <div className="pointer-events-auto bg-[var(--gray-1)] px-4 pb-4">
           <div className="flex flex-col gap-3">
@@ -201,10 +216,11 @@ export function CollectionCreate() {
               isLoading={isLookingUp}
               query={query}
               existingMeaningIds={existingMeaningIds}
-              onAdd={handleAdd}
+              manualTranslation={manualTranslation}
+              onManualTranslationChange={setManualTranslation}
             />
 
-            {/* Search input */}
+            {/* Search input + action button */}
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <HugeiconsIcon
@@ -216,7 +232,10 @@ export function CollectionCreate() {
                   ref={inputRef}
                   placeholder="Введите слово..."
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setManualTranslation('');
+                  }}
                   className="pl-11 pr-11"
                   disabled={isAdding}
                 />
@@ -226,6 +245,7 @@ export function CollectionCreate() {
                     onClick={() => {
                       setQuery('');
                       setLookupResult(null);
+                      setManualTranslation('');
                       inputRef.current?.focus();
                     }}
                     className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--gray-11)] active:text-[var(--gray-12)]"
@@ -234,6 +254,33 @@ export function CollectionCreate() {
                   </button>
                 )}
               </div>
+              {/* Кнопка добавления - показывается только если можно добавить */}
+              {(() => {
+                const meaningIds = getMeaningIds(lookupResult);
+                const canAddFromApi = meaningIds.length > 0 && !isAlreadyAdded(lookupResult, existingMeaningIds);
+                const canAddManual = !lookupResult?.meanings.length && query.trim() && manualTranslation.trim();
+                const canAdd = canAddFromApi || canAddManual;
+
+                if (canAdd) {
+                  return (
+                    <Button
+                      size="icon"
+                      disabled={isAdding}
+                      onClick={() => {
+                        if (canAddManual) {
+                          handleAdd([], { wordText: query.trim(), translation: manualTranslation.trim() });
+                        } else {
+                          handleAdd(meaningIds);
+                        }
+                      }}
+                    >
+                      <HugeiconsIcon icon={Add01Icon} size={20} />
+                    </Button>
+                  );
+                }
+
+                return null;
+              })()}
             </div>
 
             {/* Save button */}

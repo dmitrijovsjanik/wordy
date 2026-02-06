@@ -8,7 +8,10 @@ import {
   generateQuestionFromPool,
   recordInfiniteAnswer,
 } from '../services/quiz-service.js';
-import type { LanguagePair } from '../types/language.js';
+import type { LanguagePair, GeneratorType } from '../services/game/types.js';
+import { ERRORS_COLLECTION_ID } from '../config/errors-config.js';
+
+const VALID_GENERATORS = new Set<string>(['en-ru', 'ru-en', 'spelling']);
 
 export default async function quizRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
@@ -47,15 +50,39 @@ export default async function quizRoutes(app: FastifyInstance) {
 
   // ─── Infinite Quiz ──────────────────────────────────────────────────────
 
-  app.get<{ Querystring: { exclude?: string; lang?: string; collectionId?: string } }>('/api/quiz/next', async (request) => {
+  app.get<{ Querystring: { exclude?: string; lang?: string; collectionId?: string; type?: string; generators?: string } }>('/api/quiz/next', async (request) => {
     const excludeStr = request.query.exclude ?? '';
     const excludeIds = excludeStr
       ? excludeStr.split(',').map(Number).filter((n) => !Number.isNaN(n))
       : [];
-    const lang = (request.query.lang ?? 'en-ru') as LanguagePair;
-    const collectionId = request.query.collectionId ? Number(request.query.collectionId) : undefined;
+    const langParam = request.query.lang;
+    const questionType = request.query.type; // 'spelling' или undefined
 
-    const question = await generateQuestionFromPool(request.user.id, excludeIds, lang, collectionId);
+    // Если lang указан явно — используем как fixed direction, иначе auto (random)
+    const fixedDirection = langParam ? (langParam as LanguagePair) : undefined;
+    const lang = (langParam ?? 'en-ru') as LanguagePair;
+
+    // Поддержка collectionId='errors' для коллекции ошибок
+    const rawCollectionId = request.query.collectionId;
+    const collectionId = rawCollectionId === ERRORS_COLLECTION_ID
+      ? ERRORS_COLLECTION_ID
+      : rawCollectionId ? Number(rawCollectionId) : undefined;
+
+    // История недавних генераторов для авто-ротации
+    const generatorsStr = request.query.generators ?? '';
+    const recentGenerators = generatorsStr
+      ? generatorsStr.split(',').filter((g): g is GeneratorType => VALID_GENERATORS.has(g))
+      : [];
+
+    const question = await generateQuestionFromPool(
+      request.user.id,
+      excludeIds,
+      lang,
+      collectionId,
+      fixedDirection,
+      questionType as 'spelling' | undefined,
+      recentGenerators,
+    );
     return { question };
   });
 

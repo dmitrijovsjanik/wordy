@@ -6,6 +6,7 @@ import {
   userLeagueProgress,
   userSeasonStats,
   leagueNotifications,
+  dailyLeagueSnapshots,
   type leagueTierEnum,
 } from '../db/schema.js';
 import {
@@ -227,14 +228,35 @@ export async function getLeaderboard(
     .orderBy(desc(userSeasonStats.leaguePoints))
     .limit(limit);
 
-  return stats.map((s, idx) => ({
-    userId: s.userId,
-    firstName: s.firstName,
-    username: s.username,
-    avatarUrl: s.avatarUrl,
-    leaguePoints: s.leaguePoints,
-    position: idx + 1,
-  }));
+  // Получаем снепшоты за начало сегодня и за вчера
+  const resultUserIds = stats.map((s) => s.userId);
+  const [todaySnapshots, yesterdaySnapshots] = await Promise.all([
+    getTodayStartSnapshotsForDivision(seasonId, resultUserIds),
+    getYesterdaySnapshotsForDivision(seasonId, resultUserIds),
+  ]);
+
+  return stats.map((s, idx) => {
+    const currentPosition = idx + 1;
+    const todaySnapshot = todaySnapshots.get(s.userId);
+    const yesterdaySnapshot = yesterdaySnapshots.get(s.userId);
+
+    // LP за сегодня = текущие LP - LP на начало дня
+    const lpToday = todaySnapshot ? s.leaguePoints - todaySnapshot.leaguePoints : s.leaguePoints;
+
+    // Изменение позиции = вчерашняя позиция - текущая (положительное = рост)
+    const positionChange = yesterdaySnapshot ? yesterdaySnapshot.position - currentPosition : 0;
+
+    return {
+      userId: s.userId,
+      firstName: s.firstName,
+      username: s.username,
+      avatarUrl: s.avatarUrl,
+      leaguePoints: s.leaguePoints,
+      position: currentPosition,
+      lpToday,
+      positionChange,
+    };
+  });
 }
 
 export async function getUserPosition(userId: number, seasonId: number) {
@@ -539,6 +561,146 @@ export async function sendSeasonEndingReminders(seasonId: number) {
       });
     }
   }
+}
+
+// ─── Daily Snapshots ─────────────────────────────────────────────────────────
+
+/**
+ * Получает начало текущего дня (00:00 UTC).
+ */
+function getStartOfDay(date: Date = new Date()): Date {
+  const d = new Date(date);
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
+
+/**
+ * Получает начало вчерашнего дня (00:00 UTC).
+ */
+function getYesterdayStart(): Date {
+  const d = getStartOfDay();
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d;
+}
+
+/**
+ * Сохраняет ежедневный снепшот LP и позиции для пользователя.
+ * Вызывается при первом обращении пользователя за день.
+ */
+export async function saveDailySnapshot(
+  userId: number,
+  seasonId: number,
+  leaguePoints: number,
+  position: number,
+) {
+  const today = getStartOfDay();
+
+  // Проверяем, есть ли уже снепшот за сегодня
+  const existing = await db.query.dailyLeagueSnapshots.findFirst({
+    where: and(
+      eq(dailyLeagueSnapshots.userId, userId),
+      eq(dailyLeagueSnapshots.seasonId, seasonId),
+      eq(dailyLeagueSnapshots.date, today),
+    ),
+  });
+
+  if (!existing) {
+    await db.insert(dailyLeagueSnapshots).values({
+      userId,
+      seasonId,
+      date: today,
+      leaguePoints,
+      position,
+    });
+  }
+}
+
+/**
+ * Получает снепшот за начало сегодняшнего дня (LP на начало дня).
+ */
+export async function getTodayStartSnapshot(userId: number, seasonId: number) {
+  const today = getStartOfDay();
+
+  return db.query.dailyLeagueSnapshots.findFirst({
+    where: and(
+      eq(dailyLeagueSnapshots.userId, userId),
+      eq(dailyLeagueSnapshots.seasonId, seasonId),
+      eq(dailyLeagueSnapshots.date, today),
+    ),
+  });
+}
+
+/**
+ * Получает вчерашний снепшот для расчёта изменения позиции.
+ */
+export async function getYesterdaySnapshot(userId: number, seasonId: number) {
+  const yesterday = getYesterdayStart();
+
+  return db.query.dailyLeagueSnapshots.findFirst({
+    where: and(
+      eq(dailyLeagueSnapshots.userId, userId),
+      eq(dailyLeagueSnapshots.seasonId, seasonId),
+      eq(dailyLeagueSnapshots.date, yesterday),
+    ),
+  });
+}
+
+/**
+ * Получает снепшоты за вчера для всех пользователей в дивизионе.
+ */
+export async function getYesterdaySnapshotsForDivision(
+  seasonId: number,
+  userIds: number[],
+): Promise<Map<number, { leaguePoints: number; position: number }>> {
+  if (userIds.length === 0) return new Map();
+
+  const yesterday = getYesterdayStart();
+
+  const snapshots = await db
+    .select()
+    .from(dailyLeagueSnapshots)
+    .where(
+      and(
+        eq(dailyLeagueSnapshots.seasonId, seasonId),
+        eq(dailyLeagueSnapshots.date, yesterday),
+        inArray(dailyLeagueSnapshots.userId, userIds),
+      ),
+    );
+
+  const map = new Map<number, { leaguePoints: number; position: number }>();
+  for (const s of snapshots) {
+    map.set(s.userId, { leaguePoints: s.leaguePoints, position: s.position });
+  }
+  return map;
+}
+
+/**
+ * Получает снепшоты за начало сегодня для всех пользователей в дивизионе.
+ */
+export async function getTodayStartSnapshotsForDivision(
+  seasonId: number,
+  userIds: number[],
+): Promise<Map<number, { leaguePoints: number; position: number }>> {
+  if (userIds.length === 0) return new Map();
+
+  const today = getStartOfDay();
+
+  const snapshots = await db
+    .select()
+    .from(dailyLeagueSnapshots)
+    .where(
+      and(
+        eq(dailyLeagueSnapshots.seasonId, seasonId),
+        eq(dailyLeagueSnapshots.date, today),
+        inArray(dailyLeagueSnapshots.userId, userIds),
+      ),
+    );
+
+  const map = new Map<number, { leaguePoints: number; position: number }>();
+  for (const s of snapshots) {
+    map.set(s.userId, { leaguePoints: s.leaguePoints, position: s.position });
+  }
+  return map;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

@@ -20,6 +20,16 @@ export type MultipleChoiceQuestion = BaseQuestion & {
   options: string[];
 };
 
+// Spelling question (выбор правильного написания)
+export type SpellingQuestion = {
+  type: 'spelling';
+  meaningId: number;
+  word: string;              // Показываемое слово (русский перевод)
+  options: string[];         // Варианты написания (6 шт)
+  correctSpelling: string;   // Правильное написание
+  direction: 'ru-en';        // Spelling всегда ru→en
+};
+
 // Legacy format (для совместимости с текущим API)
 export type LegacyQuestion = {
   meaningId: number;
@@ -39,6 +49,7 @@ export type PooledMeaning = {
   translation: string;
   alternativeTranslations: string[] | null;
   difficulty: 'easy' | 'medium' | 'hard';
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
   word: {
     id: number;
     text: string;
@@ -67,4 +78,55 @@ export const DEFAULT_LANG_PAIR: LanguagePair = 'en-ru';
 
 export function reversePair(pair: LanguagePair): LanguagePair {
   return pair === 'en-ru' ? 'ru-en' : 'en-ru';
+}
+
+// ─── Generator Rotation ────────────────────────────────────────────────────
+
+export type GeneratorType = 'en-ru' | 'ru-en' | 'spelling';
+
+const ROTATION_LOOKBACK = 5;
+const MAX_CONSECUTIVE = 3;
+
+/**
+ * Выбирает генератор с учётом истории — предотвращает длинные серии одного типа.
+ * Вес генератора снижается за каждое появление в последних N вопросах.
+ * Жёсткий лимит: MAX_CONSECUTIVE подряд одного типа → исключение.
+ */
+export function pickGenerator(
+  applicable: GeneratorType[],
+  recentHistory: GeneratorType[],
+): GeneratorType {
+  if (applicable.length === 1) return applicable[0]!;
+
+  const recent = recentHistory.slice(-ROTATION_LOOKBACK);
+
+  // Считаем подряд одинаковых с конца
+  const lastGen = recent.length > 0 ? recent[recent.length - 1] : undefined;
+  let consecutive = 0;
+  for (let i = recent.length - 1; i >= 0; i--) {
+    if (recent[i] === lastGen) consecutive++;
+    else break;
+  }
+
+  // Исключаем генератор при MAX_CONSECUTIVE подряд
+  let candidates = applicable;
+  if (consecutive >= MAX_CONSECUTIVE && lastGen) {
+    const filtered = applicable.filter(g => g !== lastGen);
+    if (filtered.length > 0) candidates = filtered;
+  }
+
+  // Веса: базовый 1.0, -0.2 за каждое появление в окне
+  const weights = candidates.map(gen => {
+    const count = recent.filter(r => r === gen).length;
+    return Math.max(0.1, 1.0 - count * 0.2);
+  });
+
+  // Взвешенный случайный выбор
+  const total = weights.reduce((a, b) => a + b, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < candidates.length; i++) {
+    r -= weights[i]!;
+    if (r <= 0) return candidates[i]!;
+  }
+  return candidates[candidates.length - 1]!;
 }

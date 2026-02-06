@@ -77,10 +77,13 @@ export const users = pgTable('users', {
   xp: integer('xp').default(0).notNull(),
   level: integer('level').default(1).notNull(),
   streakDays: integer('streak_days').default(0).notNull(),
+  streakFreezes: integer('streak_freezes').default(0).notNull(),
+  gems: integer('gems').default(0).notNull(),
   nativeLanguage: varchar('native_language', { length: 10 }).default('ru').notNull(),
   learningLanguage: varchar('learning_language', { length: 10 }).default('en').notNull(),
   repeatMastered: boolean('repeat_mastered').default(false).notNull(),
   lastActivityAt: timestamp('last_activity_at'),
+  lastLoginDate: timestamp('last_login_date'), // Дата последнего входа для streak (без времени)
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -511,6 +514,29 @@ export const userSeasonStats = pgTable(
   ],
 );
 
+// ─── Daily League Snapshots ──────────────────────────────────────────────────
+
+export const dailyLeagueSnapshots = pgTable(
+  'daily_league_snapshots',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    seasonId: integer('season_id')
+      .references(() => leagueSeasons.id, { onDelete: 'cascade' })
+      .notNull(),
+    date: timestamp('date').notNull(),
+    leaguePoints: integer('league_points').default(0).notNull(),
+    position: integer('position').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('daily_league_snapshot_uniq').on(table.userId, table.seasonId, table.date),
+    index('daily_league_snapshots_season_date_idx').on(table.seasonId, table.date),
+  ],
+);
+
 // ─── League Notifications ───────────────────────────────────────────────────
 
 export const leagueNotifications = pgTable(
@@ -550,4 +576,9 @@ export const userSeasonStatsRelations = relations(userSeasonStats, ({ one }) => 
 export const leagueNotificationsRelations = relations(leagueNotifications, ({ one }) => ({
   user: one(users, { fields: [leagueNotifications.userId], references: [users.id] }),
   season: one(leagueSeasons, { fields: [leagueNotifications.seasonId], references: [leagueSeasons.id] }),
+}));
+
+export const dailyLeagueSnapshotsRelations = relations(dailyLeagueSnapshots, ({ one }) => ({
+  user: one(users, { fields: [dailyLeagueSnapshots.userId], references: [users.id] }),
+  season: one(leagueSeasons, { fields: [dailyLeagueSnapshots.seasonId], references: [leagueSeasons.id] }),
 }));

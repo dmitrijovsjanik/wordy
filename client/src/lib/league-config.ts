@@ -11,7 +11,7 @@ export const LP_THRESHOLDS = {
 } as const;
 
 // Лиги без понижения (защита новичков)
-export const PROTECTED_TIERS = ['bronze', 'silver', 'gold'] as const;
+export const PROTECTED_TIERS: readonly string[] = ['bronze', 'silver', 'gold'];
 
 // Зоны прогресса для UI
 export const LP_ZONES_FULL = [
@@ -87,4 +87,99 @@ export function formatLpBoundary(min: number, max: number): string {
     return `${min}+ LP`;
   }
   return `${min}-${max} LP`;
+}
+
+// Типы зон лиги
+export type LeagueZone = 'promotion_x3' | 'promotion_x2' | 'promotion_x1' | 'safe' | 'demotion';
+
+export type LeagueZoneInfo = {
+  positionPercent: number;
+  zone: LeagueZone;
+  result: number;
+};
+
+// Расчёт зоны лиги и позиции маркера на прогресс-баре
+export function getLeagueZoneInfo(
+  position: number,
+  total: number,
+  leaguePoints: number,
+  isProtected: boolean,
+): LeagueZoneInfo {
+  // Реальные пороги по позиции: топ-20% повышение, низ-20% понижение
+  const promotionThreshold = Math.max(1, Math.ceil(total * 0.2));
+  const demotionThreshold = Math.floor(total * 0.8);
+
+  let zone: LeagueZone = 'safe';
+  let result = 0;
+
+  // Определяем зону и результат
+  if (position <= promotionThreshold) {
+    if (leaguePoints >= LP_THRESHOLDS.PROMOTION_3.min) {
+      zone = 'promotion_x3';
+      result = 3;
+    } else if (leaguePoints >= LP_THRESHOLDS.PROMOTION_2.min) {
+      zone = 'promotion_x2';
+      result = 2;
+    } else if (leaguePoints >= LP_THRESHOLDS.PROMOTION_1.min) {
+      zone = 'promotion_x1';
+      result = 1;
+    } else {
+      zone = 'promotion_x1';
+      result = 1;
+    }
+  } else if (!isProtected && position > demotionThreshold) {
+    zone = 'demotion';
+    result = -1;
+  }
+
+  // Визуальные границы зон на прогресс-баре
+  // Non-protected: [demotion 0-33.3 | safe 33.3-66.6 | x1 66.6-77.7 | x2 77.7-88.8 | x3 88.8-100]
+  // Protected:      [safe 0-50 | x1 50-66.6 | x2 66.6-83.3 | x3 83.3-100]
+  const zoneBounds: Record<LeagueZone, { start: number; end: number }> = isProtected
+    ? {
+        demotion: { start: 0, end: 0 },
+        safe: { start: 0, end: 50 },
+        promotion_x1: { start: 50, end: 66.6 },
+        promotion_x2: { start: 66.6, end: 83.3 },
+        promotion_x3: { start: 83.3, end: 100 },
+      }
+    : {
+        demotion: { start: 0, end: 33.3 },
+        safe: { start: 33.3, end: 66.6 },
+        promotion_x1: { start: 66.6, end: 77.7 },
+        promotion_x2: { start: 77.7, end: 88.8 },
+        promotion_x3: { start: 88.8, end: 100 },
+      };
+
+  const bounds = zoneBounds[zone];
+
+  // Прогресс внутри зоны (0..1)
+  let progressInZone = 0.5;
+
+  if (zone === 'demotion') {
+    const demotionZoneSize = total - demotionThreshold;
+    const posInZone = position - demotionThreshold;
+    progressInZone = 1 - posInZone / Math.max(1, demotionZoneSize);
+  } else if (zone === 'safe') {
+    const safeStart = promotionThreshold;
+    const safeEnd = isProtected ? total : demotionThreshold;
+    const safeZoneSize = safeEnd - safeStart;
+    const posInZone = position - safeStart;
+    progressInZone = 1 - posInZone / Math.max(1, safeZoneSize);
+  } else {
+    // Promotion zones — позиция по LP внутри диапазона зоны
+    const lpRanges: Record<string, { min: number; max: number }> = {
+      promotion_x1: { min: LP_THRESHOLDS.PROMOTION_1.min, max: LP_THRESHOLDS.PROMOTION_2.min },
+      promotion_x2: { min: LP_THRESHOLDS.PROMOTION_2.min, max: LP_THRESHOLDS.PROMOTION_3.min },
+      promotion_x3: { min: LP_THRESHOLDS.PROMOTION_3.min, max: LP_THRESHOLDS.PROMOTION_3.min + 5000 },
+    };
+    const range = lpRanges[zone];
+    if (range) {
+      progressInZone = Math.min(1, Math.max(0, (leaguePoints - range.min) / (range.max - range.min)));
+    }
+  }
+
+  const positionPercent = bounds.start + progressInZone * (bounds.end - bounds.start);
+
+  return { positionPercent, zone, result };
 }

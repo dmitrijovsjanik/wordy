@@ -5,7 +5,7 @@
 
 import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { isNull } from 'drizzle-orm';
+import { eq, isNull } from 'drizzle-orm';
 import * as schema from '../schema.js';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -60,7 +60,7 @@ async function updateTranscriptions() {
         continue;
       }
 
-      await db.update(words).set({ transcription }).where(schema.eq(words.id, word.id));
+      await db.update(words).set({ transcription }).where(eq(words.id, word.id));
       console.log(`${progress} [${word.text}] → ${transcription}`);
       updated++;
 

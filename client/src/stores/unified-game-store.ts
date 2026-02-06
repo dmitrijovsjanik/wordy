@@ -5,8 +5,15 @@ import { quizStart, quizAnswer, quizFinish, quizNext, quizAnswerInfinite } from 
 import { useLeagueStore } from './league-store';
 
 const MAX_RECENT = 20;
+const MAX_RECENT_GENERATORS = 10;
 const STREAK_KEY = 'wordy:streak';
 const FEEDBACK_DELAY = 1200;
+
+/** Определяет тип генератора из ответа сервера */
+function getGeneratorTypeFromQuestion(question: QuizQuestion): string {
+  if (question.type === 'spelling') return 'spelling';
+  return question.direction; // 'en-ru' или 'ru-en'
+}
 
 function loadStreak(): number {
   const raw = localStorage.getItem(STREAK_KEY);
@@ -48,6 +55,7 @@ type UnifiedGameState = {
 
   // Infinite mode
   recentMeaningIds: number[];
+  recentGenerators: string[];
   collectionId: number | undefined;
 
   // Actions
@@ -77,6 +85,7 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
 
   // Infinite
   recentMeaningIds: [],
+  recentGenerators: [],
   collectionId: undefined,
 
   startGame: async (mode, options = {}) => {
@@ -91,6 +100,7 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
       result: null,
       questionIndex: 0,
       recentMeaningIds: [],
+      recentGenerators: [],
       collectionId: options.collectionId,
       maxQuestions: options.maxQuestions ?? 10,
     });
@@ -101,7 +111,8 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
         set({ sessionId: res.sessionId, currentQuestion: res.question, isLoading: false });
       } else if (mode === 'infinite') {
         const res = await quizNext([], options.collectionId);
-        set({ currentQuestion: res.question, isLoading: false });
+        const generators = res.question ? [getGeneratorTypeFromQuestion(res.question)] : [];
+        set({ currentQuestion: res.question, recentGenerators: generators, isLoading: false });
       }
     } catch {
       set({ isLoading: false, error: 'Не удалось начать игру' });
@@ -191,8 +202,16 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
         // Автопереход к следующему вопросу
         setTimeout(async () => {
           set({ feedback: null, selectedAnswer: null });
-          const nextRes = await quizNext(get().recentMeaningIds, get().collectionId);
-          set({ currentQuestion: nextRes.question });
+          const nextRes = await quizNext(
+            get().recentMeaningIds,
+            get().collectionId,
+            undefined,
+            get().recentGenerators,
+          );
+          const updatedGenerators = nextRes.question
+            ? [...get().recentGenerators, getGeneratorTypeFromQuestion(nextRes.question)].slice(-MAX_RECENT_GENERATORS)
+            : get().recentGenerators;
+          set({ currentQuestion: nextRes.question, recentGenerators: updatedGenerators });
         }, FEEDBACK_DELAY);
       }
     } catch {
@@ -220,6 +239,7 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
       answers: [],
       result: null,
       recentMeaningIds: [],
+      recentGenerators: [],
       collectionId: undefined,
     });
   },
@@ -228,6 +248,7 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
     set({
       collectionId: id,
       recentMeaningIds: [],
+      recentGenerators: [],
       currentQuestion: null,
       feedback: null,
       selectedAnswer: null,

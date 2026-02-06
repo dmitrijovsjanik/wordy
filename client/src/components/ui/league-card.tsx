@@ -39,7 +39,7 @@ export function LeagueCard({ className }: LeagueCardProps) {
       </div>
 
       {stats ? (
-        <LeagueProgress stats={stats} position={position} />
+        <LeagueProgress stats={stats} tier={progress.tier} position={position} />
       ) : (
         <div className="text-center text-sm text-[var(--gray-11)]">
           Начните играть, чтобы заработать очки лиги

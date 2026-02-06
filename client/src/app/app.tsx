@@ -8,11 +8,15 @@ const Home = lazy(() => import('@/components/home').then((m) => ({ default: m.Ho
 const Collections = lazy(() => import('@/components/collections').then((m) => ({ default: m.Collections })));
 const CollectionDetail = lazy(() => import('@/components/collection-detail').then((m) => ({ default: m.CollectionDetail })));
 const CollectionCreate = lazy(() => import('@/components/collection-create').then((m) => ({ default: m.CollectionCreate })));
+const ErrorsCollection = lazy(() => import('@/components/errors-collection').then((m) => ({ default: m.ErrorsCollection })));
 const Profile = lazy(() => import('@/components/profile').then((m) => ({ default: m.Profile })));
 const DuelCreate = lazy(() => import('@/components/duel-create').then((m) => ({ default: m.DuelCreate })));
 const DuelGame = lazy(() => import('@/components/duel-game').then((m) => ({ default: m.DuelGame })));
 const DuelResult = lazy(() => import('@/components/duel-result').then((m) => ({ default: m.DuelResult })));
 const Leaderboard = lazy(() => import('@/components/leaderboard'));
+const Modes = lazy(() => import('@/components/modes').then((m) => ({ default: m.Modes })));
+const Shop = lazy(() => import('@/components/shop').then((m) => ({ default: m.Shop })));
+const TestHeader = lazy(() => import('@/components/test-header').then((m) => ({ default: m.TestHeader })));
 
 function PageSkeleton() {
   return (
@@ -36,11 +40,15 @@ export function App() {
                 <Route path="/collections" element={<Collections />} />
                 <Route path="/collections/create" element={<CollectionCreate />} />
                 <Route path="/collections/:id" element={<CollectionDetail />} />
+                <Route path="/errors" element={<ErrorsCollection />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/duel/create" element={<DuelCreate />} />
                 <Route path="/duel/:id" element={<DuelGame />} />
                 <Route path="/duel/:id/result" element={<DuelResult />} />
                 <Route path="/leaderboard" element={<Leaderboard />} />
+                <Route path="/modes" element={<Modes />} />
+                <Route path="/shop" element={<Shop />} />
+                <Route path="/test-header" element={<TestHeader />} />
               </Routes>
             </Suspense>
           </main>

@@ -8,7 +8,7 @@ export function RewardFeedback({ reward }: RewardFeedbackProps) {
   return (
     <div
       key={reward.key}
-      className="absolute bottom-0 left-1/2 flex -translate-x-1/2 -translate-y-4 flex-col items-center gap-1"
+      className="flex flex-col items-center gap-1"
     >
       {/* XP group — value + multiplier animate together */}
       <div className="animate-reward-group flex items-center gap-1.5">

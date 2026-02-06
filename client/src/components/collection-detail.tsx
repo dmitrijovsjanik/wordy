@@ -4,12 +4,13 @@ import { useCollectionStore } from '@/stores/collection-store';
 import { useBackButton } from '@/hooks/use-back-button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { WordList, countUniqueWords } from '@/components/ui/word-list';
+import { WordList } from '@/components/ui/word-list';
+import { countUniqueWords } from '@/lib/word-utils';
 import { WordViewToggle } from '@/components/ui/word-view-toggle';
 import { WordSortSelect } from '@/components/ui/word-sort-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BackButton } from '@/components/ui/back-button';
-import { DictionaryPreview } from '@/components/ui/dictionary-preview';
+import { DictionaryPreview, getMeaningIds, isAlreadyAdded } from '@/components/ui/dictionary-preview';
 import {
   Dialog,
   DialogContent,
@@ -28,7 +29,6 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import {
   MoreVerticalIcon,
   Add01Icon,
-  Tick01Icon,
   Delete02Icon,
   Edit02Icon,
   Search01Icon,
@@ -58,6 +58,7 @@ export function CollectionDetail() {
   const [lookupResult, setLookupResult] = useState<DictionaryLookupResult | null>(null);
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
+  const [manualTranslation, setManualTranslation] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -279,8 +280,22 @@ export function CollectionDetail() {
         />
       </div>
 
+      {/* Оверлей при показе карточки словаря */}
+      <div
+        className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-200 ${
+          isAddingMode && (query.trim() || isLookingUp)
+            ? 'opacity-100'
+            : 'pointer-events-none opacity-0'
+        }`}
+        onClick={() => {
+          setQuery('');
+          setLookupResult(null);
+          setManualTranslation('');
+        }}
+      />
+
       {/* Нижняя панель */}
-      <div className="pointer-events-none sticky bottom-0 -mx-4">
+      <div className={`pointer-events-none sticky bottom-0 -mx-4 ${isAddingMode && (query.trim() || isLookingUp) ? 'z-50' : ''}`}>
         <div className="h-8 bg-gradient-to-t from-[var(--gray-1)] to-transparent" />
         <div className="pointer-events-auto bg-[var(--gray-1)] px-4 pb-4">
           {isOwner ? (
@@ -292,10 +307,11 @@ export function CollectionDetail() {
                   isLoading={isLookingUp}
                   query={query}
                   existingMeaningIds={existingMeaningIds}
-                  onAdd={handleAdd}
+                  manualTranslation={manualTranslation}
+                  onManualTranslationChange={setManualTranslation}
                 />
 
-                {/* Инпут + кнопка выхода */}
+                {/* Инпут + кнопка действия */}
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1">
                     <HugeiconsIcon
@@ -307,7 +323,10 @@ export function CollectionDetail() {
                       ref={inputRef}
                       placeholder="Введите слово..."
                       value={query}
-                      onChange={(e) => setQuery(e.target.value)}
+                      onChange={(e) => {
+                        setQuery(e.target.value);
+                        setManualTranslation('');
+                      }}
                       autoFocus
                       className="pl-11 pr-11"
                       disabled={isAdding}
@@ -318,6 +337,7 @@ export function CollectionDetail() {
                         onClick={() => {
                           setQuery('');
                           setLookupResult(null);
+                          setManualTranslation('');
                           inputRef.current?.focus();
                         }}
                         className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--gray-11)] active:text-[var(--gray-12)]"
@@ -326,13 +346,41 @@ export function CollectionDetail() {
                       </button>
                     )}
                   </div>
-                  <Button
-                    variant="secondary"
-                    size="icon"
-                    onClick={handleExitAddMode}
-                  >
-                    <HugeiconsIcon icon={Tick01Icon} size={20} />
-                  </Button>
+                  {/* Кнопка: синяя с + если можно добавить, серая с × если пусто */}
+                  {(() => {
+                    const meaningIds = getMeaningIds(lookupResult);
+                    const canAddFromApi = meaningIds.length > 0 && !isAlreadyAdded(lookupResult, existingMeaningIds);
+                    const canAddManual = !lookupResult?.meanings.length && query.trim() && manualTranslation.trim();
+                    const canAdd = canAddFromApi || canAddManual;
+
+                    if (canAdd) {
+                      return (
+                        <Button
+                          size="icon"
+                          disabled={isAdding}
+                          onClick={() => {
+                            if (canAddManual) {
+                              handleAdd([], { wordText: query.trim(), translation: manualTranslation.trim() });
+                            } else {
+                              handleAdd(meaningIds);
+                            }
+                          }}
+                        >
+                          <HugeiconsIcon icon={Add01Icon} size={20} />
+                        </Button>
+                      );
+                    }
+
+                    return (
+                      <Button
+                        variant="secondary"
+                        size="icon"
+                        onClick={handleExitAddMode}
+                      >
+                        <HugeiconsIcon icon={Cancel01Icon} size={20} />
+                      </Button>
+                    );
+                  })()}
                 </div>
               </div>
             ) : (

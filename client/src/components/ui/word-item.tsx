@@ -21,11 +21,12 @@ type WordItemProps = {
   alternativeTranslations?: string[];
   partOfSpeech?: string;
   contextExample?: string;
-  srsStage?: number;
+  srsStage?: number | null; // null = не встречалось
   onDelete?: () => Promise<void>;
+  onClick?: () => void;
 };
 
-export const WordItem = memo(function WordItem({ word, lemma, transcription, translations, alternativeTranslations, partOfSpeech, contextExample, srsStage, onDelete }: WordItemProps) {
+export const WordItem = memo(function WordItem({ word, lemma, transcription, translations, alternativeTranslations, partOfSpeech, contextExample, srsStage, onDelete, onClick }: WordItemProps) {
   // Если есть лемма — показываем её крупно, оригинальное слово мелко сверху
   // Если нет леммы — показываем оригинальное слово крупно
   const displayWord = lemma ?? word;
@@ -40,13 +41,15 @@ export const WordItem = memo(function WordItem({ word, lemma, transcription, tra
     };
   }, []);
 
-  const handleFirstTap = () => {
+  const handleFirstTap = (e: React.MouseEvent) => {
+    e.stopPropagation();
     setConfirmVisible(true);
     if (confirmTimer.current) clearTimeout(confirmTimer.current);
     confirmTimer.current = setTimeout(() => setConfirmVisible(false), 3000);
   };
 
-  const handleConfirm = async () => {
+  const handleConfirm = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (!onDelete) return;
     if (confirmTimer.current) clearTimeout(confirmTimer.current);
     setIsDeleting(true);
@@ -59,7 +62,10 @@ export const WordItem = memo(function WordItem({ word, lemma, transcription, tra
   };
 
   return (
-    <Card className="flex flex-col gap-1.5 p-4">
+    <Card
+      className={`flex flex-col gap-1.5 p-4 ${onClick ? 'cursor-pointer active:bg-[var(--gray-3)]' : ''}`}
+      onClick={onClick}
+    >
       {/* Строка 1: слово + часть речи + SRS + удаление */}
       <div className="flex items-start gap-2">
         <div className="flex flex-col">

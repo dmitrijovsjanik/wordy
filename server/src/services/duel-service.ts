@@ -1,8 +1,9 @@
-import { eq } from 'drizzle-orm';
+import { eq, and, gte } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { duels, quizSessions } from '../db/schema.js';
 import { generateQuestion } from './quiz-service.js';
-import { rewardDuelWin } from './progression-service.js';
+import { rewardDuelWin, addGems } from './progression-service.js';
+import { GEMS_DUEL_WIN_DAILY } from '../config/gems-config.js';
 
 export async function createDuel(challengerId: number) {
   const [session] = await db
@@ -138,9 +139,39 @@ export async function finishDuel(duelId: number) {
     .where(eq(duels.id, duelId));
 
   // Начислить XP и LP победителю через progression-service
+  let gemsEarned = 0;
   if (winnerId) {
     await rewardDuelWin(winnerId);
+
+    // Гемы за победу — макс. 1 раз в день
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+
+    const todayWin = await db.query.duels.findFirst({
+      where: and(
+        eq(duels.winnerId, winnerId),
+        eq(duels.status, 'finished'),
+        gte(duels.updatedAt, todayStart),
+      ),
+    });
+
+    // todayWin найдёт текущую дуэль (мы только что обновили), проверяем что нет другой
+    const otherWinsToday = await db.query.duels.findMany({
+      where: and(
+        eq(duels.winnerId, winnerId),
+        eq(duels.status, 'finished'),
+        gte(duels.updatedAt, todayStart),
+      ),
+      columns: { id: true },
+      limit: 2,
+    });
+
+    // Если это единственная победа за сегодня — начисляем гемы
+    if (otherWinsToday.length <= 1) {
+      await addGems(winnerId, GEMS_DUEL_WIN_DAILY);
+      gemsEarned = GEMS_DUEL_WIN_DAILY;
+    }
   }
 
-  return { winnerId };
+  return { winnerId, gemsEarned };
 }

@@ -7,10 +7,8 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Clock01Icon } from '@hugeicons/core-free-icons';
-import Lottie from 'lottie-react';
-import fireStreakData from '@/assets/fire-streak.json';
 import { cn } from '@/lib/utils';
-import { LP_THRESHOLDS, PROTECTED_TIERS } from '@/lib/league-config';
+import { PROTECTED_TIERS, getLeagueZoneInfo } from '@/lib/league-config';
 import { xpForLevel } from '@/lib/progression-config';
 import type { LeagueTier } from '@/types/api';
 
@@ -40,80 +38,11 @@ function formatTimeLeft(endDate: Date): string {
   return `${hours}ч`;
 }
 
-type LeagueZone = 'promotion_x3' | 'promotion_x2' | 'promotion_x1' | 'safe' | 'demotion';
-
-function getLeagueZoneInfo(position: number, total: number, leaguePoints: number, isProtected: boolean) {
-  // Реальные пороги по позиции: топ-20% повышение, низ-20% понижение
-  const promotionThreshold = Math.max(1, Math.ceil(total * 0.2));
-  const demotionThreshold = Math.floor(total * 0.8);
-
-  let zone: LeagueZone = 'safe';
-  let result = 0;
-
-  // Определяем зону и результат
-  if (position <= promotionThreshold) {
-    if (leaguePoints >= LP_THRESHOLDS.PROMOTION_3.min) {
-      zone = 'promotion_x3';
-      result = 3;
-    } else if (leaguePoints >= LP_THRESHOLDS.PROMOTION_2.min) {
-      zone = 'promotion_x2';
-      result = 2;
-    } else if (leaguePoints >= LP_THRESHOLDS.PROMOTION_1.min) {
-      zone = 'promotion_x1';
-      result = 1;
-    } else {
-      zone = 'promotion_x1';
-      result = 1;
-    }
-  } else if (!isProtected && position > demotionThreshold) {
-    zone = 'demotion';
-    result = -1;
-  }
-
-  // Рассчитываем позицию маркера для равномерных секторов на баре
-  // Бар: [понижение 1/3 | безопасно 1/3 | повышение 1/3] или [безопасно 1/2 | повышение 1/2]
-  let positionPercent: number;
-
-  if (isProtected) {
-    // Без понижения: [безопасно 0-50% | повышение 50-100%]
-    if (position <= promotionThreshold) {
-      // В зоне повышения: маппим 1..promotionThreshold → 100%..50%
-      const progressInZone = (promotionThreshold - position) / Math.max(1, promotionThreshold - 1);
-      positionPercent = 50 + progressInZone * 50;
-    } else {
-      // Безопасная зона: маппим promotionThreshold+1..total → 50%..0%
-      const safeZoneSize = total - promotionThreshold;
-      const posInSafe = position - promotionThreshold;
-      positionPercent = 50 - (posInSafe / safeZoneSize) * 50;
-    }
-  } else {
-    // С понижением: [понижение 0-33% | безопасно 33-66% | повышение 66-100%]
-    if (position <= promotionThreshold) {
-      // Повышение: маппим 1..promotionThreshold → 100%..66.6%
-      const progressInZone = (promotionThreshold - position) / Math.max(1, promotionThreshold - 1);
-      positionPercent = 66.6 + progressInZone * 33.3;
-    } else if (position > demotionThreshold) {
-      // Понижение: маппим demotionThreshold+1..total → 33.3%..0%
-      const demotionZoneSize = total - demotionThreshold;
-      const posInDemotion = position - demotionThreshold;
-      positionPercent = 33.3 - (posInDemotion / demotionZoneSize) * 33.3;
-    } else {
-      // Безопасная зона: маппим promotionThreshold+1..demotionThreshold → 66.6%..33.3%
-      const safeZoneSize = demotionThreshold - promotionThreshold;
-      const posInSafe = position - promotionThreshold;
-      positionPercent = 66.6 - (posInSafe / safeZoneSize) * 33.3;
-    }
-  }
-
-  return { positionPercent, zone, result };
-}
-
 
 type PlayerStatusCardProps = {
   user: {
     level: number;
     xp: number;
-    streakDays: number;
   };
   className?: string;
 };
@@ -161,12 +90,6 @@ export function PlayerStatusCard({ user, className }: PlayerStatusCardProps) {
           <div className="flex items-baseline gap-1">
             <span className="text-3xl font-bold text-[var(--accent-11)]">{user.level}</span>
             <span className="text-sm text-[var(--gray-11)]">ур.</span>
-            {user.streakDays > 0 && (
-              <div className="ml-auto flex items-center gap-0.5 text-sm text-[var(--gray-11)]">
-                <Lottie animationData={fireStreakData} loop autoplay className="relative -top-[2px] h-5 w-5 shrink-0" />
-                <span>{user.streakDays}</span>
-              </div>
-            )}
           </div>
           <div className="mt-2">
             <Progress value={progressPercent} className="h-2" />

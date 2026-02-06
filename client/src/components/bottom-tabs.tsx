@@ -1,6 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { BookOpen02Icon, Folder01Icon, UserIcon, ChampionIcon } from '@hugeicons/core-free-icons';
+import { BookOpen02Icon, Folder01Icon, GameController02Icon, ChampionIcon } from '@hugeicons/core-free-icons';
 import { cn } from '@/lib/utils';
 
 type Tab = {
@@ -30,10 +30,10 @@ const tabs: Tab[] = [
     match: (p) => p === '/leaderboard',
   },
   {
-    path: '/profile',
-    label: 'Профиль',
-    icon: UserIcon,
-    match: (p) => p === '/profile',
+    path: '/modes',
+    label: 'Режимы',
+    icon: GameController02Icon,
+    match: (p) => p === '/modes',
   },
 ];
 

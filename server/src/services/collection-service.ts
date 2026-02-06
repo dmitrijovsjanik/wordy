@@ -1,4 +1,4 @@
-import { eq, and, sql, isNull, inArray, or, lte } from 'drizzle-orm';
+import { eq, and, sql, isNull, inArray, or, lte, lt, gte } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   collections,
@@ -10,11 +10,16 @@ import {
   wordMeanings,
   words,
 } from '../db/schema.js';
+import { ERRORS_EXIT_SRS_STAGE, ERRORS_COLLECTION_ID } from '../config/errors-config.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 // Максимальный ранг популярности для отображения (1 = самый популярный)
 const MAX_POPULARITY_RANK = 3;
+
+// Минимальная частотность перевода (fr из Yandex API)
+// fr=1 — очень редкие переводы (град=city), fr=10 — популярные
+const MIN_FREQUENCY = 2;
 
 // ─── Marketplace ────────────────────────────────────────────────────────────
 
@@ -184,6 +189,10 @@ export async function getCollectionDetail(collectionId: number, userId: number) 
       alternativeTranslations: wordMeanings.alternativeTranslations,
       partOfSpeech: wordMeanings.partOfSpeech,
       contextExample: wordMeanings.contextExample,
+      examples: wordMeanings.examples,
+      synonyms: wordMeanings.synonyms,
+      meaningHints: wordMeanings.meaningHints,
+      frequency: wordMeanings.frequency,
       srsStage: userWordProgress.srsStage,
       popularityRank: words.frequencyRank,
     })
@@ -231,20 +240,28 @@ export async function getCollectionDetail(collectionId: number, userId: number) 
   const wordsWithProgress = [
     ...systemWords.map((w) => ({
       ...w,
-      srsStage: w.srsStage ?? 0,
+      srsStage: w.srsStage, // null = не встречалось, number = прогресс (может быть отрицательным)
       lemma: w.lemma ?? undefined,
       transcription: w.transcription ?? undefined,
       alternativeTranslations: w.alternativeTranslations ?? undefined,
       contextExample: w.contextExample ?? undefined,
+      examples: (w.examples as { text: string; translation: string }[] | null) ?? undefined,
+      synonyms: w.synonyms ?? undefined,
+      meaningHints: w.meaningHints ?? undefined,
+      frequency: w.frequency ?? undefined,
       popularityRank: w.popularityRank ?? undefined,
     })),
     ...customWords.map((w) => ({
       ...w,
-      srsStage: (w.srsStage ?? 0) as number,
+      srsStage: w.srsStage, // null = не встречалось
       lemma: undefined as string | undefined,
       transcription: undefined as string | undefined,
       alternativeTranslations: undefined as string[] | undefined,
       contextExample: w.contextExample ?? undefined,
+      examples: undefined as { text: string; translation: string }[] | undefined,
+      synonyms: undefined as string[] | undefined,
+      meaningHints: undefined as string[] | undefined,
+      frequency: undefined as number | undefined,
       popularityRank: undefined as number | undefined,
     })),
   ];
@@ -408,14 +425,16 @@ export async function deleteUserCollection(userId: number, collectionId: number)
     .where(eq(collections.id, collectionId));
 }
 
-// ─── Difficult Words (auto-collection) ──────────────────────────────────────
+// ─── Errors Collection (auto-collection) ────────────────────────────────────
 
-export async function getDifficultWords(userId: number) {
+// Слова с ошибками, которые ещё не восстановлены (srsStage < ERRORS_EXIT_SRS_STAGE)
+export async function getErrorsCollection(userId: number) {
   const progress = await db
     .select({
       meaningId: userWordProgress.meaningId,
       correctCount: userWordProgress.correctCount,
       incorrectCount: userWordProgress.incorrectCount,
+      srsStage: userWordProgress.srsStage,
       word: words.text,
       translation: wordMeanings.translation,
     })
@@ -426,16 +445,18 @@ export async function getDifficultWords(userId: number) {
       and(
         eq(userWordProgress.userId, userId),
         sql`${userWordProgress.incorrectCount} > 0`,
+        lt(userWordProgress.srsStage, ERRORS_EXIT_SRS_STAGE),
       ),
     )
     .orderBy(sql`${userWordProgress.incorrectCount} DESC`);
 
-  // Сложные кастомные слова
+  // Кастомные слова с ошибками
   const customProgress = await db
     .select({
       meaningId: sql<number>`-${userCustomWordProgress.customWordId}`,
       correctCount: userCustomWordProgress.correctCount,
       incorrectCount: userCustomWordProgress.incorrectCount,
+      srsStage: userCustomWordProgress.srsStage,
       word: userCustomWords.wordText,
       translation: userCustomWords.translation,
     })
@@ -445,17 +466,68 @@ export async function getDifficultWords(userId: number) {
       and(
         eq(userCustomWordProgress.userId, userId),
         sql`${userCustomWordProgress.incorrectCount} > 0`,
+        lt(userCustomWordProgress.srsStage, ERRORS_EXIT_SRS_STAGE),
       ),
     )
     .orderBy(sql`${userCustomWordProgress.incorrectCount} DESC`);
 
-  const allDifficult = [...progress, ...customProgress].sort(
+  const allErrors = [...progress, ...customProgress].sort(
     (a, b) => b.incorrectCount - a.incorrectCount,
   );
 
   return {
-    totalWords: allDifficult.length,
-    words: allDifficult,
+    totalWords: allErrors.length,
+    words: allErrors,
+    collection: {
+      id: ERRORS_COLLECTION_ID,
+      type: 'auto' as const,
+      title: 'Ошибки',
+      description: 'Слова, в которых вы ошибались',
+      iconName: 'alert-02',
+    },
+  };
+}
+
+// Алиас для обратной совместимости
+export const getDifficultWords = getErrorsCollection;
+
+// Пул слов для квизов из коллекции ошибок
+export async function getErrorsPool(userId: number): Promise<QuizPool> {
+  const progress = await db
+    .select({
+      meaningId: userWordProgress.meaningId,
+    })
+    .from(userWordProgress)
+    .where(
+      and(
+        eq(userWordProgress.userId, userId),
+        sql`${userWordProgress.incorrectCount} > 0`,
+        lt(userWordProgress.srsStage, ERRORS_EXIT_SRS_STAGE),
+      ),
+    );
+
+  const meaningIds = progress.map((p) => p.meaningId);
+
+  // Кастомные слова с ошибками
+  const customProgress = await db
+    .select({
+      id: userCustomWords.id,
+      wordText: userCustomWords.wordText,
+      translation: userCustomWords.translation,
+    })
+    .from(userCustomWordProgress)
+    .innerJoin(userCustomWords, eq(userCustomWordProgress.customWordId, userCustomWords.id))
+    .where(
+      and(
+        eq(userCustomWordProgress.userId, userId),
+        sql`${userCustomWordProgress.incorrectCount} > 0`,
+        lt(userCustomWordProgress.srsStage, ERRORS_EXIT_SRS_STAGE),
+      ),
+    );
+
+  return {
+    meaningIds,
+    customWords: customProgress,
   };
 }
 
@@ -553,7 +625,7 @@ export async function getAllWords(userId: number) {
         translation: w.translation,
         alternativeTranslations: 'alternativeTranslations' in w ? (w.alternativeTranslations as string[] | null) ?? undefined : undefined,
         partOfSpeech: w.partOfSpeech ?? undefined,
-        srsStage: w.srsStage ?? 0,
+        srsStage: w.srsStage ?? undefined, // undefined = не встречалось
         popularityRank: 'frequencyRank' in w ? ((w.frequencyRank as number | null) ?? undefined) : undefined,
       });
     }
@@ -629,12 +701,18 @@ export async function getQuizPool(userId: number, collectionId?: number): Promis
     lte(wordMeanings.popularityRank, MAX_POPULARITY_RANK),
   );
 
-  // Словарные слова (только популярные переводы)
+  // Фильтр по частотности: исключаем редкие переводы (fr=1)
+  const frequencyFilter = or(
+    isNull(wordMeanings.frequency),
+    gte(wordMeanings.frequency, MIN_FREQUENCY),
+  );
+
+  // Словарные слова (только популярные и частотные переводы)
   const systemMeanings = await db
     .select({ meaningId: collectionWords.meaningId })
     .from(collectionWords)
     .innerJoin(wordMeanings, eq(collectionWords.meaningId, wordMeanings.id))
-    .where(and(inArray(collectionWords.collectionId, collectionIds), popularityFilter));
+    .where(and(inArray(collectionWords.collectionId, collectionIds), popularityFilter, frequencyFilter));
 
   const meaningIds = [...new Set(systemMeanings.map((m) => m.meaningId))];
 

@@ -8,6 +8,8 @@ import {
   getUnreadNotifications,
   markNotificationsRead,
   getUserSeasonHistory,
+  saveDailySnapshot,
+  getTodayStartSnapshot,
 } from '../services/league-service.js';
 
 export default async function leagueRoutes(app: FastifyInstance) {
@@ -21,6 +23,14 @@ export default async function leagueRoutes(app: FastifyInstance) {
 
     const stats = await getUserSeasonStats(userId, season.id);
     const position = await getUserPosition(userId, season.id);
+
+    // Сохраняем снепшот при первом обращении за день
+    if (stats && position.position > 0) {
+      const existingSnapshot = await getTodayStartSnapshot(userId, season.id);
+      if (!existingSnapshot) {
+        await saveDailySnapshot(userId, season.id, stats.leaguePoints, position.position);
+      }
+    }
 
     return {
       progress: {

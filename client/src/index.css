@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "@radix-ui/colors/gray.css";
 @import "@radix-ui/colors/gray-dark.css";
+@import "@radix-ui/colors/gray-alpha.css";
+@import "@radix-ui/colors/gray-dark-alpha.css";
 @import "@radix-ui/colors/bronze.css";
 @import "@radix-ui/colors/bronze-dark.css";
 @import "@radix-ui/colors/yellow.css";
@@ -17,6 +19,8 @@
 /* Custom brand accent palette (dark): base hsla(206, 100%, 50%, 1) */
 @import "@radix-ui/colors/red.css";
 @import "@radix-ui/colors/red-dark.css";
+@import "@radix-ui/colors/tomato.css";
+@import "@radix-ui/colors/tomato-dark.css";
 @import "@radix-ui/colors/green.css";
 @import "@radix-ui/colors/green-dark.css";
 @import "@radix-ui/colors/amber.css";
@@ -517,4 +521,10 @@ h1, h2, h3, h4, h5, h6 {
 }
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* Моноширинный шрифт для spelling вопросов */
+.font-mono-spelling {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 0.02em;
 }

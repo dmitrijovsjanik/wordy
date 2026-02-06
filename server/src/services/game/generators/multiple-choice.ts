@@ -29,12 +29,31 @@ export function shuffle<T>(arr: T[]): T[] {
   return result;
 }
 
-export function randomDirection(pair: LanguagePair = DEFAULT_LANG_PAIR): LanguagePair {
+export function randomDirection(pair: LanguagePair = DEFAULT_LANG_PAIR, fixed?: LanguagePair): LanguagePair {
+  if (fixed) return fixed;
   return Math.random() < 0.5 ? pair : reversePair(pair);
 }
 
 export function getAllTranslations(meaning: { translation: string; alternativeTranslations: string[] | null }): string[] {
   return [meaning.translation, ...(meaning.alternativeTranslations ?? [])];
+}
+
+/** Собирает уникальные тексты вариантов из результатов запроса */
+function collectUniqueOptions(
+  rows: { translation: string; word: { text: string } }[],
+  isForward: boolean,
+  usedTexts: Set<string>,
+  result: string[],
+  target: number,
+) {
+  for (const row of rows) {
+    if (result.length >= target) break;
+    const text = isForward ? row.translation : row.word.text;
+    if (!usedTexts.has(text)) {
+      usedTexts.add(text);
+      result.push(text);
+    }
+  }
 }
 
 // ─── Filters ────────────────────────────────────────────────────────────────
@@ -58,6 +77,7 @@ export function getFrequencyFilter() {
 export async function generateFromMeaning(
   correct: PooledMeaning,
   langPair: LanguagePair = DEFAULT_LANG_PAIR,
+  fixedDirection?: LanguagePair,
 ): Promise<LegacyQuestion> {
   const popularityFilter = getPopularityFilter();
   const frequencyFilter = getFrequencyFilter();
@@ -65,52 +85,65 @@ export async function generateFromMeaning(
   // Все переводы правильного значения (primary + alternatives)
   const correctTranslations = getAllTranslations(correct);
   const correctTranslationsSet = new Set(correctTranslations);
+  // Все английские формы правильного слова
+  const correctWordTexts = new Set([correct.word.text, ...(correct.word.lemma ? [correct.word.lemma] : [])]);
 
-  // 3 неправильных варианта той же сложности
-  const wrongOptions = await db.query.wordMeanings.findMany({
+  const direction = randomDirection(langPair, fixedDirection);
+  const isForward = direction === langPair;
+
+  // Собираем уникальные варианты с дедупликацией по тексту опции
+  const usedOptionTexts = new Set(isForward ? correctTranslationsSet : correctWordTexts);
+  const wrongTexts: string[] = [];
+
+  // Шаг 1: та же часть речи и сложность
+  const step1 = await db.query.wordMeanings.findMany({
     where: and(
-      popularityFilter,
-      frequencyFilter,
-      CYRILLIC_FILTER,
+      popularityFilter, frequencyFilter, CYRILLIC_FILTER,
       ne(wordMeanings.id, correct.id),
       eq(wordMeanings.difficulty, correct.difficulty),
+      eq(wordMeanings.partOfSpeech, correct.partOfSpeech),
       sql`${wordMeanings.translation} NOT IN (${sql.join(correctTranslations.map(t => sql`${t}`), sql`, `)})`,
     ),
     with: { word: true },
-    limit: 3,
+    limit: 10,
     orderBy: sql`RANDOM()`,
   });
+  collectUniqueOptions(step1, isForward, usedOptionTexts, wrongTexts, 3);
 
-  // Если мало вариантов той же сложности, берём любые
-  if (wrongOptions.length < 3) {
-    const moreOptions = await db.query.wordMeanings.findMany({
+  // Шаг 2: та же сложность, любая часть речи
+  if (wrongTexts.length < 3) {
+    const step2 = await db.query.wordMeanings.findMany({
       where: and(
-        popularityFilter,
-        frequencyFilter,
-        CYRILLIC_FILTER,
+        popularityFilter, frequencyFilter, CYRILLIC_FILTER,
         ne(wordMeanings.id, correct.id),
+        eq(wordMeanings.difficulty, correct.difficulty),
         sql`${wordMeanings.translation} NOT IN (${sql.join(correctTranslations.map(t => sql`${t}`), sql`, `)})`,
-        wrongOptions.length > 0
-          ? sql`${wordMeanings.id} NOT IN (${sql.join(wrongOptions.map(o => sql`${o.id}`), sql`, `)})`
-          : undefined,
       ),
       with: { word: true },
-      limit: 3 - wrongOptions.length,
+      limit: 10,
       orderBy: sql`RANDOM()`,
     });
-    wrongOptions.push(...moreOptions);
+    collectUniqueOptions(step2, isForward, usedOptionTexts, wrongTexts, 3);
   }
 
-  // Фильтруем варианты, чей перевод совпадает с альтернативным переводом правильного
-  const filteredWrong = wrongOptions.filter(o => !correctTranslationsSet.has(o.translation));
-
-  const direction = randomDirection(langPair);
-  const isForward = direction === langPair;
+  // Шаг 3: любая сложность
+  if (wrongTexts.length < 3) {
+    const step3 = await db.query.wordMeanings.findMany({
+      where: and(
+        popularityFilter, frequencyFilter, CYRILLIC_FILTER,
+        ne(wordMeanings.id, correct.id),
+        sql`${wordMeanings.translation} NOT IN (${sql.join(correctTranslations.map(t => sql`${t}`), sql`, `)})`,
+      ),
+      with: { word: true },
+      limit: 10,
+      orderBy: sql`RANDOM()`,
+    });
+    collectUniqueOptions(step3, isForward, usedOptionTexts, wrongTexts, 3);
+  }
 
   if (isForward) {
-    // en-ru: показываем английское слово с транскрипцией
     const lemma = correct.word.lemma;
-    const options = shuffle([correct.translation, ...filteredWrong.map(o => o.translation)]);
+    const options = shuffle([correct.translation, ...wrongTexts]);
     return {
       meaningId: correct.id,
       word: lemma ?? correct.word.text,
@@ -121,8 +154,7 @@ export async function generateFromMeaning(
       direction,
     };
   } else {
-    // ru-en: показываем русское слово
-    const options = shuffle([correct.word.text, ...filteredWrong.map(o => o.word.text)]);
+    const options = shuffle([correct.word.text, ...wrongTexts]);
     return {
       meaningId: correct.id,
       word: correct.translation,
@@ -141,11 +173,12 @@ export async function generateFromCustomWord(
   correct: CustomWordForQuiz,
   allCustom: CustomWordForQuiz[],
   langPair: LanguagePair = DEFAULT_LANG_PAIR,
+  fixedDirection?: LanguagePair,
 ): Promise<LegacyQuestion> {
   const popularityFilter = getPopularityFilter();
   const frequencyFilter = getFrequencyFilter();
 
-  const direction = randomDirection(langPair);
+  const direction = randomDirection(langPair, fixedDirection);
   const isForward = direction === langPair;
 
   if (isForward) {
@@ -210,6 +243,7 @@ export async function generateFromCustomWord(
 export async function generateRandom(
   excludeMeaningIds: number[] = [],
   langPair: LanguagePair = DEFAULT_LANG_PAIR,
+  fixedDirection?: LanguagePair,
 ): Promise<LegacyQuestion | null> {
   const popularityFilter = getPopularityFilter();
   const frequencyFilter = getFrequencyFilter();
@@ -228,5 +262,5 @@ export async function generateRandom(
   if (candidates.length === 0) return null;
 
   const correct = candidates[0]!;
-  return generateFromMeaning(correct as PooledMeaning, langPair);
+  return generateFromMeaning(correct as PooledMeaning, langPair, fixedDirection);
 }
