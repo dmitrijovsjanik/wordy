@@ -1,0 +1,72 @@
+name: Diagnose Server
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Run diagnostics
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          SSH_CMD="ssh -i ~/.ssh/deploy_key root@$SSH_HOST"
+
+          echo "=== PM2 Status ==="
+          $SSH_CMD "pm2 list" || echo "PM2 not running"
+
+          echo ""
+          echo "=== PM2 Logs (last 50 lines) ==="
+          $SSH_CMD "pm2 logs wordy --nostream --lines 50" || echo "No PM2 logs"
+
+          echo ""
+          echo "=== Nginx Status ==="
+          $SSH_CMD "systemctl status nginx" || echo "Nginx not running"
+
+          echo ""
+          echo "=== Nginx Error Log (last 20 lines) ==="
+          $SSH_CMD "tail -20 /var/log/nginx/error.log" || echo "No nginx error log"
+
+          echo ""
+          echo "=== Listening Ports ==="
+          $SSH_CMD "ss -tlnp | grep -E ':(80|443|3100) '"
+
+          echo ""
+          echo "=== Firewall Rules ==="
+          $SSH_CMD "ufw status" || echo "UFW not installed"
+
+          echo ""
+          echo "=== Current Symlink ==="
+          $SSH_CMD "ls -la /var/www/wordy/current" || echo "No current symlink"
+
+          echo ""
+          echo "=== Server dist exists? ==="
+          $SSH_CMD "ls -la /var/www/wordy/current/server/dist/index.js" || echo "No server dist"
+
+          echo ""
+          echo "=== Client dist exists? ==="
+          $SSH_CMD "ls /var/www/wordy/current/client/dist/index.html" || echo "No client dist"
+
+          echo ""
+          echo "=== Nginx config ==="
+          $SSH_CMD "cat /etc/nginx/sites-enabled/wordy" || $SSH_CMD "cat /etc/nginx/sites-enabled/wordy-lang.ru" || echo "No nginx config found"
+
+          echo ""
+          echo "=== .env symlink ==="
+          $SSH_CMD "ls -la /var/www/wordy/current/server/.env" || echo "No .env"
+
+          echo ""
+          echo "=== Disk space ==="
+          $SSH_CMD "df -h /"
+
+          echo ""
+          echo "=== Memory ==="
+          $SSH_CMD "free -h"
