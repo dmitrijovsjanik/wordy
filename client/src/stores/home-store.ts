@@ -136,7 +136,7 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
       }
 
       set({
-        feedback: { ...res, correctTranslation: currentQuestion.correctTranslation, meaningId: currentQuestion.meaningId },
+        feedback: { ...res, correctTranslation: currentQuestion.correctTranslation ?? '', meaningId: currentQuestion.meaningId },
         recentMeaningIds: updatedRecent,
         isLoading: false,
         streak: newStreak,

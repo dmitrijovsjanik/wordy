@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { QuizQuestion, QuizResultResponse, InfiniteAnswerResponse } from '@/types/api';
+import type { QuizQuestion, QuizResultResponse } from '@/types/api';
 import type { GameMode, AnswerFeedback, RewardDisplay } from '@/types/game';
 import { quizStart, quizAnswer, quizFinish, quizNext, quizAnswerInfinite } from '@/lib/api';
 import { useLeagueStore } from './league-store';
@@ -166,7 +166,7 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
           answers: [...answers, newAnswer],
           feedback: {
             isCorrect: res.isCorrect,
-            correctAnswer: currentQuestion.correctTranslation,
+            correctAnswer: currentQuestion.correctTranslation ?? '',
           },
           isLoading: false,
         });
@@ -199,7 +199,7 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
         set({
           feedback: {
             isCorrect: res.isCorrect,
-            correctAnswer: currentQuestion.correctTranslation,
+            correctAnswer: currentQuestion.correctTranslation ?? '',
             xpEarned: res.xpEarned,
             xpModifier: res.xpModifier,
             lpEarned: res.lpEarned,

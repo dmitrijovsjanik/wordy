@@ -76,7 +76,7 @@ function groupWords(words: WordEntry[]): GroupedWord[] {
     // Если хотя бы одно значение не null — используем минимальное числовое
     if (!stageByPair.has(key)) {
       stageByPair.set(key, newStage);
-    } else if (currentStage !== null && newStage !== null) {
+    } else if (currentStage != null && newStage !== null) {
       stageByPair.set(key, Math.min(currentStage, newStage));
     } else if (newStage !== null) {
       stageByPair.set(key, newStage);

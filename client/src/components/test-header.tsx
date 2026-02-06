@@ -83,7 +83,7 @@ function CurrentHeader() {
         <div className="flex-1" />
         <StreakDaysIndicator count={user.streakDays} />
         <StreakFreezeIndicator count={user.streakFreezes} />
-        <GemsIndicator count={user.gems} />
+        <GemsIndicator gems={user.gems} freezes={user.streakFreezes} />
       </div>
       {/* Card */}
       {isLoading || !progress ? (
@@ -221,7 +221,7 @@ function VariantA() {
         <div className="flex items-center gap-1.5">
           <StreakDaysIndicator count={user.streakDays} />
           <StreakFreezeIndicator count={user.streakFreezes} />
-          <GemsIndicator count={user.gems} />
+          <GemsIndicator gems={user.gems} freezes={user.streakFreezes} />
         </div>
       </div>
 
@@ -311,7 +311,7 @@ function VariantB() {
 
         <StreakDaysIndicator count={user.streakDays} />
         <StreakFreezeIndicator count={user.streakFreezes} />
-        <GemsIndicator count={user.gems} />
+        <GemsIndicator gems={user.gems} freezes={user.streakFreezes} />
       </div>
 
       {/* Row 2: Full-width XP bar */}
@@ -433,7 +433,7 @@ function VariantC() {
         <div className="flex flex-col items-center gap-1.5">
           <StreakDaysIndicator count={user.streakDays} />
           <StreakFreezeIndicator count={user.streakFreezes} />
-          <GemsIndicator count={user.gems} />
+          <GemsIndicator gems={user.gems} freezes={user.streakFreezes} />
         </div>
       </div>
 
@@ -558,7 +558,7 @@ function VariantD() {
 
         <StreakDaysIndicator count={user.streakDays} />
         <StreakFreezeIndicator count={user.streakFreezes} />
-        <GemsIndicator count={user.gems} />
+        <GemsIndicator gems={user.gems} freezes={user.streakFreezes} />
       </div>
     </div>
   );
@@ -657,7 +657,7 @@ function VariantE() {
           )}
           <StreakDaysIndicator count={user.streakDays} />
           <StreakFreezeIndicator count={user.streakFreezes} />
-          <GemsIndicator count={user.gems} />
+          <GemsIndicator gems={user.gems} freezes={user.streakFreezes} />
         </div>
       </div>
     </div>
@@ -734,7 +734,7 @@ function VariantF() {
 
         <StreakDaysIndicator count={user.streakDays} />
         <StreakFreezeIndicator count={user.streakFreezes} />
-        <GemsIndicator count={user.gems} />
+        <GemsIndicator gems={user.gems} freezes={user.streakFreezes} />
       </div>
     </div>
   );
@@ -747,7 +747,7 @@ function VariantF() {
 function VariantG() {
   const user = useUserStore((s) => s.user);
   const { progress, stats, season, isLoading, fetchStatus } = useLeagueStore();
-  const [timeLeft, setTimeLeft] = useState('');
+  const [_timeLeft, setTimeLeft] = useState('');
 
   useEffect(() => { fetchStatus(); }, [fetchStatus]);
   useEffect(() => {
@@ -837,7 +837,7 @@ function VariantG() {
         <div className="flex items-center gap-1.5">
           <StreakDaysIndicator count={user.streakDays} />
           <StreakFreezeIndicator count={user.streakFreezes} />
-          <GemsIndicator count={user.gems} />
+          <GemsIndicator gems={user.gems} freezes={user.streakFreezes} />
         </div>
       </div>
     </div>
@@ -944,7 +944,7 @@ function VariantH() {
         <div className="flex items-center gap-1.5">
           <StreakDaysIndicator count={user.streakDays} />
           <StreakFreezeIndicator count={user.streakFreezes} />
-          <GemsIndicator count={user.gems} />
+          <GemsIndicator gems={user.gems} freezes={user.streakFreezes} />
         </div>
       </div>
     </div>
@@ -1032,7 +1032,7 @@ function VariantI() {
         <div className="flex flex-col items-center gap-1.5">
           <StreakDaysIndicator count={user.streakDays} />
           <StreakFreezeIndicator count={user.streakFreezes} />
-          <GemsIndicator count={user.gems} />
+          <GemsIndicator gems={user.gems} freezes={user.streakFreezes} />
         </div>
       </div>
 
@@ -1108,7 +1108,7 @@ function VariantJ() {
 
         <StreakDaysIndicator count={user.streakDays} />
         <StreakFreezeIndicator count={user.streakFreezes} />
-        <GemsIndicator count={user.gems} />
+        <GemsIndicator gems={user.gems} freezes={user.streakFreezes} />
       </div>
 
       {/* Row 2: League centered vertical */}
@@ -1216,7 +1216,7 @@ function VariantK() {
         <div className="flex items-center gap-1.5">
           <StreakDaysIndicator count={user.streakDays} />
           <StreakFreezeIndicator count={user.streakFreezes} />
-          <GemsIndicator count={user.gems} />
+          <GemsIndicator gems={user.gems} freezes={user.streakFreezes} />
         </div>
       </div>
     </div>
@@ -1415,7 +1415,7 @@ function VariantM() {
         <StreakFreezeIndicator count={user.streakFreezes} />
 
         {/* Gems pill */}
-        <GemsIndicator count={user.gems} />
+        <GemsIndicator gems={user.gems} freezes={user.streakFreezes} />
       </div>
     </div>
   );
@@ -1518,7 +1518,7 @@ function VariantN() {
 
         <div className="flex items-center gap-1.5">
           <StreakFreezeIndicator count={user.streakFreezes} />
-          <GemsIndicator count={user.gems} />
+          <GemsIndicator gems={user.gems} freezes={user.streakFreezes} />
         </div>
       </div>
     </div>
@@ -1621,7 +1621,7 @@ function VariantN2() {
 
         <div className="flex items-center gap-1.5">
           <StreakFreezeIndicator count={user.streakFreezes} />
-          <GemsIndicator count={user.gems} />
+          <GemsIndicator gems={user.gems} freezes={user.streakFreezes} />
         </div>
       </div>
     </div>
@@ -1824,7 +1824,7 @@ function VariantP() {
         {/* Right: pills */}
         <StreakDaysIndicator count={user.streakDays} />
         <StreakFreezeIndicator count={user.streakFreezes} />
-        <GemsIndicator count={user.gems} />
+        <GemsIndicator gems={user.gems} freezes={user.streakFreezes} />
       </div>
     </div>
   );

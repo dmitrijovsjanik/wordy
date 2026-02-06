@@ -139,7 +139,7 @@ export function WordDetailModal({
               </span>
               <div className="flex flex-wrap gap-1">
                 {word.synonyms.map((syn, i) => (
-                  <Badge key={i} variant="outline" className="text-xs">
+                  <Badge key={i} variant="secondary" className="text-xs">
                     {syn}
                   </Badge>
                 ))}

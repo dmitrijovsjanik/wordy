@@ -151,7 +151,7 @@ export function Profile() {
           </div>
           <div className="flex items-center gap-2">
             {requestCount > 0 && (
-              <Badge variant="destructive" className="text-[10px]">{requestCount}</Badge>
+              <Badge variant="error" className="text-[10px]">{requestCount}</Badge>
             )}
             <HugeiconsIcon icon={ArrowRight01Icon} size={16} strokeWidth={2} className="text-[var(--gray-11)]" />
           </div>

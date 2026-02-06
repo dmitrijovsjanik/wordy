@@ -39,7 +39,7 @@ export function DictionaryPreview({
   result,
   isLoading,
   query,
-  existingMeaningIds,
+  existingMeaningIds: _existingMeaningIds,
   manualTranslation,
   onManualTranslationChange,
 }: DictionaryPreviewProps) {
