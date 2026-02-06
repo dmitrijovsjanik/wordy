@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Duel, DuelCreateResponse, QuizQuestion, QuizResultResponse } from '@/types/api';
+import type { AnswerFeedback } from '@/types/game';
 import { duelCreate, duelJoin, duelGet, duelFinish, quizAnswer, quizFinish } from '@/lib/api';
 
 type DuelPhase = 'loading' | 'playing' | 'waiting_opponent' | 'finished';
@@ -9,7 +10,7 @@ type DuelState = {
   sessionId: number | null;
   currentQuestion: QuizQuestion | null;
   questionIndex: number;
-  answerFeedback: { isCorrect: boolean; correctTranslation: string } | null;
+  answerFeedback: AnswerFeedback | null;
   quizResult: QuizResultResponse | null;
   winnerId: number | null;
   isLoading: boolean;
@@ -101,7 +102,7 @@ export const useDuelStore = create<DuelState>()((set, get) => ({
       });
 
       set({
-        answerFeedback: { isCorrect: res.isCorrect, correctTranslation: res.correctTranslation },
+        answerFeedback: { isCorrect: res.isCorrect, correctAnswer: res.correctTranslation ?? '' },
         isLoading: false,
       });
 

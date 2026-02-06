@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
@@ -47,8 +47,10 @@ type FriendsTabType = 'friends' | 'requests';
 
 export function Friends() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [tab, setTab] = useState<FriendsTabType>('friends');
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [deepLinkResult, setDeepLinkResult] = useState<string | null>(null);
 
   const {
     friends,
@@ -71,6 +73,16 @@ export function Friends() {
     fetchFriendCode();
     fetchInviteToken();
   }, [fetchFriends, fetchRequests, fetchFriendCode, fetchInviteToken]);
+
+  // Deep link result from DeepLinkHandler
+  useEffect(() => {
+    const state = location.state as { deepLink?: string } | null;
+    if (state?.deepLink) {
+      setDeepLinkResult(state.deepLink);
+      // Очищаем state чтобы модалка не показывалась повторно при навигации
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, navigate, location.pathname]);
 
   // Share link → friend request (requires confirmation)
   const shareLink = friendCode
@@ -165,6 +177,39 @@ export function Friends() {
             </Button>
             <Button variant="ghost" className="w-full" onClick={() => setInviteOpen(false)}>
               Закрыть
+            </Button>
+          </div>
+        </DrawerContent>
+      </Drawer>
+
+      {/* Deep link result drawer */}
+      <Drawer open={deepLinkResult !== null} onOpenChange={(open) => { if (!open) setDeepLinkResult(null); }}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>
+              {deepLinkResult === 'friend_success' && 'Запрос отправлен'}
+              {deepLinkResult === 'invite_success' && 'Друг добавлен'}
+              {deepLinkResult === 'friend_error' && 'Не удалось отправить'}
+              {deepLinkResult === 'invite_error' && 'Не удалось добавить'}
+            </DrawerTitle>
+            <DrawerDescription>
+              {deepLinkResult === 'friend_success' && 'Запрос на дружбу успешно отправлен. Ожидайте подтверждения.'}
+              {deepLinkResult === 'invite_success' && 'Вы успешно добавлены в друзья!'}
+              {deepLinkResult === 'friend_error' && 'Возможно, вы уже отправляли запрос или являетесь друзьями.'}
+              {deepLinkResult === 'invite_error' && 'Ссылка недействительна или уже была использована.'}
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="flex flex-col items-center gap-4 px-4 pt-2 pb-8">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--gray-3)]">
+              <HugeiconsIcon
+                icon={deepLinkResult?.includes('success') ? Tick01Icon : Cancel01Icon}
+                size={32}
+                strokeWidth={2}
+                className={deepLinkResult?.includes('success') ? 'text-[var(--green-9)]' : 'text-[var(--red-9)]'}
+              />
+            </div>
+            <Button className="w-full" onClick={() => setDeepLinkResult(null)}>
+              Понятно
             </Button>
           </div>
         </DrawerContent>

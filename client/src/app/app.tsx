@@ -35,14 +35,14 @@ function DeepLinkHandler() {
       processed.current = true;
       const token = startParam.slice(7);
       acceptInvite(token)
-        .then(() => navigate('/friends', { replace: true }))
-        .catch(() => {});
+        .then(() => navigate('/friends', { replace: true, state: { deepLink: 'invite_success' } }))
+        .catch(() => navigate('/friends', { replace: true, state: { deepLink: 'invite_error' } }));
     } else if (startParam?.startsWith('friend_')) {
       processed.current = true;
       const code = startParam.slice(7);
       sendFriendRequest(code)
-        .then(() => navigate('/friends', { replace: true }))
-        .catch(() => {});
+        .then(() => navigate('/friends', { replace: true, state: { deepLink: 'friend_success' } }))
+        .catch(() => navigate('/friends', { replace: true, state: { deepLink: 'friend_error' } }));
     } else if (startParam?.startsWith('duel_')) {
       processed.current = true;
       const duelId = startParam.slice(5);

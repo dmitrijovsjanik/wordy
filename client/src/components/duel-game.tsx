@@ -5,12 +5,13 @@ import { useUserStore } from '@/stores/user-store';
 import { useBackButton } from '@/hooks/use-back-button';
 import { useTelegram } from '@/hooks/use-telegram';
 import { duelStart } from '@/lib/api';
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BackButton } from '@/components/ui/back-button';
-import { cn } from '@/lib/utils';
+import { WordDisplay } from '@/components/game/word-display';
+import { QuizContainer } from '@/components/game/quiz-container';
+import { MultipleChoice } from '@/components/game/question-types/multiple-choice';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Loading03Icon } from '@hugeicons/core-free-icons';
 import type { Duel } from '@/types/api';
@@ -53,19 +54,16 @@ export function DuelGame() {
     const duelId = Number(id);
 
     async function init() {
-      // Загружаем текущее состояние дуэли
       await fetchDuel(duelId);
       const currentDuel = useDuelStore.getState().duel;
       if (!currentDuel) return;
 
       const isChallenger = currentDuel.challengerId === user!.id;
 
-      // Оппонент — сначала присоединяется к дуэли
       if (!isChallenger && currentDuel.status === 'waiting') {
         await useDuelStore.getState().joinDuel(duelId);
       }
 
-      // Стартуем квиз для существующей дуэльной сессии
       const res = await duelStart(duelId);
       useDuelStore.setState({
         sessionId: res.sessionId,
@@ -95,7 +93,6 @@ export function DuelGame() {
 
   useEffect(() => {
     if (!quizResult || !duel) return;
-    const duelId = duel.id;
     const d = duel as Duel;
 
     const bothFinished = d.challengerSession?.finishedAt && d.opponentSession?.finishedAt;
@@ -104,7 +101,7 @@ export function DuelGame() {
         useDuelStore.setState({ phase: 'finished' });
       });
     } else {
-      startWaitingForOpponent(duelId);
+      startWaitingForOpponent(duel.id);
     }
   }, [quizResult, duel?.id]);
 
@@ -121,7 +118,7 @@ export function DuelGame() {
     setSelectedOption(option);
 
     const timeMs = Date.now() - answerStartTime.current;
-    const isCorrectGuess = option === currentQuestion.correctTranslation;
+    const isCorrectGuess = option === (currentQuestion.correctTranslation ?? '');
 
     submitAnswer(isCorrectGuess ? currentQuestion.meaningId : null, timeMs);
   }, [answerFeedback, isLoading, currentQuestion, hapticImpact, submitAnswer]);
@@ -206,40 +203,41 @@ export function DuelGame() {
         </span>
       </div>
 
-      {/* Word */}
-      <div className="mt-8 flex flex-1 flex-col items-center justify-center">
-        <span className="text-sm text-[var(--gray-11)]">Как переводится?</span>
-        <h2 className="mt-2 text-3xl font-bold">{currentQuestion?.word}</h2>
-      </div>
+      {/* Question content with animation */}
+      <QuizContainer questionKey={questionIndex}>
+        {/* Direction hint */}
+        <div className="mt-8 flex flex-1 flex-col items-center justify-center">
+          <span className="mb-2 text-sm text-[var(--gray-11)]">
+            {currentQuestion?.direction === 'ru-en' ? 'Переведите на английский' : 'Как переводится?'}
+          </span>
 
-      {/* Options 2x2 grid */}
-      <div className="mt-auto grid grid-cols-2 gap-3 pb-4">
-        {currentQuestion?.options.map((option) => {
-          const isSelected = selectedOption === option;
-          const showResult = answerFeedback !== null;
-          const isCorrectOption = option === answerFeedback?.correctTranslation;
+          {/* Word display with transcription and speaker */}
+          {currentQuestion && (
+            <WordDisplay
+              word={currentQuestion.word}
+              originalForm={currentQuestion.originalForm}
+              transcription={currentQuestion.transcription}
+              meaningId={currentQuestion.meaningId}
+              showSpeaker={currentQuestion.direction !== 'ru-en'}
+            />
+          )}
+        </div>
 
-          return (
-            <Button
-              key={`${questionIndex}-${option}`}
-              variant={
-                !showResult ? 'secondary' :
-                isCorrectOption ? 'success' :
-                isSelected && !isCorrectOption ? 'error' :
-                'secondary'
-              }
-              disabled={showResult || isLoading}
-              onClick={() => handleAnswer(option)}
-              className={cn(
-                'px-4 text-center text-sm',
-                showResult && !isSelected && !isCorrectOption && 'opacity-40',
-              )}
-            >
-              {option}
-            </Button>
-          );
-        })}
-      </div>
+        {/* Options */}
+        <div className="mt-auto pb-4">
+          {currentQuestion && (
+            <MultipleChoice
+              options={currentQuestion.options}
+              questionKey={questionIndex}
+              selectedAnswer={selectedOption}
+              feedback={answerFeedback}
+              disabled={isLoading}
+              onAnswer={handleAnswer}
+              showSkip={false}
+            />
+          )}
+        </div>
+      </QuizContainer>
     </div>
   );
 }

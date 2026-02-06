@@ -42,6 +42,18 @@ else
   echo "==> Database already has $WORD_COUNT words, skipping seed"
 fi
 
+# Generate collections if none exist
+COLLECTION_COUNT=$(psql "$DATABASE_URL" -t -c "SELECT COUNT(*) FROM collections WHERE type='system';" 2>/dev/null | tr -d ' ')
+if [ "$COLLECTION_COUNT" = "0" ] || [ -z "$COLLECTION_COUNT" ]; then
+  echo "==> No system collections found, generating..."
+  cd "$RELEASE_DIR/server"
+  npx tsx src/db/seed/seed-topics.ts || echo "==> seed-topics failed, continuing"
+  npx tsx src/db/seed/generate-collections.ts || echo "==> generate-collections failed, continuing"
+  echo "==> Collection generation complete!"
+else
+  echo "==> Already have $COLLECTION_COUNT system collections, skipping"
+fi
+
 # Restart or start PM2 process
 cd "$RELEASE_DIR"
 if pm2 describe wordy > /dev/null 2>&1; then
