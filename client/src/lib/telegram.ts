@@ -46,8 +46,12 @@ export const telegram = {
   },
 
   requestFullscreen() {
-    if (isAvailable() && window.Telegram.WebApp.requestFullscreen) {
-      window.Telegram.WebApp.requestFullscreen();
+    try {
+      if (isAvailable() && window.Telegram.WebApp.requestFullscreen) {
+        window.Telegram.WebApp.requestFullscreen();
+      }
+    } catch {
+      // WebAppMethodUnsupported — older Telegram versions
     }
   },
 
