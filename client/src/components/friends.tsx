@@ -74,12 +74,12 @@ export function Friends() {
 
   // Share link → friend request (requires confirmation)
   const shareLink = friendCode
-    ? `https://t.me/wordyengbot/wordy?startapp=friend_${friendCode}`
+    ? `https://t.me/wordylang_bot/app?startapp=friend_${friendCode}`
     : null;
 
   // QR code → instant add (no confirmation)
   const qrLink = inviteToken
-    ? `https://t.me/wordyengbot/wordy?startapp=invite_${inviteToken}`
+    ? `https://t.me/wordylang_bot/app?startapp=invite_${inviteToken}`
     : null;
 
   const handleShare = useCallback(() => {

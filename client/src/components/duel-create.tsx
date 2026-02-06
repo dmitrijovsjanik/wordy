@@ -41,7 +41,7 @@ export function DuelCreate() {
 
   const shareDuelLink = useCallback(() => {
     if (!duel) return;
-    const link = `${window.location.origin}/duel/${duel.id}`;
+    const link = `https://t.me/wordylang_bot/app?startapp=duel_${duel.id}`;
 
     if (navigator.share) {
       navigator.share({ text: 'Присоединяйся к дуэли в Wordy!', url: link });

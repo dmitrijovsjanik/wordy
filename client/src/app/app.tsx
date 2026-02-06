@@ -43,6 +43,10 @@ function DeepLinkHandler() {
       sendFriendRequest(code)
         .then(() => navigate('/friends', { replace: true }))
         .catch(() => {});
+    } else if (startParam?.startsWith('duel_')) {
+      processed.current = true;
+      const duelId = startParam.slice(5);
+      navigate(`/duel/${duelId}`, { replace: true });
     }
   }, [isAuthenticated, navigate]);
 
