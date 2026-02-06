@@ -14,6 +14,7 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
   useEffect(() => {
     telegram.expand();
     telegram.requestFullscreen();
+    telegram.disableVerticalSwipes();
     init();
   }, [init]);
 

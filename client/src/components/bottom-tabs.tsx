@@ -45,9 +45,7 @@ export function BottomTabs() {
   if (pathname.startsWith('/duel')) return null;
 
   return (
-    <nav className="shrink-0 bg-[var(--gray-1)]"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-    >
+    <nav className="shrink-0 bg-[var(--gray-1)]">
       <div className="flex h-14 items-center justify-around mt-2 mb-2">
         {tabs.map((tab) => {
           const isActive = tab.match(pathname);

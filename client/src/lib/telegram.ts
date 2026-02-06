@@ -58,6 +58,14 @@ export const telegram = {
     });
   },
 
+  disableVerticalSwipes() {
+    safeCall(() => {
+      if (isAvailable() && window.Telegram.WebApp.disableVerticalSwipes) {
+        window.Telegram.WebApp.disableVerticalSwipes();
+      }
+    });
+  },
+
   hapticImpact(style: HapticStyle) {
     safeCall(() => {
       if (isAvailable()) window.Telegram.WebApp.HapticFeedback.impactOccurred(style);
@@ -92,10 +100,9 @@ declare global {
         themeParams: Record<string, string>;
         expand: () => void;
         requestFullscreen?: () => void;
+        disableVerticalSwipes?: () => void;
         initData: string;
         initDataUnsafe?: { start_param?: string };
-        safeAreaInset?: { top: number; bottom: number; left: number; right: number };
-        contentSafeAreaInset?: { top: number; bottom: number; left: number; right: number };
         HapticFeedback: {
           impactOccurred: (style: HapticStyle) => void;
           notificationOccurred: (type: HapticNotification) => void;

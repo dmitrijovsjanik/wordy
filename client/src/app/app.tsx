@@ -64,7 +64,7 @@ export function App() {
     <BrowserRouter>
       <TelegramProvider>
         <DeepLinkHandler />
-        <div className="mx-auto flex h-dvh max-w-md flex-col">
+        <div className="tg-safe-area mx-auto flex h-dvh max-w-md flex-col">
           <main className="flex-1 overflow-y-auto">
             <Suspense fallback={<PageSkeleton />}>
               <Routes>
