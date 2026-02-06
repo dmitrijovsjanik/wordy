@@ -132,6 +132,9 @@ export type DailyRewardsResponse = {
   dailyPlayDone: boolean;
   duelWinDone: boolean;
   streakDays: number;
+  dailyCorrectCount: number;
+  streakMilestonesDone: number[];
+  correctMilestonesDone: number[];
 };
 
 export function getDailyRewards() {

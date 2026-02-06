@@ -85,6 +85,10 @@ export const users = pgTable('users', {
   friendCode: varchar('friend_code', { length: 12 }).unique(),
   lastActivityAt: timestamp('last_activity_at'),
   lastLoginDate: timestamp('last_login_date'), // Дата последнего входа для streak (без времени)
+  dailyCorrectCount: integer('daily_correct_count').default(0).notNull(),
+  dailyCorrectDate: timestamp('daily_correct_date'), // Дата для сброса счётчика правильных ответов за день
+  dailyStreakMilestonesDone: varchar('daily_streak_milestones_done', { length: 255 }).default('').notNull(),
+  dailyCorrectMilestonesDone: varchar('daily_correct_milestones_done', { length: 255 }).default('').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

@@ -11,7 +11,7 @@ import {
   addGems,
   XP_CORRECT_ANSWER,
 } from './progression-service.js';
-import { ANSWER_STREAK_MILESTONES } from '../config/gems-config.js';
+import { ANSWER_STREAK_MILESTONES, DAILY_CORRECT_MILESTONES } from '../config/gems-config.js';
 import {
   generateRandom,
   generateFromMeaning,
@@ -478,16 +478,75 @@ export async function recordInfiniteAnswer(
   if (isCorrect) {
     const reward = await rewardCorrectAnswer(userId, streak);
 
-    // Гемы за мильники стрика ответов (10/20/30 подряд)
+    // Загружаем дневные счётчики пользователя
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: {
+        dailyCorrectCount: true,
+        dailyCorrectDate: true,
+        dailyStreakMilestonesDone: true,
+        dailyCorrectMilestonesDone: true,
+      },
+    });
+
+    const now = new Date();
+    const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+
+    // Проверяем, нужно ли сбросить дневные счётчики
+    let dailyCorrectCount = user?.dailyCorrectCount ?? 0;
+    let streakMilestonesDone = new Set((user?.dailyStreakMilestonesDone ?? '').split(',').filter(Boolean).map(Number));
+    let correctMilestonesDone = new Set((user?.dailyCorrectMilestonesDone ?? '').split(',').filter(Boolean).map(Number));
+
+    if (user?.dailyCorrectDate) {
+      const lastDate = new Date(
+        Date.UTC(user.dailyCorrectDate.getUTCFullYear(), user.dailyCorrectDate.getUTCMonth(), user.dailyCorrectDate.getUTCDate())
+      );
+      if (lastDate.getTime() !== todayStart.getTime()) {
+        dailyCorrectCount = 0;
+        streakMilestonesDone = new Set();
+        correctMilestonesDone = new Set();
+      }
+    } else {
+      dailyCorrectCount = 0;
+      streakMilestonesDone = new Set();
+      correctMilestonesDone = new Set();
+    }
+
+    let milestoneGems = 0;
+
+    // Гемы за мильники стрика ответов подряд (разово в день)
     const newStreak = streak + 1;
-    let streakGems = 0;
     for (const [threshold, gems] of ANSWER_STREAK_MILESTONES) {
-      if (newStreak === threshold) {
+      if (newStreak >= threshold && !streakMilestonesDone.has(threshold)) {
         await addGems(userId, gems);
-        streakGems = gems;
-        break;
+        milestoneGems += gems;
+        streakMilestonesDone.add(threshold);
       }
     }
+
+    // Инкрементируем дневной счётчик правильных ответов
+    const newDailyCorrectCount = dailyCorrectCount + 1;
+
+    // Гемы за суммарные правильные ответы за день (разово в день)
+    for (const [threshold, gems] of DAILY_CORRECT_MILESTONES) {
+      if (newDailyCorrectCount >= threshold && !correctMilestonesDone.has(threshold)) {
+        await addGems(userId, gems);
+        milestoneGems += gems;
+        correctMilestonesDone.add(threshold);
+      }
+    }
+
+    // Сохраняем дневные счётчики
+    await db
+      .update(users)
+      .set({
+        dailyCorrectCount: newDailyCorrectCount,
+        dailyCorrectDate: todayStart,
+        dailyStreakMilestonesDone: [...streakMilestonesDone].join(','),
+        dailyCorrectMilestonesDone: [...correctMilestonesDone].join(','),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
 
     return {
       isCorrect,
@@ -500,7 +559,8 @@ export async function recordInfiniteAnswer(
       lpEarned: reward.lpEarned,
       lpModifier: reward.lpModifier,
       totalLp: reward.totalLp,
-      gemsEarned: reward.gemsEarned + streakGems,
+      gemsEarned: reward.gemsEarned + milestoneGems,
+      dailyCorrectCount: newDailyCorrectCount,
     };
   }
 
@@ -514,6 +574,7 @@ export async function recordInfiniteAnswer(
     lpEarned: 0,
     totalLp: undefined,
     gemsEarned: 0,
+    dailyCorrectCount: undefined,
   };
 }
 

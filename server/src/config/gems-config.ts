@@ -22,22 +22,28 @@ export const GEMS_LEVEL_UP = 20;
 /** Каждый 7-й день стрика */
 export const GEMS_STREAK_7_DAYS = 30;
 
-// ─── Стрик ответов подряд ───────────────────────────────────────────────────
+// ─── Стрик ответов подряд (разово в день) ────────────────────────────────────
 
-/** 10 правильных подряд */
-export const GEMS_ANSWER_STREAK_10 = 5;
-
-/** 20 правильных подряд */
-export const GEMS_ANSWER_STREAK_20 = 10;
-
-/** 30 правильных подряд */
-export const GEMS_ANSWER_STREAK_30 = 20;
+/** 5 правильных подряд */
+export const GEMS_ANSWER_STREAK_5 = 5;
 
 /** Мильники стрика ответов: [порог, награда] */
 export const ANSWER_STREAK_MILESTONES: ReadonlyArray<[number, number]> = [
-  [10, GEMS_ANSWER_STREAK_10],
-  [20, GEMS_ANSWER_STREAK_20],
-  [30, GEMS_ANSWER_STREAK_30],
+  [5, GEMS_ANSWER_STREAK_5],
+];
+
+// ─── Правильные ответы за день (суммарные, разово в день) ────────────────────
+
+/** 25 правильных за день */
+export const GEMS_DAILY_CORRECT_25 = 10;
+
+/** 50 правильных за день */
+export const GEMS_DAILY_CORRECT_50 = 20;
+
+/** Мильники правильных ответов за день: [порог, награда] */
+export const DAILY_CORRECT_MILESTONES: ReadonlyArray<[number, number]> = [
+  [25, GEMS_DAILY_CORRECT_25],
+  [50, GEMS_DAILY_CORRECT_50],
 ];
 
 // ─── Заморозка стрика ───────────────────────────────────────────────────────

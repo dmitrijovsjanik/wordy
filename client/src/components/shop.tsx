@@ -108,15 +108,6 @@ function ResourceInfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function getStreakMilestonesToday(): Set<number> {
-  const raw = localStorage.getItem('wordy:streak_milestones');
-  if (!raw) return new Set();
-  try {
-    const data = JSON.parse(raw) as { date: string; done: number[] };
-    if (data.date === new Date().toISOString().slice(0, 10)) return new Set(data.done);
-  } catch { /* ignore */ }
-  return new Set();
-}
 
 export function Shop() {
   const navigate = useNavigate();
@@ -126,7 +117,6 @@ export function Shop() {
   const [resourceInfoType, setResourceInfoType] = useState<'gems' | 'freezes' | null>(null);
   const [dailyRewards, setDailyRewards] = useState<DailyRewardsResponse | null>(null);
   const resetTimer = useResetTimer();
-  const streakMilestones = getStreakMilestonesToday();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollUp, setCanScrollUp] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(false);
@@ -279,9 +269,9 @@ export function Shop() {
                   <div className="flex flex-col gap-1.5">
                     <DailyRewardRow label="Первая игра за день" value="+5" done={dailyRewards?.dailyPlayDone} />
                     <DailyRewardRow label="Первая победа в дуэли" value="+15" done={dailyRewards?.duelWinDone} />
-                    <DailyRewardRow label="10 ответов подряд" value="+5" done={streakMilestones.has(10)} />
-                    <DailyRewardRow label="20 ответов подряд" value="+10" done={streakMilestones.has(20)} />
-                    <DailyRewardRow label="30 ответов подряд" value="+20" done={streakMilestones.has(30)} />
+                    <DailyRewardRow label="5 ответов подряд" value="+5" done={dailyRewards?.streakMilestonesDone.includes(5)} />
+                    <DailyRewardRow label="25 правильных за день" value="+10" done={dailyRewards?.correctMilestonesDone.includes(25)} />
+                    <DailyRewardRow label="50 правильных за день" value="+20" done={dailyRewards?.correctMilestonesDone.includes(50)} />
                   </div>
 
                   {/* Прогресс */}

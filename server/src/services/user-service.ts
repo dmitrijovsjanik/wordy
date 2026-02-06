@@ -82,7 +82,14 @@ export async function updateSettings(userId: number, settings: { repeatMastered?
 export async function getDailyRewards(userId: number) {
   const user = await db.query.users.findFirst({
     where: eq(users.id, userId),
-    columns: { lastLoginDate: true, streakDays: true },
+    columns: {
+      lastLoginDate: true,
+      streakDays: true,
+      dailyCorrectCount: true,
+      dailyCorrectDate: true,
+      dailyStreakMilestonesDone: true,
+      dailyCorrectMilestonesDone: true,
+    },
   });
 
   if (!user) throw new Error('Пользователь не найден');
@@ -111,7 +118,30 @@ export async function getDailyRewards(userId: number) {
   });
   const duelWinDone = todayDuelWins.length > 0;
 
-  return { dailyPlayDone, duelWinDone, streakDays: user.streakDays };
+  // Дневные счётчики — проверяем что дата сегодня
+  let dailyCorrectCount = 0;
+  let streakMilestonesDone: number[] = [];
+  let correctMilestonesDone: number[] = [];
+
+  if (user.dailyCorrectDate) {
+    const lastDate = new Date(
+      Date.UTC(user.dailyCorrectDate.getUTCFullYear(), user.dailyCorrectDate.getUTCMonth(), user.dailyCorrectDate.getUTCDate())
+    );
+    if (lastDate.getTime() === todayStart.getTime()) {
+      dailyCorrectCount = user.dailyCorrectCount;
+      streakMilestonesDone = user.dailyStreakMilestonesDone.split(',').filter(Boolean).map(Number);
+      correctMilestonesDone = user.dailyCorrectMilestonesDone.split(',').filter(Boolean).map(Number);
+    }
+  }
+
+  return {
+    dailyPlayDone,
+    duelWinDone,
+    streakDays: user.streakDays,
+    dailyCorrectCount,
+    streakMilestonesDone,
+    correctMilestonesDone,
+  };
 }
 
 export async function purchaseStreakFreeze(userId: number) {

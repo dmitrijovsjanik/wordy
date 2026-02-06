@@ -245,6 +245,7 @@ export type InfiniteAnswerResponse = {
   lpModifier?: number; // модификатор в процентах (100 = x1.0, 105 = x1.05)
   totalLp?: number;
   gemsEarned?: number; // гемы за стрик ответов / level-up
+  dailyCorrectCount?: number; // правильных ответов за день
 };
 
 // ─── Leagues ─────────────────────────────────────────────────────────────────
