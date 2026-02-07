@@ -19,7 +19,6 @@ const DuelResult = lazy(() => import('@/components/duel-result').then((m) => ({ 
 const Leaderboard = lazy(() => import('@/components/leaderboard'));
 const Modes = lazy(() => import('@/components/modes').then((m) => ({ default: m.Modes })));
 const Shop = lazy(() => import('@/components/shop').then((m) => ({ default: m.Shop })));
-const TestHeader = lazy(() => import('@/components/test-header').then((m) => ({ default: m.TestHeader })));
 const FriendsPage = lazy(() => import('@/components/friends').then((m) => ({ default: m.Friends })));
 
 function DeepLinkHandler() {
@@ -85,7 +84,6 @@ export function App() {
                 <Route path="/modes" element={<Modes />} />
                 <Route path="/shop" element={<Shop />} />
                 <Route path="/friends" element={<FriendsPage />} />
-                <Route path="/test-header" element={<TestHeader />} />
               </Routes>
             </Suspense>
           </main>
