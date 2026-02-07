@@ -172,7 +172,7 @@ export type CollectionWord = {
   synonyms?: string[];
   meaningHints?: string[];
   frequency?: number;
-  srsStage: number | null; // null = не встречалось, отрицательное = долг
+  srsStage: number | null; // 0-3 learning progress, null = не встречалось
   popularityRank?: number;
 };
 

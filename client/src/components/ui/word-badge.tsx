@@ -6,7 +6,7 @@ type WordBadgeProps = {
   word: string;
   translations: string[];
   alternativeTranslations?: string[];
-  srsStage?: number | null; // null = не встречалось
+  progress?: number; // 0.0-1.0, прогресс изучения слова
   className?: string;
   onClick?: () => void;
 };

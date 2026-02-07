@@ -43,6 +43,39 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    key: 'srs-redesign-migrate-stages',
+    description: 'Конвертация srsStage 0-6 в новую модель 0-3 + hasPenalty + reviewStage',
+    run: async () => {
+      // user_word_progress
+      await db.execute(sql`
+        UPDATE user_word_progress SET
+          has_penalty = CASE WHEN srs_stage < 0 THEN true ELSE false END,
+          review_stage = CASE WHEN srs_stage >= 6 THEN 2 ELSE 0 END,
+          srs_stage = CASE
+            WHEN srs_stage < 0 THEN 0
+            WHEN srs_stage <= 0 THEN 0
+            WHEN srs_stage <= 2 THEN 1
+            WHEN srs_stage <= 4 THEN 2
+            ELSE 3
+          END
+      `);
+
+      // user_custom_word_progress
+      await db.execute(sql`
+        UPDATE user_custom_word_progress SET
+          has_penalty = CASE WHEN srs_stage < 0 THEN true ELSE false END,
+          review_stage = CASE WHEN srs_stage >= 6 THEN 2 ELSE 0 END,
+          srs_stage = CASE
+            WHEN srs_stage < 0 THEN 0
+            WHEN srs_stage <= 0 THEN 0
+            WHEN srs_stage <= 2 THEN 1
+            WHEN srs_stage <= 4 THEN 2
+            ELSE 3
+          END
+      `);
+    },
+  },
 ];
 
 export async function runStartupMigrations(): Promise<void> {

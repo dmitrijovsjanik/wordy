@@ -8,8 +8,8 @@ import type { UserStats } from '@/types/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StatProgress } from '@/components/ui/stat-progress';
 import { BackButton } from '@/components/ui/back-button';
 import { LeagueBadge, getLeagueName } from '@/components/ui/league-badge';
 import { StreakDaysIndicator } from '@/components/ui/streak-days-indicator';
@@ -96,13 +96,12 @@ export function Profile() {
       </div>
 
       {/* XP Progress */}
-      <div className="mt-5">
-        <div className="flex items-center justify-between text-xs">
-          <span className="font-medium">Уровень {user.level}</span>
-          <span className="text-[var(--gray-11)]">{user.xp - currentLevelXp} / {nextLevelXp - currentLevelXp} XP</span>
-        </div>
-        <Progress value={progressPercent} className="mt-1.5" />
-      </div>
+      <StatProgress
+        label={`Уровень ${user.level}`}
+        value={`${user.xp - currentLevelXp} / ${nextLevelXp - currentLevelXp} XP`}
+        percent={progressPercent}
+        className="mt-5"
+      />
 
       {/* Records Grid */}
       {stats ? (

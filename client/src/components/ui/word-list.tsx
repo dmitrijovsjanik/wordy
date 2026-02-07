@@ -18,7 +18,7 @@ type WordEntry = {
   synonyms?: string[];
   meaningHints?: string[];
   frequency?: number;
-  srsStage?: number | null; // null/undefined = не встречалось
+  srsStage?: number | null; // 0-3 learning progress, null = не встречалось
   popularityRank?: number;
 };
 
@@ -35,7 +35,7 @@ type GroupedWord = {
   synonyms?: string[];
   meaningHints?: string[];
   frequency?: number;
-  srsStage: number | null; // null = не встречалось
+  progress: number; // 0.0-1.0, агрегированный прогресс по всем meanings
   popularityRank?: number;
 };
 
@@ -49,7 +49,7 @@ function groupWords(words: WordEntry[]): GroupedWord[] {
   const byWord = new Map<string, Set<string>>();
   const idsByWord = new Map<string, number[]>();
   const altsByWord = new Map<string, Set<string>>();
-  const stageByPair = new Map<string, number | null>(); // null = не встречалось
+  const stageByPair = new Map<string, number>(); // srsStage per meaning (0-3)
   const metaByWord = new Map<string, {
     partOfSpeech?: string;
     contextExample?: string;
@@ -77,18 +77,12 @@ function groupWords(words: WordEntry[]): GroupedWord[] {
     if (w.id !== undefined) idsByWord.get(w.word)!.push(w.id);
 
     const key = `${w.word}::${w.translation}`;
-    const currentStage = stageByPair.get(key);
-    const newStage = w.srsStage ?? null; // null/undefined = не встречалось
-    // Агрегация: null < отрицательные < 0 < положительные
-    // Если хотя бы одно значение не null — используем минимальное числовое
+    const stage = Math.min(Math.max(w.srsStage ?? 0, 0), 3); // clamp to 0-3
     if (!stageByPair.has(key)) {
-      stageByPair.set(key, newStage);
-    } else if (currentStage != null && newStage !== null) {
-      stageByPair.set(key, Math.min(currentStage, newStage));
-    } else if (newStage !== null) {
-      stageByPair.set(key, newStage);
+      stageByPair.set(key, stage);
+    } else {
+      stageByPair.set(key, Math.min(stageByPair.get(key)!, stage));
     }
-    // Если оба null — остаётся null
 
     if (!metaByWord.has(w.word)) {
       metaByWord.set(w.word, {
@@ -137,23 +131,16 @@ function groupWords(words: WordEntry[]): GroupedWord[] {
 
     for (const gw of group.words) seenWords.add(gw);
 
-    let minStage: number | null | undefined;
+    let stageSum = 0;
+    let meaningCount = 0;
     let minPopularity: number | undefined;
     const allIds: number[] = [];
     for (const gw of group.words) {
       allIds.push(...(idsByWord.get(gw) ?? []));
       for (const t of group.translations) {
-        const stage = stageByPair.get(`${gw}::${t}`);
-        // Агрегируем: если есть числовое значение — берём минимальное
-        if (stage !== null && stage !== undefined) {
-          if (minStage === undefined || minStage === null) {
-            minStage = stage;
-          } else {
-            minStage = Math.min(minStage, stage);
-          }
-        } else if (minStage === undefined) {
-          minStage = null;
-        }
+        const stage = stageByPair.get(`${gw}::${t}`) ?? 0;
+        stageSum += stage;
+        meaningCount++;
       }
       const meta = metaByWord.get(gw);
       if (meta?.popularityRank !== undefined) {
@@ -162,6 +149,7 @@ function groupWords(words: WordEntry[]): GroupedWord[] {
           : Math.min(minPopularity, meta.popularityRank);
       }
     }
+    const progress = meaningCount > 0 ? stageSum / (meaningCount * 3) : 0;
 
     const alts: Set<string> = new Set();
     for (const gw of group.words) {
@@ -186,7 +174,7 @@ function groupWords(words: WordEntry[]): GroupedWord[] {
       synonyms: meta?.synonyms,
       meaningHints: meta?.meaningHints,
       frequency: meta?.frequency,
-      srsStage: minStage === undefined ? null : minStage,
+      progress,
       popularityRank: minPopularity,
     });
   }
@@ -194,12 +182,9 @@ function groupWords(words: WordEntry[]): GroupedWord[] {
   return result;
 }
 
-// Вес для сортировки: прогресс (6, 5, 4...) > долг (-1, -2) > не встречалось (null)
-// Чем меньше вес — тем выше в списке
-function getSortWeight(stage: number | null): number {
-  if (stage === null) return 1000; // Не встречалось — в конец
-  if (stage < 0) return 500 - stage; // Долг: -1 → 501, -2 → 502 (перед null, после прогресса)
-  return -stage; // Прогресс: 6 → -6, 0 → 0 (от макс к мин)
+// Сортировка по прогрессу: больше прогресс → выше в списке
+function getSortWeight(progress: number): number {
+  return -progress; // 1.0 → -1.0 (вверху), 0.0 → 0 (внизу)
 }
 
 function sortWords(words: GroupedWord[], sortMode: string): GroupedWord[] {
@@ -209,8 +194,7 @@ function sortWords(words: GroupedWord[], sortMode: string): GroupedWord[] {
       sorted.sort((a, b) => a.word.localeCompare(b.word, 'en', { sensitivity: 'base' }));
       break;
     case 'progress':
-      // Порядок: прогресс (6, 5, ..., 0) → долг (-1, -2) → не встречалось (null)
-      sorted.sort((a, b) => getSortWeight(a.srsStage) - getSortWeight(b.srsStage));
+      sorted.sort((a, b) => getSortWeight(a.progress) - getSortWeight(b.progress));
       break;
     case 'popularity':
     default:
@@ -243,7 +227,7 @@ function toCollectionWord(g: GroupedWord): CollectionWord {
     synonyms: g.synonyms,
     meaningHints: g.meaningHints,
     frequency: g.frequency,
-    srsStage: g.srsStage,
+    srsStage: null, // progress используется вместо srsStage для отображения
     popularityRank: g.popularityRank,
   };
 }
@@ -283,7 +267,7 @@ export function WordList({ words, onDeleteWords }: WordListProps) {
               word={g.word}
               translations={g.translations}
               alternativeTranslations={g.alternativeTranslations}
-              srsStage={g.srsStage}
+              progress={g.progress}
               onClick={() => handleWordClick(g)}
             />
           ))}
@@ -313,7 +297,7 @@ export function WordList({ words, onDeleteWords }: WordListProps) {
             alternativeTranslations={g.alternativeTranslations}
             partOfSpeech={g.partOfSpeech}
             contextExample={g.contextExample}
-            srsStage={g.srsStage}
+            progress={g.progress}
             onDelete={onDeleteWords ? () => onDeleteWords(g.ids) : undefined}
             onClick={() => handleWordClick(g)}
           />

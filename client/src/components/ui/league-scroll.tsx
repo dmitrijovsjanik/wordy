@@ -75,23 +75,23 @@ export function LeagueScroll({ currentTier, className }: LeagueScrollProps) {
   }, [updateGradients]);
 
   return (
-    <div className={cn('relative -mx-4', className)}>
+    <div className={cn('relative', className)}>
       <div
         className={cn(
-          'pointer-events-none absolute left-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-r from-[var(--gray-2)] to-transparent transition-opacity duration-200',
+          'pointer-events-none absolute left-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-r from-[var(--gray-1)] to-transparent transition-opacity duration-200',
           showLeftGradient ? 'opacity-100' : 'opacity-0'
         )}
       />
       <div
         className={cn(
-          'pointer-events-none absolute right-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-l from-[var(--gray-2)] to-transparent transition-opacity duration-200',
+          'pointer-events-none absolute right-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-l from-[var(--gray-1)] to-transparent transition-opacity duration-200',
           showRightGradient ? 'opacity-100' : 'opacity-0'
         )}
       />
 
       <div
         ref={scrollRef}
-        className="flex gap-3 overflow-x-auto scrollbar-hide px-4 snap-x snap-mandatory"
+        className="flex items-end gap-3 overflow-x-auto scrollbar-hide snap-x snap-mandatory"
       >
         {LEAGUE_TIERS.map((tier) => {
           const IconComponent = LEAGUE_ICONS[tier];

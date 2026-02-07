@@ -2,8 +2,8 @@
 
 // Порог SRS-стадии для выхода из коллекции ошибок
 // Слово покидает коллекцию когда srsStage >= этого значения
-// При ошибке srsStage падает на 2, так что для достижения 3 нужно 3+ правильных ответов
-export const ERRORS_EXIT_SRS_STAGE = 3;
+// В новой модели srsStage 0-3, значение 2 = ~67% прогресса изучения
+export const ERRORS_EXIT_SRS_STAGE = 2;
 
 // Виртуальный ID коллекции ошибок (используется в API)
 export const ERRORS_COLLECTION_ID = 'errors' as const;

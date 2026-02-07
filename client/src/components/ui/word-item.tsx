@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, memo } from 'react';
 import { Card } from '@/components/ui/card';
-import { SrsIndicator } from '@/components/ui/srs-indicator';
+import { ProgressRing } from '@/components/ui/progress-ring';
 import { Button } from '@/components/ui/button';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Delete02Icon, Tick01Icon } from '@hugeicons/core-free-icons';
@@ -21,12 +21,12 @@ type WordItemProps = {
   alternativeTranslations?: string[];
   partOfSpeech?: string;
   contextExample?: string;
-  srsStage?: number | null; // null = не встречалось
+  progress?: number; // 0.0-1.0, прогресс изучения слова
   onDelete?: () => Promise<void>;
   onClick?: () => void;
 };
 
-export const WordItem = memo(function WordItem({ word, lemma, transcription, translations, alternativeTranslations, partOfSpeech, contextExample, srsStage, onDelete, onClick }: WordItemProps) {
+export const WordItem = memo(function WordItem({ word, lemma, transcription, translations, alternativeTranslations, partOfSpeech, contextExample, progress, onDelete, onClick }: WordItemProps) {
   // Если есть лемма — показываем её крупно, оригинальное слово мелко сверху
   // Если нет леммы — показываем оригинальное слово крупно
   const displayWord = lemma ?? word;
@@ -83,7 +83,7 @@ export const WordItem = memo(function WordItem({ word, lemma, transcription, tra
               {POS_LABELS[partOfSpeech] ?? partOfSpeech}
             </span>
           )}
-          {srsStage !== undefined && <SrsIndicator stage={srsStage} />}
+          {progress !== undefined && progress > 0 && <ProgressRing progress={progress} />}
           {onDelete && (
             confirmVisible ? (
               <Button

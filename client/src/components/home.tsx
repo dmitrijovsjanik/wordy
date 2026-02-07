@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useState, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useUserStore } from '@/stores/user-store';
 import { useHomeStore } from '@/stores/home-store';
 import { useLeagueStore } from '@/stores/league-store';
@@ -299,8 +299,7 @@ export function Home() {
             <div className="absolute inset-x-0 top-[15%] flex justify-center">
               <div className="flex items-center gap-1.5">
                 {!isLeagueLoading && progress ? (
-                  <Link
-                    to="/leaderboard"
+                  <div
                     className="flex h-8 items-center gap-1 rounded-full bg-[var(--gray-3)] pl-1 pr-2.5"
                   >
                     {(() => {
@@ -313,7 +312,7 @@ export function Home() {
                       <HugeiconsIcon icon={Clock01Icon} size={10} />
                       <span>{timeLeft || '—'}</span>
                     </div>
-                  </Link>
+                  </div>
                 ) : (
                   <Skeleton className="h-8 w-24 rounded-full" />
                 )}

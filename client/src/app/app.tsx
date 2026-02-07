@@ -21,6 +21,7 @@ const Modes = lazy(() => import('@/components/modes').then((m) => ({ default: m.
 const Shop = lazy(() => import('@/components/shop').then((m) => ({ default: m.Shop })));
 const FriendsPage = lazy(() => import('@/components/friends').then((m) => ({ default: m.Friends })));
 const Settings = lazy(() => import('@/components/settings').then((m) => ({ default: m.Settings })));
+const AllWords = lazy(() => import('@/components/all-words').then((m) => ({ default: m.AllWords })));
 
 function DeepLinkHandler() {
   const navigate = useNavigate();
@@ -86,6 +87,7 @@ export function App() {
                 <Route path="/shop" element={<Shop />} />
                 <Route path="/friends" element={<FriendsPage />} />
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/words" element={<AllWords />} />
               </Routes>
             </Suspense>
           </main>

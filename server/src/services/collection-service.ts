@@ -11,6 +11,7 @@ import {
   words,
 } from '../db/schema.js';
 import { ERRORS_EXIT_SRS_STAGE, ERRORS_COLLECTION_ID } from '../config/errors-config.js';
+import { LEARNED_PROGRESS } from './srs-service.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -18,8 +19,8 @@ import { ERRORS_EXIT_SRS_STAGE, ERRORS_COLLECTION_ID } from '../config/errors-co
 const MAX_POPULARITY_RANK = 3;
 
 // Минимальная частотность перевода (fr из Yandex API)
-// fr=1 — очень редкие переводы (град=city), fr=10 — популярные
-const MIN_FREQUENCY = 2;
+// fr=1 — очень редкие переводы (град=city), fr=5/10 — популярные
+const MIN_FREQUENCY = 5;
 
 // ─── Marketplace ────────────────────────────────────────────────────────────
 
@@ -121,7 +122,7 @@ export async function getLibrary(userId: number) {
   const progressRows = await db
     .select({
       collectionId: collectionWords.collectionId,
-      masteredCount: sql<number>`count(*) filter (where ${userWordProgress.srsStage} >= 6)`,
+      masteredCount: sql<number>`count(*) filter (where ${userWordProgress.srsStage} >= 3)`,
     })
     .from(collectionWords)
     .innerJoin(
@@ -138,7 +139,7 @@ export async function getLibrary(userId: number) {
   const customProgressRows = await db
     .select({
       collectionId: userCustomWords.collectionId,
-      masteredCount: sql<number>`count(*) filter (where ${userCustomWordProgress.srsStage} >= 6)`,
+      masteredCount: sql<number>`count(*) filter (where ${userCustomWordProgress.srsStage} >= 3)`,
     })
     .from(userCustomWords)
     .innerJoin(
@@ -702,22 +703,61 @@ export async function getQuizPool(userId: number, collectionId?: number): Promis
     lte(wordMeanings.popularityRank, MAX_POPULARITY_RANK),
   );
 
-  // Фильтр по частотности: исключаем редкие переводы (fr=1)
+  // Фильтр по частотности: исключаем редкие переводы
   const frequencyFilter = or(
     isNull(wordMeanings.frequency),
     gte(wordMeanings.frequency, MIN_FREQUENCY),
   );
 
-  // Словарные слова (только популярные и частотные переводы)
+  // Словарные слова с popularity rank (для ранговых слоёв)
   const systemMeanings = await db
-    .select({ meaningId: collectionWords.meaningId })
+    .select({
+      meaningId: collectionWords.meaningId,
+      popularityRank: wordMeanings.popularityRank,
+    })
     .from(collectionWords)
     .innerJoin(wordMeanings, eq(collectionWords.meaningId, wordMeanings.id))
     .where(and(inArray(collectionWords.collectionId, collectionIds), popularityFilter, frequencyFilter));
 
-  const meaningIds = [...new Set(systemMeanings.map((m) => m.meaningId))];
+  const allMeaningIds = [...new Set(systemMeanings.map((m) => m.meaningId))];
 
-  // Кастомные слова
+  // Ранговые слои: rank 1 → rank 2 → rank 3
+  // Rank N открывается когда ВСЕ meanings rank N-1 изучены (srsStage >= LEARNED_PROGRESS)
+  const byRank = new Map<number, number[]>();
+  for (const m of systemMeanings) {
+    const rank = m.popularityRank ?? 1;
+    if (!byRank.has(rank)) byRank.set(rank, []);
+    byRank.get(rank)!.push(m.meaningId);
+  }
+  // Дедупликация внутри рангов
+  for (const [rank, ids] of byRank) {
+    byRank.set(rank, [...new Set(ids)]);
+  }
+
+  // Получаем прогресс пользователя для определения разблокированных рангов
+  let progressMap = new Map<number, number>();
+  if (allMeaningIds.length > 0) {
+    const progressRows = await db
+      .select({ meaningId: userWordProgress.meaningId, srsStage: userWordProgress.srsStage })
+      .from(userWordProgress)
+      .where(and(eq(userWordProgress.userId, userId), inArray(userWordProgress.meaningId, allMeaningIds)));
+    progressMap = new Map(progressRows.map((p) => [p.meaningId, p.srsStage]));
+  }
+
+  // Определяем разблокированные ранги
+  const ranks = [...byRank.keys()].sort((a, b) => a - b);
+  const unlockedMeaningIds: number[] = [];
+
+  for (const rank of ranks) {
+    const rankIds = byRank.get(rank)!;
+    unlockedMeaningIds.push(...rankIds);
+
+    // Проверяем, все ли meanings текущего ранга изучены
+    const allLearned = rankIds.every((id) => (progressMap.get(id) ?? 0) >= LEARNED_PROGRESS);
+    if (!allLearned) break; // Не открываем следующий ранг
+  }
+
+  // Кастомные слова (без ранговых ограничений)
   const custom = await db
     .select({
       id: userCustomWords.id,
@@ -732,7 +772,7 @@ export async function getQuizPool(userId: number, collectionId?: number): Promis
       ),
     );
 
-  return { meaningIds, customWords: custom };
+  return { meaningIds: unlockedMeaningIds, customWords: custom };
 }
 
 // ─── Add Words to Collection ─────────────────────────────────────────────

@@ -36,7 +36,7 @@ type CollectionState = {
     translation: string;
     alternativeTranslations?: string[];
     partOfSpeech?: string;
-    srsStage?: number | null; // null/undefined = не встречалось
+    srsStage?: number | null; // 0-3 learning progress, null = не встречалось
     popularityRank?: number;
   }[];
   currentDetail: CollectionDetail | null;

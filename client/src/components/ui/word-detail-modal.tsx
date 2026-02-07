@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { SrsIndicator } from '@/components/ui/srs-indicator';
+import { ProgressRing } from '@/components/ui/progress-ring';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { VolumeHighIcon, Delete02Icon, Tick01Icon } from '@hugeicons/core-free-icons';
 
@@ -116,8 +116,8 @@ export function WordDetailModal({
                 {POS_LABELS[word.partOfSpeech] ?? word.partOfSpeech}
               </Badge>
             )}
-            {word.srsStage !== null && (
-              <SrsIndicator stage={word.srsStage} />
+            {word.srsStage !== null && word.srsStage > 0 && (
+              <ProgressRing progress={Math.min(word.srsStage, 3) / 3} />
             )}
           </div>
 

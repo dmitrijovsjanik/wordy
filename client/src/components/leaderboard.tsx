@@ -6,7 +6,6 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { LeagueScroll } from '@/components/ui/league-scroll';
 import { LeagueProgress } from '@/components/ui/league-progress';
-import { BackButton } from '@/components/ui/back-button';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ArrowUp01Icon, ArrowDown01Icon, Clock01Icon } from '@hugeicons/core-free-icons';
 import { cn } from '@/lib/utils';
@@ -143,8 +142,7 @@ export function Leaderboard() {
 
   if (isLoading || !progress) {
     return (
-      <div className="flex flex-col gap-4 px-4 pt-6 pb-4">
-        <BackButton to="/" />
+      <div className="flex flex-col gap-4 px-4 pt-4 pb-4">
         <Skeleton className="h-32 w-full rounded-2xl" />
         <div className="flex flex-col gap-2">
           {Array.from({ length: 10 }).map((_, i) => (
@@ -156,17 +154,13 @@ export function Leaderboard() {
   }
 
   return (
-    <div className="flex flex-col gap-4 px-4 pt-6 pb-4">
-      <div className="mb-2">
-        <BackButton to="/" />
-      </div>
-
+    <div className="flex flex-col gap-4 px-4 pt-4 pb-4">
       {/* Текущий статус */}
-      <Card className="overflow-hidden pt-3">
+      <div>
         {/* Заголовок сезона */}
         {season && (
-          <div className="mb-4 flex items-center justify-between">
-            <span className="text-lg font-bold">Сезон {season.weekNumber}</span>
+          <div className="mb-4 flex items-center gap-2">
+            <h2 className="text-lg font-semibold tracking-tight">Сезон {season.weekNumber}</h2>
             <div className="flex items-center gap-1 text-sm text-[var(--gray-11)]">
               <HugeiconsIcon icon={Clock01Icon} size={14} />
               <span>{timeLeft || '—'}</span>
@@ -180,7 +174,7 @@ export function Leaderboard() {
         />
 
         {stats && <LeagueProgress stats={stats} tier={progress.tier} />}
-      </Card>
+      </div>
 
       {/* Таблица лидеров */}
       <LeaderboardList
@@ -197,8 +191,6 @@ function LeaderboardList({ leaderboard, tier }: { leaderboard: LeaderboardEntry[
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-lg font-bold">Таблица лидеров</h2>
-
       {zones.map((zone) => {
         const entries = grouped[zone.id];
 
@@ -237,7 +229,7 @@ function LeaderboardList({ leaderboard, tier }: { leaderboard: LeaderboardEntry[
                   key={entry.userId}
                   className={cn(
                     'flex items-center gap-3 p-3',
-                    entry.isCurrentUser && 'ring-2 ring-[var(--accent-7)]',
+                    entry.isCurrentUser && 'bg-[var(--gray-5)]',
                   )}
                 >
                   {/* Позиция и изменение */}

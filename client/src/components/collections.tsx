@@ -2,16 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCollectionStore } from '@/stores/collection-store';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { WordList } from '@/components/ui/word-list';
-import { countUniqueWords } from '@/lib/word-utils';
-import { WordViewToggle } from '@/components/ui/word-view-toggle';
-import { WordSortSelect } from '@/components/ui/word-sort-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Add01Icon, Search01Icon, Cancel01Icon, Alert02Icon } from '@hugeicons/core-free-icons';
+import { Add01Icon, Alert02Icon, Book02Icon } from '@hugeicons/core-free-icons';
 import { Progress } from '@/components/ui/progress';
 import { ICON_MAP, DEFAULT_ICON } from '@/lib/icon-map';
 import type { MarketplaceCollection, CollectionGroup, LibraryCollection, CefrLevel } from '@/types/api';
@@ -101,7 +96,7 @@ function CollectionCard({ col, onClick, variant }: CollectionCardProps) {
   );
 }
 
-type Tab = 'library' | 'words' | 'marketplace';
+type Tab = 'library' | 'marketplace';
 
 const LEVEL_ORDER: CefrLevel[] = ['a1', 'a2', 'b1', 'b2'];
 
@@ -194,7 +189,7 @@ export function Collections() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const tabFromUrl = searchParams.get('tab') as Tab | null;
-  const activeTab: Tab = tabFromUrl && ['library', 'words', 'marketplace'].includes(tabFromUrl)
+  const activeTab: Tab = tabFromUrl && ['library', 'marketplace'].includes(tabFromUrl)
     ? tabFromUrl
     : 'library';
 
@@ -207,23 +202,9 @@ export function Collections() {
   const allWords = useCollectionStore((s) => s.allWords);
   const isLoadingLibrary = useCollectionStore((s) => s.isLoadingLibrary);
   const isLoadingMarketplace = useCollectionStore((s) => s.isLoadingMarketplace);
-  const isLoadingAllWords = useCollectionStore((s) => s.isLoadingAllWords);
   const fetchLibrary = useCollectionStore((s) => s.fetchLibrary);
   const fetchMarketplace = useCollectionStore((s) => s.fetchMarketplace);
   const fetchAllWords = useCollectionStore((s) => s.fetchAllWords);
-
-  // Поиск слов
-  const [wordSearch, setWordSearch] = useState('');
-
-  const filteredWords = useMemo(() => {
-    const query = wordSearch.trim().toLowerCase();
-    if (!query) return allWords;
-    return allWords.filter(
-      (w) =>
-        w.word.toLowerCase().includes(query) ||
-        w.translation.toLowerCase().includes(query),
-    );
-  }, [allWords, wordSearch]);
 
   const errorsCollection = useCollectionStore((s) => s.errorsCollection);
   const isLoadingErrors = useCollectionStore((s) => s.isLoadingErrors);
@@ -245,9 +226,6 @@ export function Collections() {
             <TabsTrigger active={activeTab === 'library'} onClick={() => setActiveTab('library')}>
               Библиотека
             </TabsTrigger>
-            <TabsTrigger active={activeTab === 'words'} onClick={() => setActiveTab('words')}>
-              Все слова
-            </TabsTrigger>
             <TabsTrigger active={activeTab === 'marketplace'} onClick={() => setActiveTab('marketplace')}>
               Каталог
             </TabsTrigger>
@@ -268,6 +246,24 @@ export function Collections() {
 
         {activeTab === 'library' && !isLoadingLibrary && (
           <>
+            {/* Карточка "Все слова" */}
+            <div
+              className="flex cursor-pointer items-center gap-3 rounded-xl bg-[var(--gray-2)] p-3 active:bg-[var(--gray-3)]"
+              onClick={() => navigate('/words')}
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-4)]">
+                <HugeiconsIcon icon={Book02Icon} size={20} className="text-[var(--brand-11)]" />
+              </div>
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="truncate text-sm font-medium text-[var(--gray-12)]">
+                  Все слова
+                </span>
+                <span className="text-xs text-[var(--gray-11)]">
+                  {allWords.length} слов
+                </span>
+              </div>
+            </div>
+
             {/* Карточка "Ошибки" — показываем если есть слова с ошибками */}
             {!isLoadingErrors && errorsCollection && errorsCollection.totalWords > 0 && (
               <div
@@ -288,9 +284,9 @@ export function Collections() {
               </div>
             )}
 
-            {library.length === 0 && (!errorsCollection || errorsCollection.totalWords === 0) && (
+            {library.length === 0 && (
               <p className="mt-4 text-center text-sm text-[var(--gray-11)]">
-                Библиотека пуста. Добавьте коллекцию из каталога!
+                Добавьте коллекцию из каталога!
               </p>
             )}
 
@@ -302,58 +298,6 @@ export function Collections() {
                 onClick={() => navigate(`/collections/${col.id}`)}
               />
             ))}
-          </>
-        )}
-
-        {activeTab === 'words' && isLoadingAllWords && (
-          <>
-            <Skeleton className="h-8 w-full rounded-lg" />
-            <Skeleton className="h-20 w-full rounded-lg" />
-            <Skeleton className="h-20 w-full rounded-lg" />
-          </>
-        )}
-
-        {activeTab === 'words' && !isLoadingAllWords && (
-          <>
-            {/* Поиск */}
-            <div className="relative">
-              <HugeiconsIcon
-                icon={Search01Icon}
-                size={18}
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--gray-11)]"
-              />
-              <Input
-                placeholder="Поиск слов..."
-                value={wordSearch}
-                onChange={(e) => setWordSearch(e.target.value)}
-                className="pl-11 pr-11"
-              />
-              {wordSearch && (
-                <button
-                  type="button"
-                  onClick={() => setWordSearch('')}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--gray-11)] active:text-[var(--gray-12)]"
-                >
-                  <HugeiconsIcon icon={Cancel01Icon} size={18} />
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-[var(--gray-11)]">{countUniqueWords(filteredWords)} слов</span>
-              <div className="flex items-center gap-2">
-                <WordSortSelect />
-                <WordViewToggle />
-              </div>
-            </div>
-
-            {filteredWords.length === 0 && (
-              <p className="mt-4 text-center text-sm text-[var(--gray-11)]">
-                {wordSearch ? 'Ничего не найдено' : 'Нет слов. Добавьте коллекции в библиотеку!'}
-              </p>
-            )}
-
-            <WordList words={filteredWords} />
           </>
         )}
 

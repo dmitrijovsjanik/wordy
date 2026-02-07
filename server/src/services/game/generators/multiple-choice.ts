@@ -11,8 +11,8 @@ import { DEFAULT_LANG_PAIR, reversePair } from '../types.js';
 export const MAX_POPULARITY_RANK = 3;
 
 // Минимальная частотность перевода (fr из Yandex API)
-// fr=1 — очень редкие переводы (град=city), fr=10 — популярные
-export const MIN_FREQUENCY = 2;
+// fr=1 — очень редкие переводы (град=city), fr=5/10 — популярные
+export const MIN_FREQUENCY = 5;
 
 // Фильтр: перевод должен содержать хотя бы одну кириллическую букву
 // Исключает латинские термины типа "Plus", "Wi-Fi" и т.д.

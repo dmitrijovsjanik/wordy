@@ -334,9 +334,11 @@ export const userWordProgress = pgTable(
       .notNull(),
     correctCount: integer('correct_count').default(0).notNull(),
     incorrectCount: integer('incorrect_count').default(0).notNull(),
-    srsStage: integer('srs_stage').default(0).notNull(),
+    srsStage: integer('srs_stage').default(0).notNull(), // 0-3 learning progress (3 = learned)
+    hasPenalty: boolean('has_penalty').default(false).notNull(),
+    reviewStage: integer('review_stage').default(0).notNull(), // index into review intervals after learned
     nextReviewAt: timestamp('next_review_at'),
-    masteredAt: timestamp('mastered_at'),
+    masteredAt: timestamp('mastered_at'), // set when srsStage reaches 3 (learned)
     lastSeenAt: timestamp('last_seen_at').defaultNow().notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -388,9 +390,11 @@ export const userCustomWordProgress = pgTable(
       .notNull(),
     correctCount: integer('correct_count').default(0).notNull(),
     incorrectCount: integer('incorrect_count').default(0).notNull(),
-    srsStage: integer('srs_stage').default(0).notNull(),
+    srsStage: integer('srs_stage').default(0).notNull(), // 0-3 learning progress (3 = learned)
+    hasPenalty: boolean('has_penalty').default(false).notNull(),
+    reviewStage: integer('review_stage').default(0).notNull(), // index into review intervals after learned
     nextReviewAt: timestamp('next_review_at'),
-    masteredAt: timestamp('mastered_at'),
+    masteredAt: timestamp('mastered_at'), // set when srsStage reaches 3 (learned)
     lastSeenAt: timestamp('last_seen_at').defaultNow().notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),

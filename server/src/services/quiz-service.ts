@@ -3,7 +3,7 @@ import { db } from '../db/index.js';
 import { wordMeanings, quizSessions, quizAnswers, users, userWordProgress, userCustomWords, userCustomWordProgress } from '../db/schema.js';
 import { getQuizPool, getErrorsPool, type CustomWordForQuiz } from './collection-service.js';
 import { ERRORS_COLLECTION_ID } from '../config/errors-config.js';
-import { computeNextReview, MASTERED_STAGE } from './srs-service.js';
+import { computeNextReview, LEARNED_PROGRESS } from './srs-service.js';
 import {
   rewardCorrectAnswer,
   rewardQuizSessionComplete,
@@ -109,7 +109,7 @@ export async function generateQuestionFromPool(
       const progress = progressMap.get(id);
       if (!progress) {
         unseen.push(id);
-      } else if (progress.srsStage >= MASTERED_STAGE && !repeatMastered) {
+      } else if (progress.srsStage >= LEARNED_PROGRESS && !repeatMastered) {
         // выученное — пропускаем
       } else if (!progress.nextReviewAt || progress.nextReviewAt <= now) {
         reviewReady.push(id);
@@ -144,7 +144,7 @@ export async function generateQuestionFromPool(
       const progress = customProgressMap.get(cw.id);
       if (!progress) {
         customUnseen.push(cw);
-      } else if (progress.srsStage >= MASTERED_STAGE && !repeatMastered) {
+      } else if (progress.srsStage >= LEARNED_PROGRESS && !repeatMastered) {
         // выученное — пропускаем
       } else if (!progress.nextReviewAt || progress.nextReviewAt <= now) {
         customReviewReady.push(cw);
@@ -398,27 +398,35 @@ export async function recordInfiniteAnswer(
       .limit(1);
 
     if (existing) {
-      const srs = computeNextReview(existing.srsStage, isCorrect);
+      const srs = computeNextReview({
+        learningProgress: existing.srsStage,
+        hasPenalty: existing.hasPenalty,
+        reviewStage: existing.reviewStage,
+      }, isCorrect);
       await db
         .update(userCustomWordProgress)
         .set({
           correctCount: isCorrect ? sql`${userCustomWordProgress.correctCount} + 1` : userCustomWordProgress.correctCount,
           incorrectCount: isCorrect ? userCustomWordProgress.incorrectCount : sql`${userCustomWordProgress.incorrectCount} + 1`,
-          srsStage: srs.newStage,
+          srsStage: srs.newProgress,
+          hasPenalty: srs.newPenalty,
+          reviewStage: srs.newReviewStage,
           nextReviewAt: srs.nextReviewAt,
-          masteredAt: srs.isMastered ? new Date() : (srs.newStage < MASTERED_STAGE ? null : existing.masteredAt),
+          masteredAt: srs.isLearned ? new Date() : existing.masteredAt,
           lastSeenAt: new Date(),
           updatedAt: new Date(),
         })
         .where(eq(userCustomWordProgress.id, existing.id));
     } else {
-      const srs = computeNextReview(0, isCorrect);
+      const srs = computeNextReview({ learningProgress: 0, hasPenalty: false, reviewStage: 0 }, isCorrect);
       await db.insert(userCustomWordProgress).values({
         userId,
         customWordId: realId,
         correctCount: isCorrect ? 1 : 0,
         incorrectCount: isCorrect ? 0 : 1,
-        srsStage: srs.newStage,
+        srsStage: srs.newProgress,
+        hasPenalty: srs.newPenalty,
+        reviewStage: srs.newReviewStage,
         nextReviewAt: srs.nextReviewAt,
       });
     }
@@ -448,27 +456,35 @@ export async function recordInfiniteAnswer(
       .limit(1);
 
     if (existing) {
-      const srs = computeNextReview(existing.srsStage, isCorrect);
+      const srs = computeNextReview({
+        learningProgress: existing.srsStage,
+        hasPenalty: existing.hasPenalty,
+        reviewStage: existing.reviewStage,
+      }, isCorrect);
       await db
         .update(userWordProgress)
         .set({
           correctCount: isCorrect ? sql`${userWordProgress.correctCount} + 1` : userWordProgress.correctCount,
           incorrectCount: isCorrect ? userWordProgress.incorrectCount : sql`${userWordProgress.incorrectCount} + 1`,
-          srsStage: srs.newStage,
+          srsStage: srs.newProgress,
+          hasPenalty: srs.newPenalty,
+          reviewStage: srs.newReviewStage,
           nextReviewAt: srs.nextReviewAt,
-          masteredAt: srs.isMastered ? new Date() : (srs.newStage < MASTERED_STAGE ? null : existing.masteredAt),
+          masteredAt: srs.isLearned ? new Date() : existing.masteredAt,
           lastSeenAt: new Date(),
           updatedAt: new Date(),
         })
         .where(eq(userWordProgress.id, existing.id));
     } else {
-      const srs = computeNextReview(0, isCorrect);
+      const srs = computeNextReview({ learningProgress: 0, hasPenalty: false, reviewStage: 0 }, isCorrect);
       await db.insert(userWordProgress).values({
         userId,
         meaningId,
         correctCount: isCorrect ? 1 : 0,
         incorrectCount: isCorrect ? 0 : 1,
-        srsStage: srs.newStage,
+        srsStage: srs.newProgress,
+        hasPenalty: srs.newPenalty,
+        reviewStage: srs.newReviewStage,
         nextReviewAt: srs.nextReviewAt,
       });
     }
