@@ -52,9 +52,16 @@ export default async function collectionRoutes(app: FastifyInstance) {
 
   app.post<{ Body: { title: string; description?: string; words?: { wordText: string; translation: string; partOfSpeech?: string; contextExample?: string }[] } }>(
     '/api/collections',
-    async (request) => {
-      const collectionId = await createUserCollection(request.user.id, request.body);
-      return { collectionId };
+    async (request, reply) => {
+      try {
+        const collectionId = await createUserCollection(request.user.id, request.body);
+        return { collectionId };
+      } catch (err) {
+        if (err instanceof Error && err.message === 'COLLECTION_LIMIT_REACHED') {
+          return reply.status(403).send({ error: 'Достигнут лимит коллекций', code: 'COLLECTION_LIMIT' });
+        }
+        throw err;
+      }
     },
   );
 
@@ -77,10 +84,17 @@ export default async function collectionRoutes(app: FastifyInstance) {
   app.post<{
     Params: { id: string };
     Body: { meaningIds?: number[]; custom?: { wordText: string; translation: string; partOfSpeech?: string }[] };
-  }>('/api/collections/:id/words', async (request) => {
+  }>('/api/collections/:id/words', async (request, reply) => {
     const id = Number(request.params.id);
-    const result = await addWordsToCollection(request.user.id, id, request.body);
-    return { success: true, added: result.added };
+    try {
+      const result = await addWordsToCollection(request.user.id, id, request.body);
+      return { success: true, added: result.added };
+    } catch (err) {
+      if (err instanceof Error && err.message === 'WORD_LIMIT_REACHED') {
+        return reply.status(403).send({ error: 'Достигнут лимит слов в коллекции', code: 'WORD_LIMIT' });
+      }
+      throw err;
+    }
   });
 
   // Remove word from collection

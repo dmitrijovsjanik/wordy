@@ -11,6 +11,7 @@ import {
   words,
 } from '../db/schema.js';
 import { ERRORS_EXIT_SRS_STAGE, ERRORS_COLLECTION_ID } from '../config/errors-config.js';
+import { FREE_LIMITS } from '../config/premium-config.js';
 import { LEARNED_PROGRESS } from './srs-service.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -312,6 +313,22 @@ type CreateCollectionInput = {
 };
 
 export async function createUserCollection(userId: number, input: CreateCollectionInput) {
+  // Проверяем лимит коллекций для бесплатного плана
+  const [{ count: existingCount }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(collections)
+    .where(
+      and(
+        eq(collections.creatorId, userId),
+        eq(collections.type, 'user'),
+        isNull(collections.deletedAt),
+      ),
+    );
+
+  if (existingCount >= FREE_LIMITS.MAX_CUSTOM_COLLECTIONS) {
+    throw new Error('COLLECTION_LIMIT_REACHED');
+  }
+
   const [col] = await db
     .insert(collections)
     .values({
@@ -796,6 +813,26 @@ export async function addWordsToCollection(
   });
 
   if (!col) throw new Error('Коллекция не найдена');
+
+  // Проверяем лимит слов для пользовательских коллекций (бесплатный план)
+  if (col.type === 'user') {
+    const [{ sysCount }] = await db
+      .select({ sysCount: sql<number>`count(*)::int` })
+      .from(collectionWords)
+      .where(eq(collectionWords.collectionId, collectionId));
+
+    const [{ customCount }] = await db
+      .select({ customCount: sql<number>`count(*)::int` })
+      .from(userCustomWords)
+      .where(eq(userCustomWords.collectionId, collectionId));
+
+    const currentTotal = sysCount + customCount;
+    const toAdd = (input.meaningIds?.length ?? 0) + (input.custom?.length ?? 0);
+
+    if (currentTotal + toAdd > FREE_LIMITS.MAX_WORDS_PER_COLLECTION) {
+      throw new Error('WORD_LIMIT_REACHED');
+    }
+  }
 
   let added = 0;
 

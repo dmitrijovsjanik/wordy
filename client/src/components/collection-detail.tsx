@@ -36,7 +36,10 @@ import {
 } from '@hugeicons/core-free-icons';
 import { dictionaryLookup, addCollectionWords, removeCollectionWord } from '@/lib/api';
 import { useHomeStore } from '@/stores/home-store';
+import { PremiumDrawer } from '@/components/ui/premium-drawer';
 import type { DictionaryLookupResult } from '@/types/api';
+
+const MAX_FREE_WORDS = 50;
 
 export function CollectionDetail() {
   const { id } = useParams<{ id: string }>();
@@ -61,6 +64,9 @@ export function CollectionDetail() {
   const [manualTranslation, setManualTranslation] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Premium paywall
+  const [showPremiumDrawer, setShowPremiumDrawer] = useState(false);
 
   // Модалка редактирования
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -106,6 +112,14 @@ export function CollectionDetail() {
       custom?: { wordText: string; translation: string },
     ) => {
       if (!id) return;
+
+      // Проверяем лимит слов для user-коллекций (бесплатный план)
+      const currentWordCount = currentDetail?.words.length ?? 0;
+      if (currentDetail?.collection.type === 'user' && currentWordCount >= MAX_FREE_WORDS) {
+        setShowPremiumDrawer(true);
+        return;
+      }
+
       setIsAdding(true);
       try {
         await addCollectionWords(Number(id), {
@@ -263,7 +277,11 @@ export function CollectionDetail() {
       {/* Список слов */}
       <div className="mt-6 flex flex-1 flex-col gap-3">
         <div className="flex items-center justify-between">
-          <span className="text-sm text-[var(--gray-11)]">{countUniqueWords(words)} слов</span>
+          <span className="text-sm text-[var(--gray-11)]">
+            {collection.type === 'user'
+              ? `${countUniqueWords(words)}/${MAX_FREE_WORDS} слов`
+              : `${countUniqueWords(words)} слов`}
+          </span>
           <div className="flex items-center gap-2">
             <WordSortSelect />
             <WordViewToggle />
@@ -399,8 +417,12 @@ export function CollectionDetail() {
                 <Button
                   variant="secondary"
                   onClick={() => {
-                    setIsAddingMode(true);
-                    setTimeout(() => inputRef.current?.focus(), 100);
+                    if (collection.type === 'user' && words.length >= MAX_FREE_WORDS) {
+                      setShowPremiumDrawer(true);
+                    } else {
+                      setIsAddingMode(true);
+                      setTimeout(() => inputRef.current?.focus(), 100);
+                    }
                   }}
                   className="w-full"
                 >
@@ -461,6 +483,12 @@ export function CollectionDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PremiumDrawer
+        open={showPremiumDrawer}
+        onOpenChange={setShowPremiumDrawer}
+        limitType="words"
+      />
     </div>
   );
 }

@@ -5,11 +5,14 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { PremiumDrawer } from '@/components/ui/premium-drawer';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Add01Icon, Alert02Icon, Book02Icon } from '@hugeicons/core-free-icons';
 import { Progress } from '@/components/ui/progress';
 import { ICON_MAP, DEFAULT_ICON } from '@/lib/icon-map';
 import type { MarketplaceCollection, CollectionGroup, LibraryCollection, CefrLevel } from '@/types/api';
+
+const MAX_FREE_COLLECTIONS = 1;
 
 const CEFR_LABELS: Record<CefrLevel, string> = {
   a1: 'A1',
@@ -210,6 +213,9 @@ export function Collections() {
   const isLoadingErrors = useCollectionStore((s) => s.isLoadingErrors);
   const fetchErrorsCollection = useCollectionStore((s) => s.fetchErrorsCollection);
 
+  const [showPremiumDrawer, setShowPremiumDrawer] = useState(false);
+  const customCollectionsCount = library.filter((c) => c.type === 'user').length;
+
   useEffect(() => {
     fetchLibrary();
     fetchMarketplace();
@@ -352,7 +358,13 @@ export function Collections() {
           <div className="pointer-events-auto bg-[var(--gray-1)] px-4 pb-4">
             <Button
               className="w-full gap-2"
-              onClick={() => navigate('/collections/create')}
+              onClick={() => {
+                if (customCollectionsCount >= MAX_FREE_COLLECTIONS) {
+                  setShowPremiumDrawer(true);
+                } else {
+                  navigate('/collections/create');
+                }
+              }}
             >
               <HugeiconsIcon strokeWidth={2} icon={Add01Icon} size={20} />
               Создать коллекцию
@@ -360,6 +372,12 @@ export function Collections() {
           </div>
         </div>
       )}
+
+      <PremiumDrawer
+        open={showPremiumDrawer}
+        onOpenChange={setShowPremiumDrawer}
+        limitType="collections"
+      />
     </div>
   );
 }

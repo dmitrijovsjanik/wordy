@@ -7,10 +7,13 @@ import { Input } from '@/components/ui/input';
 import { BackButton } from '@/components/ui/back-button';
 import { DictionaryPreview, getMeaningIds, isAlreadyAdded } from '@/components/ui/dictionary-preview';
 import { WordList } from '@/components/ui/word-list';
+import { PremiumDrawer } from '@/components/ui/premium-drawer';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Search01Icon, Cancel01Icon, Add01Icon } from '@hugeicons/core-free-icons';
 import { dictionaryLookup, addCollectionWords } from '@/lib/api';
 import type { DictionaryLookupResult } from '@/types/api';
+
+const MAX_FREE_WORDS = 50;
 
 type AddedWord = {
   id: number;
@@ -43,6 +46,7 @@ export function CollectionCreate() {
   // Words added so far
   const [words, setWords] = useState<AddedWord[]>([]);
   const [nextLocalId, setNextLocalId] = useState(1);
+  const [showPremiumDrawer, setShowPremiumDrawer] = useState(false);
 
   // Debounced dictionary lookup
   useEffect(() => {
@@ -82,6 +86,12 @@ export function CollectionCreate() {
       meaningIds: number[],
       custom?: { wordText: string; translation: string },
     ) => {
+      // Проверяем лимит слов для бесплатного плана
+      if (words.length >= MAX_FREE_WORDS) {
+        setShowPremiumDrawer(true);
+        return;
+      }
+
       if (createdId) {
         // Collection already created — add via API
         setIsAdding(true);
@@ -126,7 +136,7 @@ export function CollectionCreate() {
       setLookupResult(null);
       inputRef.current?.focus();
     },
-    [createdId, lookupResult, nextLocalId],
+    [createdId, lookupResult, nextLocalId, words.length],
   );
 
   const handleSave = async () => {
@@ -179,7 +189,7 @@ export function CollectionCreate() {
       {/* Word list */}
       <div className="mt-6 flex flex-1 flex-col gap-2">
         <span className="text-sm text-[var(--gray-11)]">
-          {words.length > 0 ? `${words.length} слов` : 'Нет слов'}
+          {words.length > 0 ? `${words.length}/${MAX_FREE_WORDS} слов` : 'Нет слов'}
         </span>
 
         {words.length === 0 && (
@@ -294,6 +304,12 @@ export function CollectionCreate() {
           </div>
         </div>
       </div>
+
+      <PremiumDrawer
+        open={showPremiumDrawer}
+        onOpenChange={setShowPremiumDrawer}
+        limitType="words"
+      />
     </div>
   );
 }
