@@ -1,4 +1,4 @@
-import { eq, and, sql, isNull, inArray, or, lte, lt, gte } from 'drizzle-orm';
+import { eq, and, sql, isNull, inArray, or, lte, lt, gte, asc } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   collections,
@@ -207,7 +207,7 @@ export async function getCollectionDetail(collectionId: number, userId: number) 
       ),
     )
     .where(and(eq(collectionWords.collectionId, collectionId), popularityFilter))
-    .orderBy(collectionWords.order);
+    .orderBy(collectionWords.order, asc(wordMeanings.popularityRank));
 
   // Кастомные слова с SRS-прогрессом
   const customWords = await db
@@ -573,7 +573,8 @@ export async function getAllWords(userId: number) {
         eq(userWordProgress.userId, userId),
       ),
     )
-    .where(and(inArray(collectionWords.collectionId, collectionIds), popularityFilter));
+    .where(and(inArray(collectionWords.collectionId, collectionIds), popularityFilter))
+    .orderBy(asc(wordMeanings.popularityRank));
 
   // Custom words from collections with SRS progress
   const customWordRows = await db

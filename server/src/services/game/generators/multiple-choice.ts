@@ -18,6 +18,11 @@ export const MIN_FREQUENCY = 2;
 // Исключает латинские термины типа "Plus", "Wi-Fi" и т.д.
 export const CYRILLIC_FILTER = sql`${wordMeanings.translation} ~ '[а-яА-ЯёЁ]'`;
 
+// Слова, у которых перевод нужно показывать с синонимами рода
+const TRANSLATION_DISPLAY: Record<string, Record<string, string>> = {
+  'it': { 'он': 'он, она, оно' },
+};
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 export function shuffle<T>(arr: T[]): T[] {
@@ -143,13 +148,15 @@ export async function generateFromMeaning(
 
   if (isForward) {
     const lemma = correct.word.lemma;
-    const options = shuffle([correct.translation, ...wrongTexts]);
+    const wordKey = (lemma ?? correct.word.text).toLowerCase();
+    const displayTranslation = TRANSLATION_DISPLAY[wordKey]?.[correct.translation] ?? correct.translation;
+    const options = shuffle([displayTranslation, ...wrongTexts]);
     return {
       meaningId: correct.id,
       word: lemma ?? correct.word.text,
       originalForm: lemma ? correct.word.text : null,
       transcription: correct.word.transcription,
-      correctTranslation: correct.translation,
+      correctTranslation: displayTranslation,
       options,
       direction,
     };

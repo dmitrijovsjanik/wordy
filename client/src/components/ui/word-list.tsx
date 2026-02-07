@@ -62,8 +62,15 @@ function groupWords(words: WordEntry[]): GroupedWord[] {
     frequency?: number;
   }>();
 
+  // Порядок переводов по появлению (= порядок популярности из API)
+  const translationOrder = new Map<string, string[]>();
+
   for (const w of words) {
     if (!byWord.has(w.word)) byWord.set(w.word, new Set());
+    if (!byWord.get(w.word)!.has(w.translation)) {
+      if (!translationOrder.has(w.word)) translationOrder.set(w.word, []);
+      translationOrder.get(w.word)!.push(w.translation);
+    }
     byWord.get(w.word)!.add(w.translation);
 
     if (!idsByWord.has(w.word)) idsByWord.set(w.word, []);
@@ -109,10 +116,10 @@ function groupWords(words: WordEntry[]): GroupedWord[] {
   const byTranslationSet = new Map<string, { words: Set<string>; translations: string[] }>();
 
   for (const [word, translations] of byWord) {
-    const sorted = [...translations].sort();
-    const tKey = sorted.join('\0');
+    // Ключ — алфавитный (для стабильной группировки), порядок — из API (по популярности)
+    const tKey = [...translations].sort().join('\0');
     if (!byTranslationSet.has(tKey)) {
-      byTranslationSet.set(tKey, { words: new Set(), translations: sorted });
+      byTranslationSet.set(tKey, { words: new Set(), translations: translationOrder.get(word) ?? [...translations] });
     }
     byTranslationSet.get(tKey)!.words.add(word);
   }
@@ -125,8 +132,7 @@ function groupWords(words: WordEntry[]): GroupedWord[] {
     if (seenWords.has(w.word)) continue;
 
     const translations = byWord.get(w.word)!;
-    const sorted = [...translations].sort();
-    const tKey = sorted.join('\0');
+    const tKey = [...translations].sort().join('\0');
     const group = byTranslationSet.get(tKey)!;
 
     for (const gw of group.words) seenWords.add(gw);
