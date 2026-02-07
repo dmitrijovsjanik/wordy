@@ -26,7 +26,7 @@ export function LeagueWidget({ className }: LeagueWidgetProps) {
   return (
     <Link to="/leaderboard">
       <Card className={cn('flex items-center gap-3 p-3', className)}>
-        <LeagueBadge tier={progress.tier} division={progress.division} size="lg" />
+        <LeagueBadge tier={progress.tier} size="lg" />
 
         <div className="flex flex-1 flex-col">
           <span className="font-semibold text-lg">

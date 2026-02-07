@@ -25,6 +25,15 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    key: 'remove-divisions-set-1',
+    description: 'Убираем дивизионы из лиг — устанавливаем division=1 для всех',
+    run: async () => {
+      await db.execute(sql`
+        UPDATE user_league_progress SET division = 1 WHERE division != 1
+      `);
+    },
+  },
 ];
 
 export async function runStartupMigrations(): Promise<void> {

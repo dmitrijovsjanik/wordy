@@ -35,7 +35,7 @@ export default async function leagueRoutes(app: FastifyInstance) {
     return {
       progress: {
         tier: progress.tier,
-        division: progress.division,
+        division: 1, // legacy, всегда 1
       },
       stats: stats
         ? {
@@ -66,7 +66,7 @@ export default async function leagueRoutes(app: FastifyInstance) {
     const progress = await getUserLeagueProgress(userId);
     const season = await getOrCreateCurrentSeason();
 
-    const entries = await getLeaderboard(season.id, progress.tier, progress.division, 50);
+    const entries = await getLeaderboard(season.id, progress.tier, 50);
 
     return {
       entries: entries.map((e) => ({
@@ -110,10 +110,10 @@ export default async function leagueRoutes(app: FastifyInstance) {
         year: h.season.year,
         leaguePoints: h.leaguePoints,
         tierAtStart: h.tierAtStart,
-        divisionAtStart: h.divisionAtStart,
+        divisionAtStart: 1, // legacy
         tierAtEnd: h.tierAtEnd,
-        divisionAtEnd: h.divisionAtEnd,
-        divisionChange: h.divisionChange,
+        divisionAtEnd: 1, // legacy
+        divisionChange: h.divisionChange ?? 0,
       })),
     };
   });

@@ -14,11 +14,8 @@ const LEAGUE_NAMES: Record<LeagueTier, string> = {
   legend: 'Легенда',
 };
 
-const DIVISION_LABELS = ['I', 'II', 'III'];
-
 type LeagueBadgeProps = {
   tier: LeagueTier;
-  division: number;
   size?: 'sm' | 'md' | 'lg';
   showLabel?: boolean;
   className?: string;
@@ -26,7 +23,6 @@ type LeagueBadgeProps = {
 
 export function LeagueBadge({
   tier,
-  division,
   size = 'md',
   showLabel = true,
   className,
@@ -39,12 +35,9 @@ export function LeagueBadge({
     <div className={cn('flex items-center gap-2', className)}>
       <IconComponent size={iconSize} className="flex-shrink-0" />
       {showLabel && (
-        <div className="flex flex-col">
-          <span className={cn('font-medium', size === 'sm' ? 'text-xs' : 'text-sm')}>
-            {LEAGUE_NAMES[tier]}
-          </span>
-          <span className="text-xs text-[var(--gray-11)]">{DIVISION_LABELS[division - 1]}</span>
-        </div>
+        <span className={cn('font-medium', size === 'sm' ? 'text-xs' : 'text-sm')}>
+          {LEAGUE_NAMES[tier]}
+        </span>
       )}
     </div>
   );
@@ -52,8 +45,4 @@ export function LeagueBadge({
 
 export function getLeagueName(tier: LeagueTier): string {
   return LEAGUE_NAMES[tier];
-}
-
-export function getDivisionLabel(division: number): string {
-  return DIVISION_LABELS[division - 1] ?? '';
 }

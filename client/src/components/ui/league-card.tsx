@@ -13,7 +13,7 @@ type LeagueCardProps = {
 };
 
 export function LeagueCard({ className }: LeagueCardProps) {
-  const { progress, stats, position, season, isLoading, fetchStatus } = useLeagueStore();
+  const { progress, stats, season, isLoading, fetchStatus } = useLeagueStore();
 
   useEffect(() => {
     fetchStatus();
@@ -30,16 +30,16 @@ export function LeagueCard({ className }: LeagueCardProps) {
   return (
     <Card className={cn('flex flex-col gap-4', className)}>
       <div className="flex items-center justify-between">
-        <LeagueBadge tier={progress.tier} division={progress.division} size="lg" />
+        <LeagueBadge tier={progress.tier} size="lg" />
         {season && (
           <span className="text-xs text-[var(--gray-11)]">
-            Неделя {season.weekNumber}
+            Сезон {season.weekNumber}
           </span>
         )}
       </div>
 
       {stats ? (
-        <LeagueProgress stats={stats} tier={progress.tier} position={position} />
+        <LeagueProgress stats={stats} tier={progress.tier} />
       ) : (
         <div className="text-center text-sm text-[var(--gray-11)]">
           Начните играть, чтобы заработать очки лиги

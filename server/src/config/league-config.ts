@@ -66,27 +66,49 @@ export {
   applyModifier,
 } from './progression-config.js';
 
-// Пороги LP для результатов недели (увеличены x10 под новую разрядность)
-export const LP_THRESHOLDS = {
-  DEMOTION_2: { max: 999 },
-  DEMOTION_1: { min: 1000, max: 1999 },
-  MAINTAIN: { min: 2000, max: 3999 },
-  PROMOTION_1: { min: 4000, max: 6999 },
-  PROMOTION_2: { min: 7000, max: 9999 },
-  PROMOTION_3: { min: 10000 },
-} as const;
+// ─── Пороги LP по тирам ─────────────────────────────────────────────────────
+// Масштабируются по лигам (~1.25x за тир) для нормального распределения
 
-// Лимиты для групп понижения
-export const DEMOTION_LIMITS = {
-  DEMOTION_2_LIMIT: 5,
-  DEMOTION_1_LIMIT: 10,
-} as const;
+type TierThresholds = {
+  demotion: number; // ниже → понижение (0 для protected)
+  promotion: number; // выше → повышение
+};
 
-// Топ-позиции для бонусов повышения
-export const TOP_POSITIONS = {
-  PROMOTION_3_TOP: 5,
-  PROMOTION_2_TOP: 10,
-} as const;
+export const TIER_THRESHOLDS: Record<LeagueTier, TierThresholds> = {
+  bronze:   { demotion: 0,    promotion: 2000 },
+  silver:   { demotion: 0,    promotion: 2500 },
+  gold:     { demotion: 0,    promotion: 3000 },
+  amber:    { demotion: 2000, promotion: 4000 },
+  sapphire: { demotion: 2500, promotion: 5000 },
+  amethyst: { demotion: 3000, promotion: 6500 },
+  topaz:    { demotion: 4000, promotion: 8000 },
+  ruby:     { demotion: 5000, promotion: 10000 },
+  legend:   { demotion: 6000, promotion: Infinity }, // нет повышения из Legend
+};
+
+// ─── Награды гемами за зоны по итогам сезона ────────────────────────────────
+
+type TierRewards = {
+  maintain: number;   // безопасная зона
+  promotion: number;  // повышение
+};
+
+export const SEASON_REWARDS: Record<LeagueTier, TierRewards> = {
+  bronze:   { maintain: 50,  promotion: 100 },
+  silver:   { maintain: 50,  promotion: 100 },
+  gold:     { maintain: 50,  promotion: 100 },
+  amber:    { maintain: 75,  promotion: 150 },
+  sapphire: { maintain: 75,  promotion: 150 },
+  amethyst: { maintain: 100, promotion: 200 },
+  topaz:    { maintain: 100, promotion: 200 },
+  ruby:     { maintain: 150, promotion: 300 },
+  legend:   { maintain: 150, promotion: 0 },   // из Legend некуда повышаться
+};
+
+// Лимит для группы понижения (максимум N человек получают -1)
+export const DEMOTION_LIMIT = 10;
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 // Получить следующую лигу
 export function getNextTier(tier: LeagueTier): LeagueTier | null {
@@ -105,44 +127,14 @@ export function isProtectedTier(tier: LeagueTier): boolean {
   return PROTECTED_TIERS.includes(tier);
 }
 
-// Рассчитать изменение дивизионов
-export function calculateDivisionChange(
+// Определить зону пользователя по LP и тиру
+export function getSeasonZone(
   tier: LeagueTier,
-  division: number,
-  change: number,
-): { newTier: LeagueTier; newDivision: number } {
-  let newTier = tier;
-  let newDivision = division - change; // меньший дивизион = выше (I лучше III)
+  leaguePoints: number,
+): 'promotion' | 'maintain' | 'demotion' {
+  const thresholds = TIER_THRESHOLDS[tier];
 
-  // Повышение в следующую лигу
-  while (newDivision < 1) {
-    const nextTier = getNextTier(newTier);
-    if (nextTier) {
-      newTier = nextTier;
-      newDivision += 3;
-    } else {
-      newDivision = 1; // Топ лиги
-      break;
-    }
-  }
-
-  // Понижение в предыдущую лигу
-  while (newDivision > 3) {
-    // Проверяем защиту от понижения
-    if (isProtectedTier(newTier)) {
-      newDivision = 3; // Не опускаемся ниже III дивизиона защищённой лиги
-      break;
-    }
-
-    const prevTier = getPrevTier(newTier);
-    if (prevTier) {
-      newTier = prevTier;
-      newDivision -= 3;
-    } else {
-      newDivision = 3; // Дно
-      break;
-    }
-  }
-
-  return { newTier, newDivision };
+  if (leaguePoints >= thresholds.promotion) return 'promotion';
+  if (isProtectedTier(tier) || leaguePoints >= thresholds.demotion) return 'maintain';
+  return 'demotion';
 }

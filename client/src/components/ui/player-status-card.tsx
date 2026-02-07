@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Clock01Icon } from '@hugeicons/core-free-icons';
 import { cn } from '@/lib/utils';
-import { PROTECTED_TIERS, getLeagueZoneInfo } from '@/lib/league-config';
+import { isProtectedTier, getLeagueZoneInfo } from '@/lib/league-config';
 import { xpForLevel } from '@/lib/progression-config';
 import type { LeagueTier } from '@/types/api';
 
@@ -23,8 +23,6 @@ const LEAGUE_NAMES: Record<LeagueTier, string> = {
   ruby: 'Рубин',
   legend: 'Легенда',
 };
-
-const DIVISION_LABELS = ['I', 'II', 'III'];
 
 function formatTimeLeft(endDate: Date): string {
   const now = new Date();
@@ -48,7 +46,7 @@ type PlayerStatusCardProps = {
 };
 
 export function PlayerStatusCard({ user, className }: PlayerStatusCardProps) {
-  const { progress, stats, position, season, isLoading, fetchStatus } = useLeagueStore();
+  const { progress, stats, season, isLoading, fetchStatus } = useLeagueStore();
   const [timeLeft, setTimeLeft] = useState('');
 
   useEffect(() => {
@@ -77,9 +75,8 @@ export function PlayerStatusCard({ user, className }: PlayerStatusCardProps) {
     return <Skeleton className={cn('h-24 w-full rounded-2xl', className)} />;
   }
 
-  const isProtected = PROTECTED_TIERS.includes(progress.tier);
-  const leagueZone = position && position.total > 0
-    ? getLeagueZoneInfo(position.position, position.total, stats?.leaguePoints ?? 0, isProtected)
+  const leagueZone = stats
+    ? getLeagueZoneInfo(progress.tier, stats.leaguePoints)
     : null;
 
   return (
@@ -111,20 +108,17 @@ export function PlayerStatusCard({ user, className }: PlayerStatusCardProps) {
               return <IconComponent size={32} className="shrink-0" />;
             })()}
             <span className="text-sm font-semibold">{LEAGUE_NAMES[progress.tier]}</span>
-            <span className="text-sm text-[var(--gray-11)]">{DIVISION_LABELS[progress.division - 1]}</span>
             {leagueZone ? (
               <span
                 className={cn(
                   'ml-auto text-sm font-medium',
-                  leagueZone.zone === 'promotion_x3' && 'text-[var(--violet-11)]',
-                  leagueZone.zone === 'promotion_x2' && 'text-[var(--blue-11)]',
-                  leagueZone.zone === 'promotion_x1' && 'text-[var(--green-11)]',
+                  leagueZone.zone === 'promotion' && 'text-[var(--green-11)]',
                   leagueZone.zone === 'demotion' && 'text-[var(--red-11)]',
-                  leagueZone.zone === 'safe' && 'text-[var(--gray-11)]',
+                  leagueZone.zone === 'maintain' && 'text-[var(--gray-11)]',
                 )}
               >
-                {leagueZone.result > 0 && '+'}
-                {leagueZone.result !== 0 ? leagueZone.result : '±0'}
+                {leagueZone.tierChange > 0 && '+'}
+                {leagueZone.tierChange !== 0 ? leagueZone.tierChange : '±0'}
               </span>
             ) : (
               <span className="ml-auto text-sm text-[var(--gray-11)]">—</span>
@@ -134,58 +128,31 @@ export function PlayerStatusCard({ user, className }: PlayerStatusCardProps) {
           {/* Середина: прогресс-бар с зонами */}
           <div className="mt-2">
             <div className="relative h-2 w-full">
-              {/*
-                Зоны равномерно делят бар:
-                - С понижением: 33.3% понижение | 33.3% безопасно | 33.3% повышение (по 11.1% на x1/x2/x3)
-                - Без понижения: 50% безопасно | 50% повышение (по 16.6% на x1/x2/x3)
-                Фон: step-3, текущая зона: step-9
-              */}
               <div className="absolute inset-0 flex overflow-hidden rounded-full">
-                {!isProtected ? (
+                {!isProtectedTier(progress.tier) ? (
                   <>
-                    {/* Понижение — 1/3 */}
                     <div
                       className="h-full w-1/3"
                       style={{ backgroundColor: leagueZone?.zone === 'demotion' ? 'var(--red-9)' : 'var(--red-6)' }}
                     />
-                    {/* Безопасно — 1/3 */}
                     <div
                       className="h-full w-1/3"
-                      style={{ backgroundColor: leagueZone?.zone === 'safe' ? 'var(--gray-9)' : 'var(--gray-6)' }}
-                    />
-                    {/* Повышение — 1/3 разбито на 3 равные части */}
-                    <div
-                      className="h-full w-[11.1%]"
-                      style={{ backgroundColor: leagueZone?.zone === 'promotion_x1' ? 'var(--green-9)' : 'var(--green-6)' }}
+                      style={{ backgroundColor: leagueZone?.zone === 'maintain' ? 'var(--gray-9)' : 'var(--gray-6)' }}
                     />
                     <div
-                      className="h-full w-[11.1%]"
-                      style={{ backgroundColor: leagueZone?.zone === 'promotion_x2' ? 'var(--blue-9)' : 'var(--blue-6)' }}
-                    />
-                    <div
-                      className="h-full w-[11.1%]"
-                      style={{ backgroundColor: leagueZone?.zone === 'promotion_x3' ? 'var(--violet-9)' : 'var(--violet-6)' }}
+                      className="h-full w-1/3"
+                      style={{ backgroundColor: leagueZone?.zone === 'promotion' ? 'var(--green-9)' : 'var(--green-6)' }}
                     />
                   </>
                 ) : (
                   <>
-                    {/* Безопасно — 1/2 */}
                     <div
-                      className="h-full w-1/2"
-                      style={{ backgroundColor: leagueZone?.zone === 'safe' ? 'var(--gray-9)' : 'var(--gray-6)' }}
-                    />
-                    {/* Повышение — 1/2 разбито на 3 равные части */}
-                    <div
-                      className="h-full w-[16.6%]"
-                      style={{ backgroundColor: leagueZone?.zone === 'promotion_x1' ? 'var(--green-9)' : 'var(--green-6)' }}
+                      className="h-full w-2/3"
+                      style={{ backgroundColor: leagueZone?.zone === 'maintain' ? 'var(--gray-9)' : 'var(--gray-6)' }}
                     />
                     <div
-                      className="h-full w-[16.6%]"
-                      style={{ backgroundColor: leagueZone?.zone === 'promotion_x2' ? 'var(--blue-9)' : 'var(--blue-6)' }}
-                    />
-                    <div
-                      className="h-full w-[16.7%]"
-                      style={{ backgroundColor: leagueZone?.zone === 'promotion_x3' ? 'var(--violet-9)' : 'var(--violet-6)' }}
+                      className="h-full w-1/3"
+                      style={{ backgroundColor: leagueZone?.zone === 'promotion' ? 'var(--green-9)' : 'var(--green-6)' }}
                     />
                   </>
                 )}

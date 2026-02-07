@@ -10,7 +10,7 @@ import { BackButton } from '@/components/ui/back-button';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ArrowUp01Icon, ArrowDown01Icon, Clock01Icon } from '@hugeicons/core-free-icons';
 import { cn } from '@/lib/utils';
-import { LP_THRESHOLDS, PROTECTED_TIERS, formatLpBoundary } from '@/lib/league-config';
+import { TIER_THRESHOLDS, SEASON_REWARDS, isProtectedTier } from '@/lib/league-config';
 import { Avatar } from '@/components/ui/avatar';
 import type { LeagueTier } from '@/types/api';
 
@@ -27,41 +27,43 @@ function formatTimeLeft(endDate: Date): string {
 }
 
 type Zone = {
-  id: string;
+  id: 'promotion' | 'maintain' | 'demotion';
   label: string;
-  lpBoundary: string;
+  reward: string;
   color: string;
   placeholder: string;
 };
 
-function getZones(isProtected: boolean): Zone[] {
+function getZones(tier: LeagueTier): Zone[] {
+  const rewards = SEASON_REWARDS[tier];
+  const thresholds = TIER_THRESHOLDS[tier];
+  const isProtected = isProtectedTier(tier);
+
   const zones: Zone[] = [
     {
-      id: 'promotion_x3',
-      label: 'x3 продвижение',
-      lpBoundary: formatLpBoundary(LP_THRESHOLDS.PROMOTION_3.min, Infinity),
-      color: 'var(--violet-9)',
-      placeholder: 'Пока никого',
-    },
-    {
-      id: 'promotion_x2',
-      label: 'x2 продвижение',
-      lpBoundary: formatLpBoundary(LP_THRESHOLDS.PROMOTION_2.min, LP_THRESHOLDS.PROMOTION_2.max),
-      color: 'var(--blue-9)',
-      placeholder: 'Пока никого',
-    },
-    {
-      id: 'promotion_x1',
-      label: 'x1 продвижение',
-      lpBoundary: formatLpBoundary(LP_THRESHOLDS.PROMOTION_1.min, LP_THRESHOLDS.PROMOTION_1.max),
+      id: 'promotion',
+      label: 'Повышение',
+      reward: thresholds.promotion === Infinity ? '' : `${thresholds.promotion}+ LP — +${rewards.promotion} 💎`,
       color: 'var(--green-9)',
       placeholder: 'Пока никого',
     },
-    { id: 'safe', label: 'Безопасная зона', lpBoundary: '', color: 'var(--gray-9)', placeholder: 'Пока никого' },
+    {
+      id: 'maintain',
+      label: 'Безопасная зона',
+      reward: `+${rewards.maintain} 💎`,
+      color: 'var(--gray-9)',
+      placeholder: 'Пока никого',
+    },
   ];
 
   if (!isProtected) {
-    zones.push({ id: 'demotion', label: 'Понижение', lpBoundary: '', color: 'var(--red-9)', placeholder: 'Пока никого' });
+    zones.push({
+      id: 'demotion',
+      label: 'Понижение',
+      reward: `< ${thresholds.demotion} LP`,
+      color: 'var(--red-9)',
+      placeholder: 'Пока никого',
+    });
   }
 
   return zones;
@@ -80,49 +82,30 @@ type LeaderboardEntry = {
 };
 
 type GroupedZones = {
-  promotion_x3: LeaderboardEntry[];
-  promotion_x2: LeaderboardEntry[];
-  promotion_x1: LeaderboardEntry[];
-  safe: LeaderboardEntry[];
+  promotion: LeaderboardEntry[];
+  maintain: LeaderboardEntry[];
   demotion: LeaderboardEntry[];
 };
 
-function groupByZones(entries: LeaderboardEntry[], isProtected: boolean): GroupedZones {
-  const total = entries.length;
-  if (total === 0) {
-    return { promotion_x3: [], promotion_x2: [], promotion_x1: [], safe: [], demotion: [] };
-  }
+function groupByZones(entries: LeaderboardEntry[], tier: LeagueTier): GroupedZones {
+  const thresholds = TIER_THRESHOLDS[tier];
+  const isProtected = isProtectedTier(tier);
 
-  const promotionEnd = Math.max(1, Math.ceil(total * 0.2));
-  const demotionStart = Math.floor(total * 0.8) + 1;
-
-  const promotion_x3: LeaderboardEntry[] = [];
-  const promotion_x2: LeaderboardEntry[] = [];
-  const promotion_x1: LeaderboardEntry[] = [];
-  const safe: LeaderboardEntry[] = [];
+  const promotion: LeaderboardEntry[] = [];
+  const maintain: LeaderboardEntry[] = [];
   const demotion: LeaderboardEntry[] = [];
 
   for (const entry of entries) {
-    if (entry.position <= promotionEnd) {
-      // В зоне повышения — группируем по LP
-      if (entry.leaguePoints >= LP_THRESHOLDS.PROMOTION_3.min) {
-        promotion_x3.push(entry);
-      } else if (entry.leaguePoints >= LP_THRESHOLDS.PROMOTION_2.min) {
-        promotion_x2.push(entry);
-      } else if (entry.leaguePoints >= LP_THRESHOLDS.PROMOTION_1.min) {
-        promotion_x1.push(entry);
-      } else {
-        // Меньше порога, но в топ-20% — всё равно x1
-        promotion_x1.push(entry);
-      }
-    } else if (!isProtected && entry.position >= demotionStart) {
-      demotion.push(entry);
+    if (entry.leaguePoints >= thresholds.promotion) {
+      promotion.push(entry);
+    } else if (isProtected || entry.leaguePoints >= thresholds.demotion) {
+      maintain.push(entry);
     } else {
-      safe.push(entry);
+      demotion.push(entry);
     }
   }
 
-  return { promotion_x3, promotion_x2, promotion_x1, safe, demotion };
+  return { promotion, maintain, demotion };
 }
 
 export function Leaderboard() {
@@ -130,7 +113,6 @@ export function Leaderboard() {
   const {
     progress,
     stats,
-    position,
     season,
     leaderboard,
     isLoading,
@@ -194,11 +176,10 @@ export function Leaderboard() {
 
         <LeagueScroll
           currentTier={progress.tier}
-          currentDivision={progress.division}
           className="mb-4"
         />
 
-        {stats && <LeagueProgress stats={stats} tier={progress.tier} position={position} />}
+        {stats && <LeagueProgress stats={stats} tier={progress.tier} />}
       </Card>
 
       {/* Таблица лидеров */}
@@ -211,16 +192,15 @@ export function Leaderboard() {
 }
 
 function LeaderboardList({ leaderboard, tier }: { leaderboard: LeaderboardEntry[]; tier: LeagueTier }) {
-  const isProtected = PROTECTED_TIERS.includes(tier);
-  const zones = useMemo(() => getZones(isProtected), [isProtected]);
-  const grouped = useMemo(() => groupByZones(leaderboard, isProtected), [leaderboard, isProtected]);
+  const zones = useMemo(() => getZones(tier), [tier]);
+  const grouped = useMemo(() => groupByZones(leaderboard, tier), [leaderboard, tier]);
 
   return (
     <div className="flex flex-col gap-4">
       <h2 className="text-lg font-bold">Таблица лидеров</h2>
 
       {zones.map((zone) => {
-        const entries = grouped[zone.id as keyof GroupedZones];
+        const entries = grouped[zone.id];
 
         return (
           <div key={zone.id} className="flex flex-col gap-2">
@@ -236,12 +216,12 @@ function LeaderboardList({ leaderboard, tier }: { leaderboard: LeaderboardEntry[
                 className="h-0.5 flex-1 rounded-full"
                 style={{ backgroundColor: zone.color }}
               />
-              {zone.lpBoundary && (
+              {zone.reward && (
                 <span
                   className="shrink-0 text-xs font-medium"
                   style={{ color: zone.color }}
                 >
-                  {zone.lpBoundary}
+                  {zone.reward}
                 </span>
               )}
             </div>
@@ -264,7 +244,7 @@ function LeaderboardList({ leaderboard, tier }: { leaderboard: LeaderboardEntry[
                   <div className="flex w-8 flex-col items-center">
                     <span
                       className="font-bold"
-                      style={{ color: zone.id !== 'safe' ? zone.color : undefined }}
+                      style={{ color: zone.id !== 'maintain' ? zone.color : undefined }}
                     >
                       {entry.position}
                     </span>

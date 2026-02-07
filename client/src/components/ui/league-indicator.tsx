@@ -17,8 +17,6 @@ const LEAGUE_NAMES: Record<LeagueTier, string> = {
   legend: 'Легенда',
 };
 
-const DIVISION_LABELS = ['I', 'II', 'III'];
-
 export function LeagueIndicator() {
   const navigate = useNavigate();
   const { progress, stats, isLoading, fetchStatus } = useLeagueStore();
@@ -35,7 +33,6 @@ export function LeagueIndicator() {
 
   const IconComponent = LEAGUE_ICONS[progress.tier];
   const leagueName = LEAGUE_NAMES[progress.tier];
-  const divisionLabel = DIVISION_LABELS[progress.division - 1];
 
   return (
     <button
@@ -45,7 +42,7 @@ export function LeagueIndicator() {
       <IconComponent size={32} className="shrink-0" />
       <div className="flex flex-col items-start leading-tight">
         <span className="text-[12px] font-semibold text-[var(--gray-12)]">
-          {leagueName} {divisionLabel}
+          {leagueName}
         </span>
         <span className="text-[11px] text-[var(--gray-11)]">
           {stats?.leaguePoints ?? 0} LP

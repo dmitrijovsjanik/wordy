@@ -27,15 +27,12 @@ const LEAGUE_NAMES: Record<LeagueTier, string> = {
   legend: 'Легенда',
 };
 
-const DIVISION_LABELS = ['I', 'II', 'III'];
-
 type LeagueScrollProps = {
   currentTier: LeagueTier;
-  currentDivision: number;
   className?: string;
 };
 
-export function LeagueScroll({ currentTier, currentDivision, className }: LeagueScrollProps) {
+export function LeagueScroll({ currentTier, className }: LeagueScrollProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const currentItemRef = useRef<HTMLDivElement>(null);
   const currentIndex = LEAGUE_TIERS.indexOf(currentTier);
@@ -62,7 +59,6 @@ export function LeagueScroll({ currentTier, currentDivision, className }: League
   }, []);
 
   useEffect(() => {
-    // Используем requestAnimationFrame для гарантии что DOM обновился
     const raf = requestAnimationFrame(() => {
       scrollToCurrentItem();
       updateGradients();
@@ -80,14 +76,12 @@ export function LeagueScroll({ currentTier, currentDivision, className }: League
 
   return (
     <div className={cn('relative -mx-4', className)}>
-      {/* Градиент слева */}
       <div
         className={cn(
           'pointer-events-none absolute left-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-r from-[var(--gray-2)] to-transparent transition-opacity duration-200',
           showLeftGradient ? 'opacity-100' : 'opacity-0'
         )}
       />
-      {/* Градиент справа */}
       <div
         className={cn(
           'pointer-events-none absolute right-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-l from-[var(--gray-2)] to-transparent transition-opacity duration-200',
@@ -122,11 +116,6 @@ export function LeagueScroll({ currentTier, currentDivision, className }: League
               >
                 {LEAGUE_NAMES[tier]}
               </span>
-              {isCurrent && (
-                <span className="text-[10px] text-[var(--gray-11)]">
-                  {DIVISION_LABELS[currentDivision - 1]}
-                </span>
-              )}
             </div>
           );
         })}
