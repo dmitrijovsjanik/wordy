@@ -23,6 +23,8 @@ import { Fire02Icon, Target02Icon, GameController01Icon, Award01Icon, Sun01Icon,
 import { useThemeStore } from '@/stores/theme-store';
 import { useFriendStore } from '@/stores/friend-store';
 import { cn } from '@/lib/utils';
+import { Avatar } from '@/components/ui/avatar';
+import { xpForLevel } from '@/lib/progression-config';
 
 const LANGUAGES = [
   { code: 'ru', name: 'Русский', flag: '\u{1F1F7}\u{1F1FA}', available: true },
@@ -78,10 +80,6 @@ function LanguageDropdown({ label, value, excludeCode }: LanguageDropdownProps) 
   );
 }
 
-function xpForLevel(level: number) {
-  return (level - 1) * (level - 1) * 100;
-}
-
 export function Profile() {
   const navigate = useNavigate();
   const user = useUserStore((s) => s.user);
@@ -114,9 +112,7 @@ export function Profile() {
 
       {/* Avatar + Name */}
       <div className="flex flex-col items-center">
-        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[var(--brand-9)] text-2xl font-bold text-white">
-          {user.firstName.charAt(0)}
-        </div>
+        <Avatar src={user.avatarUrl} fallback={user.firstName} size={80} />
         <h1 className="mt-3 text-xl font-bold">{user.firstName}</h1>
         {user.username && (
           <span className="text-sm text-[var(--gray-11)]">@{user.username}</span>

@@ -486,11 +486,27 @@ export async function recordInfiniteAnswer(
         dailyCorrectDate: true,
         dailyStreakMilestonesDone: true,
         dailyCorrectMilestonesDone: true,
+        lastLoginDate: true,
       },
     });
 
     const now = new Date();
     const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+
+    // Обновляем streak дней (если первый ответ за день)
+    let isNewDay = !user?.lastLoginDate;
+    if (user?.lastLoginDate) {
+      const lastLogin = new Date(
+        Date.UTC(user.lastLoginDate.getUTCFullYear(), user.lastLoginDate.getUTCMonth(), user.lastLoginDate.getUTCDate())
+      );
+      isNewDay = lastLogin.getTime() !== todayStart.getTime();
+    }
+
+    let streakGemsFromDay = 0;
+    if (isNewDay) {
+      const streakResult = await updateStreakDays(userId);
+      streakGemsFromDay = streakResult.gemsEarned;
+    }
 
     // Проверяем, нужно ли сбросить дневные счётчики
     let dailyCorrectCount = user?.dailyCorrectCount ?? 0;
@@ -559,7 +575,7 @@ export async function recordInfiniteAnswer(
       lpEarned: reward.lpEarned,
       lpModifier: reward.lpModifier,
       totalLp: reward.totalLp,
-      gemsEarned: reward.gemsEarned + milestoneGems,
+      gemsEarned: reward.gemsEarned + milestoneGems + streakGemsFromDay,
       dailyCorrectCount: newDailyCorrectCount,
     };
   }

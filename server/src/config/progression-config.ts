@@ -10,23 +10,26 @@ export const XP_QUIZ_COMPLETE_BONUS = 0; // можно добавить бону
 
 /**
  * Рассчитывает уровень на основе общего XP.
- * Формула: level = floor(sqrt(xp / 10000)) + 1
+ * Формула: level = floor((xp / 100) ^ (1/2.2)) + 1
  *
- * Примеры:
- * - 0-9999 XP = уровень 1
- * - 10000-39999 XP = уровень 2
- * - 40000-89999 XP = уровень 3
- * - 90000-159999 XP = уровень 4
+ * Примеры (в ответах по 100 XP):
+ * - 0 XP = уровень 1
+ * - 100 XP = уровень 2    (1 ответ)
+ * - 460 XP = уровень 3    (5 ответов)
+ * - 2735 XP = уровень 5   (27 ответов)
+ * - 25764 XP = уровень 10 (258 ответов)
  */
 export function calculateLevel(xp: number): number {
-  return Math.floor(Math.sqrt(xp / 10000)) + 1;
+  if (xp < 100) return 1;
+  return Math.floor(Math.pow(xp / 100, 1 / 2.2)) + 1;
 }
 
 /**
  * Рассчитывает XP, необходимый для достижения определённого уровня.
  */
 export function xpForLevel(level: number): number {
-  return Math.pow(level - 1, 2) * 10000;
+  if (level <= 1) return 0;
+  return Math.round(100 * Math.pow(level - 1, 2.2));
 }
 
 /**

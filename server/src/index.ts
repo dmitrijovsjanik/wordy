@@ -10,7 +10,11 @@ import dictionaryRoutes from './routes/dictionary.js';
 import leagueRoutes from './routes/leagues.js';
 import friendRoutes from './routes/friends.js';
 import botRoutes, { setupBot } from './routes/bot.js';
+import { runStartupMigrations } from './db/startup-migrations.js';
 import './cron/league-cron.js';
+
+// Одноразовые миграции данных (выполняются до старта сервера)
+await runStartupMigrations();
 
 const isDev = process.env.NODE_ENV !== 'production';
 

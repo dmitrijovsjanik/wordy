@@ -15,7 +15,7 @@ export function Avatar({ src, fallback, size = 48, className, onClick }: AvatarP
     <div
       onClick={onClick}
       className={cn(
-        'flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--brand-9)]',
+        'flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--gray-3)]',
         onClick && 'cursor-pointer',
         className
       )}
@@ -29,7 +29,7 @@ export function Avatar({ src, fallback, size = 48, className, onClick }: AvatarP
         />
       ) : (
         <span
-          className="font-semibold text-white"
+          className="font-semibold text-[var(--gray-11)]"
           style={{ fontSize: size * 0.4 }}
         >
           {initials}

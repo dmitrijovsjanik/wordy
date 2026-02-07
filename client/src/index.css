@@ -108,6 +108,15 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
+  touch-action: pan-x pan-y;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Предотвращаем зум iOS при фокусе на input/select/textarea */
+@supports (-webkit-touch-callout: none) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
 }
 
 /* Safe area padding внутри h-dvh контейнера, чтобы не ломать высоту */

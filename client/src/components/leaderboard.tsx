@@ -11,6 +11,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { ArrowUp01Icon, ArrowDown01Icon, Clock01Icon } from '@hugeicons/core-free-icons';
 import { cn } from '@/lib/utils';
 import { LP_THRESHOLDS, PROTECTED_TIERS, formatLpBoundary } from '@/lib/league-config';
+import { Avatar } from '@/components/ui/avatar';
 import type { LeagueTier } from '@/types/api';
 
 function formatTimeLeft(endDate: Date): string {
@@ -284,9 +285,7 @@ function LeaderboardList({ leaderboard, tier }: { leaderboard: LeaderboardEntry[
                     )}
                   </div>
 
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--gray-3)] text-sm font-medium">
-                    {entry.firstName.charAt(0)}
-                  </div>
+                  <Avatar src={entry.avatarUrl} fallback={entry.firstName} size={40} />
 
                   <div className="flex flex-1 flex-col">
                     <span className="font-medium">{entry.firstName}</span>

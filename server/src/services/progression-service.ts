@@ -170,7 +170,7 @@ export async function rewardCorrectAnswer(
 export function getDuelWinRewardSql() {
   return {
     xp: sql`${users.xp} + ${XP_DUEL_WIN}`,
-    level: sql`floor(sqrt((${users.xp} + ${XP_DUEL_WIN}) / 10000)) + 1`,
+    level: sql`CASE WHEN ${users.xp} + ${XP_DUEL_WIN} < 100 THEN 1 ELSE floor(power((${users.xp} + ${XP_DUEL_WIN}) / 100.0, 1.0/2.2)) + 1 END`,
   };
 }
 
