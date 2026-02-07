@@ -34,6 +34,15 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    key: 'reset-season-to-zero',
+    description: 'Сброс номера текущего сезона на 0',
+    run: async () => {
+      await db.execute(sql`
+        UPDATE league_seasons SET week_number = 0 WHERE is_active = true
+      `);
+    },
+  },
 ];
 
 export async function runStartupMigrations(): Promise<void> {
