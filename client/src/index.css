@@ -217,8 +217,8 @@ h1, h2, h3, h4, h5, h6 {
   pointer-events: none;
   background: radial-gradient(
     ellipse 80% 120% at 50% 0%,
-    rgba(251, 146, 60, 0.2) 0%,
-    rgba(249, 115, 22, 0.08) 40%,
+    var(--orange-a5) 0%,
+    var(--orange-a3) 40%,
     transparent 100%
   );
   filter: blur(8px);
@@ -237,7 +237,7 @@ h1, h2, h3, h4, h5, h6 {
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: rgb(251, 146, 60);
+  background: var(--orange-9);
   opacity: 0;
   filter: blur(0.5px);
   animation: particle-rise 2s ease-out infinite, particle-wave 2s ease-in-out infinite;

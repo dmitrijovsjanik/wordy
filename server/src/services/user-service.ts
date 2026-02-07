@@ -1,7 +1,8 @@
-import { eq, and, gte, asc } from 'drizzle-orm';
+import { eq, and, gte, asc, isNotNull, count } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { users, quizSessions, duels, streakActivityDays } from '../db/schema.js';
+import { users, quizSessions, duels, streakActivityDays, userLeagueProgress, userSeasonStats, userWordProgress } from '../db/schema.js';
 import { STREAK_FREEZE_COST, MAX_STREAK_FREEZES } from '../config/gems-config.js';
+import { LEAGUE_TIERS } from '../config/league-config.js';
 
 export async function getProfile(userId: number) {
   const user = await db.query.users.findFirst({
@@ -44,15 +45,49 @@ export async function getStats(userId: number) {
 
   const user = await db.query.users.findFirst({
     where: eq(users.id, userId),
-    columns: { streakDays: true },
+    columns: { maxStreakDays: true, bestAnswerStreak: true },
   });
+
+  // Вычисляем максимальную лигу из текущего тира и истории сезонов
+  const currentProgress = await db.query.userLeagueProgress.findFirst({
+    where: eq(userLeagueProgress.userId, userId),
+    columns: { tier: true },
+  });
+
+  const seasonHistory = await db.query.userSeasonStats.findMany({
+    where: eq(userSeasonStats.userId, userId),
+    columns: { tierAtEnd: true },
+  });
+
+  let maxLeagueTier: string | null = currentProgress?.tier ?? null;
+  const currentIdx = maxLeagueTier ? LEAGUE_TIERS.indexOf(maxLeagueTier as typeof LEAGUE_TIERS[number]) : -1;
+  let maxIdx = currentIdx;
+
+  for (const season of seasonHistory) {
+    if (season.tierAtEnd) {
+      const idx = LEAGUE_TIERS.indexOf(season.tierAtEnd as typeof LEAGUE_TIERS[number]);
+      if (idx > maxIdx) {
+        maxIdx = idx;
+        maxLeagueTier = season.tierAtEnd;
+      }
+    }
+  }
+
+  // Кол-во выученных слов (masteredAt IS NOT NULL)
+  const [masteredRow] = await db
+    .select({ value: count() })
+    .from(userWordProgress)
+    .where(and(eq(userWordProgress.userId, userId), isNotNull(userWordProgress.masteredAt)));
 
   return {
     totalGames,
     totalCorrect,
     totalQuestions,
     correctPercent,
-    bestStreak: user?.streakDays ?? 0,
+    bestAnswerStreak: user?.bestAnswerStreak ?? 0,
+    maxStreakDays: user?.maxStreakDays ?? 0,
+    maxLeagueTier,
+    wordsLearned: masteredRow.value,
   };
 }
 

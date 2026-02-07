@@ -192,19 +192,17 @@ export function Home() {
 
   return (
     <div className="flex min-h-full flex-col px-4 pt-4 pb-4">
-      {/* Row 1: Avatar + name | freeze + gems + notifications */}
+      {/* Row 1: Avatar | Gems (center) | Notifications */}
       <div className="mb-2 flex items-center gap-3">
         <button onClick={() => navigate('/profile')} className="shrink-0">
           <Avatar src={user.avatarUrl} fallback={user.firstName} size={56} />
         </button>
-        <StreakDaysIndicator count={user.streakDays} onClick={() => setStreakSheetOpen(true)} />
-        <div className="flex-1" />
-        <div className="flex items-center gap-3">
+        <div className="flex flex-1 justify-center">
           <GemsIndicator gems={user.gems} freezes={user.streakFreezes} onClick={() => navigate('/shop')} />
-          <button className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--gray-3)]">
-            <HugeiconsIcon icon={Notification03Icon} size={24} className="text-[var(--gray-11)]" />
-          </button>
         </div>
+        <Button variant="secondary" size="icon">
+          <HugeiconsIcon icon={Notification03Icon} size={24} className="text-[var(--gray-11)]" />
+        </Button>
       </div>
 
       {/* Quiz Card */}
@@ -339,6 +337,7 @@ export function Home() {
                   <span className="relative text-xs font-bold text-[var(--gray-12)]">{user.level}</span>
                 </button>
 
+                <StreakDaysIndicator count={user.streakDays} onClick={() => setStreakSheetOpen(true)} />
               </div>
             </div>
 

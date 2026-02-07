@@ -117,7 +117,10 @@ export type UserStats = {
   totalCorrect: number;
   totalQuestions: number;
   correctPercent: number;
-  bestStreak: number;
+  bestAnswerStreak: number;
+  maxStreakDays: number;
+  maxLeagueTier: LeagueTier | null;
+  wordsLearned: number;
 };
 
 export type ApiError = {

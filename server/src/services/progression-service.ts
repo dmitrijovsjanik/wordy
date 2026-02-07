@@ -276,6 +276,7 @@ export async function updateStreakDays(userId: number): Promise<StreakUpdateResu
   // Обновляем пользователя
   const updateData: Record<string, unknown> = {
     streakDays: newStreakDays,
+    maxStreakDays: sql`GREATEST(${users.maxStreakDays}, ${newStreakDays})`,
     lastLoginDate: now,
     updatedAt: new Date(),
   };

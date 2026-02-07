@@ -49,7 +49,7 @@ export function StreakIndicator({
 
         <motion.div
           key={bounceKey}
-          className="relative z-10 flex h-8 items-center justify-center rounded-full border border-orange-500/20 bg-orange-950/80 px-3.5 shadow-[inset_0_0_10px_rgba(251,146,60,0.15),inset_0_1px_0_rgba(255,255,255,0.06)]"
+          className="relative z-10 flex h-8 items-center justify-center rounded-full border border-[var(--orange-6)] bg-[var(--orange-3)] px-3.5"
           initial={false}
           animate={bounceKey === 0 ? {} : {
             scaleX: [1, 1.15, 0.95, 1],
@@ -58,7 +58,7 @@ export function StreakIndicator({
           }}
           transition={{ duration: 0.35, ease: 'easeOut' }}
         >
-          <span className="whitespace-nowrap text-xs font-medium tracking-wide text-[var(--red-11)]">
+          <span className="whitespace-nowrap text-xs font-medium tracking-wide text-[var(--orange-11)]">
             {streak} подряд!
           </span>
         </motion.div>

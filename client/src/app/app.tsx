@@ -20,6 +20,7 @@ const Leaderboard = lazy(() => import('@/components/leaderboard'));
 const Modes = lazy(() => import('@/components/modes').then((m) => ({ default: m.Modes })));
 const Shop = lazy(() => import('@/components/shop').then((m) => ({ default: m.Shop })));
 const FriendsPage = lazy(() => import('@/components/friends').then((m) => ({ default: m.Friends })));
+const Settings = lazy(() => import('@/components/settings').then((m) => ({ default: m.Settings })));
 
 function DeepLinkHandler() {
   const navigate = useNavigate();
@@ -84,6 +85,7 @@ export function App() {
                 <Route path="/modes" element={<Modes />} />
                 <Route path="/shop" element={<Shop />} />
                 <Route path="/friends" element={<FriendsPage />} />
+                <Route path="/settings" element={<Settings />} />
               </Routes>
             </Suspense>
           </main>

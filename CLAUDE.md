@@ -109,6 +109,15 @@ wordy/
 
 ---
 
+## Database Migrations
+
+- При добавлении новых полей/таблиц используй `npm run db:push` (dev) или `npm run db:migrate` (prod)
+- В `drizzle.config.ts` настроен `tablesFilter: ['!_startup_migrations']` — таблица `_startup_migrations` создаётся программно в `server/src/db/startup-migrations.ts` и исключена из управления drizzle-kit, чтобы `db:push` не путал её с таблицами из schema
+- Если `db:push` зависает на интерактивном промпте — проверь, не появилась ли в БД новая таблица, не описанная в schema. Добавь её в `tablesFilter` или в schema
+- **Naming convention для unique constraints**: Drizzle генерирует имена вида `{table}_{column}_unique`, а PostgreSQL по умолчанию использует `{table}_{column}_key`. Если constraint создан вручную или через старую версию drizzle — переименуй его: `ALTER TABLE t RENAME CONSTRAINT old_name TO new_name`
+
+---
+
 ## Quick Commands
 
 ```bash

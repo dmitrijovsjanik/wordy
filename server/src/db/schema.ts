@@ -77,6 +77,8 @@ export const users = pgTable('users', {
   xp: integer('xp').default(0).notNull(),
   level: integer('level').default(1).notNull(),
   streakDays: integer('streak_days').default(0).notNull(),
+  maxStreakDays: integer('max_streak_days').default(0).notNull(),
+  bestAnswerStreak: integer('best_answer_streak').default(0).notNull(),
   streakFreezes: integer('streak_freezes').default(0).notNull(),
   gems: integer('gems').default(0).notNull(),
   nativeLanguage: varchar('native_language', { length: 10 }).default('ru').notNull(),

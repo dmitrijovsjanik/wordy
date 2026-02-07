@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button';
 type BackButtonProps = {
   to?: string;
   onClick?: () => void;
+  variant?: 'secondary' | 'ghost';
 };
 
-export function BackButton({ to, onClick }: BackButtonProps) {
+export function BackButton({ to, onClick, variant = 'secondary' }: BackButtonProps) {
   const navigate = useNavigate();
 
   const handleClick = () => {
@@ -22,7 +23,7 @@ export function BackButton({ to, onClick }: BackButtonProps) {
   };
 
   return (
-    <Button variant="secondary" size="icon" onClick={handleClick}>
+    <Button variant={variant} size="icon" onClick={handleClick}>
       <HugeiconsIcon strokeWidth={2} icon={ArrowLeft02Icon} size={20} />
     </Button>
   );

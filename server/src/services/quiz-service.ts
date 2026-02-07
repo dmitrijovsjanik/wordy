@@ -552,7 +552,7 @@ export async function recordInfiniteAnswer(
       }
     }
 
-    // Сохраняем дневные счётчики
+    // Сохраняем дневные счётчики и обновляем рекорд стрика ответов
     await db
       .update(users)
       .set({
@@ -560,6 +560,7 @@ export async function recordInfiniteAnswer(
         dailyCorrectDate: todayStart,
         dailyStreakMilestonesDone: [...streakMilestonesDone].join(','),
         dailyCorrectMilestonesDone: [...correctMilestonesDone].join(','),
+        bestAnswerStreak: sql`GREATEST(${users.bestAnswerStreak}, ${newStreak})`,
         updatedAt: new Date(),
       })
       .where(eq(users.id, userId));
