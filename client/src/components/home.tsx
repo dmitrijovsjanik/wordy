@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useUserStore } from '@/stores/user-store';
 import { useHomeStore } from '@/stores/home-store';
 import { useLeagueStore } from '@/stores/league-store';
+import { useCollectionStore } from '@/stores/collection-store';
 import { useTelegram } from '@/hooks/use-telegram';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { WelcomeDrawer } from '@/components/ui/welcome-drawer';
 import { LEAGUE_ICONS } from '@/components/ui/league-icons';
 
 // Новые модульные компоненты
@@ -83,6 +85,17 @@ export function Home() {
 
   // Streak info sheet
   const [streakSheetOpen, setStreakSheetOpen] = useState(false);
+
+  // Welcome drawer — show once when user has no system collections
+  const WELCOME_KEY = 'wordy:welcomeShown';
+  const library = useCollectionStore((s) => s.library);
+  const isLoadingLibrary = useCollectionStore((s) => s.isLoadingLibrary);
+  const fetchLibrary = useCollectionStore((s) => s.fetchLibrary);
+  const [welcomeDismissed, setWelcomeDismissed] = useState(() => localStorage.getItem(WELCOME_KEY) === '1');
+  const hasSystemCollection = library.some((c) => c.type === 'system');
+  const showWelcome = !isLoadingLibrary && !hasSystemCollection && !welcomeDismissed;
+
+  useEffect(() => { fetchLibrary(); }, [fetchLibrary]);
 
   // Streak particles state
   const [particleBurst, setParticleBurst] = useState(false);
@@ -355,6 +368,12 @@ export function Home() {
         onOpenChange={setStreakSheetOpen}
         streakDays={user.streakDays}
         createdAt={user.createdAt}
+      />
+
+      <WelcomeDrawer
+        open={showWelcome}
+        onOpenChange={(open) => { if (!open) { localStorage.setItem(WELCOME_KEY, '1'); setWelcomeDismissed(true); } }}
+        onCollectionAdded={() => { fetchNext(); }}
       />
     </div>
   );

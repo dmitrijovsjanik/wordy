@@ -284,13 +284,34 @@ export function Collections() {
               </div>
             )}
 
-            {library.length === 0 && (
-              <p className="mt-4 text-center text-sm text-[var(--gray-11)]">
-                Добавьте коллекцию из каталога!
-              </p>
+            {/* Пользовательские коллекции — выше каталожных */}
+            {library.filter((c) => c.type !== 'system').map((col) => (
+              <CollectionCard
+                key={col.id}
+                col={col}
+                variant="library"
+                onClick={() => navigate(`/collections/${col.id}`)}
+              />
+            ))}
+
+            {/* Баннер: нет коллекций из каталога */}
+            {!library.some((c) => c.type === 'system') && (
+              <div className="flex flex-col items-center gap-3 rounded-xl p-5">
+                <p className="text-center text-sm text-[var(--gray-12)]">
+                  Добавьте коллекцию из каталога для более эффективного обучения
+                </p>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setActiveTab('marketplace')}
+                >
+                  Открыть каталог
+                </Button>
+              </div>
             )}
 
-            {library.map((col) => (
+            {/* Каталожные коллекции */}
+            {library.filter((c) => c.type === 'system').map((col) => (
               <CollectionCard
                 key={col.id}
                 col={col}
