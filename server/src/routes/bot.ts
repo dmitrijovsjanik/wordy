@@ -110,6 +110,7 @@ Email: wordylang@mail.ru`;
 const START_KEYBOARD: InlineKeyboardButton[][] = [
   [{ text: '🚀 Открыть Wordy', web_app: { url: WEB_APP_URL } }],
   [{ text: '🛒 Каталог товаров', callback_data: 'catalog' }],
+  [{ text: '👤 Моя подписка', callback_data: 'my_subscription' }],
   [
     { text: '📄 Оферта', callback_data: 'offer' },
     { text: '📞 Контакты', callback_data: 'contacts' },
@@ -183,6 +184,79 @@ async function editScreen(chatId: number, messageId: number, text: string, keybo
   });
 }
 
+// ─── Подписка ────────────────────────────────────────────────────────────────
+
+async function sendSubscriptionScreen(chatId: number, messageId?: number) {
+  const user = await db.query.users.findFirst({
+    where: eq(users.telegramId, BigInt(chatId)),
+    columns: { premiumUntil: true, premiumPlan: true, autoRenew: true, savedPaymentMethodId: true },
+  });
+
+  // Из текстовой команды (нет messageId) — "Закрыть" (удалит сообщение).
+  // Из inline-навигации (есть messageId) — "Назад" (отредактирует обратно в меню).
+  const backRow: InlineKeyboardButton[] = messageId
+    ? [{ text: '⬅️ Назад', callback_data: 'start' }]
+    : [{ text: '✖️ Закрыть', callback_data: 'close' }];
+
+  if (!user) {
+    const text = '👤 *Моя подписка*\n\nВы ещё не зарегистрированы. Откройте Wordy и начните играть!';
+    const keyboard: InlineKeyboardButton[][] = [
+      [{ text: '🚀 Открыть Wordy', web_app: { url: WEB_APP_URL } }],
+      backRow,
+    ];
+    if (messageId) {
+      await editScreen(chatId, messageId, text, keyboard);
+    } else {
+      await sendScreen(chatId, text, keyboard);
+    }
+    return;
+  }
+
+  const isPremium = !!user.premiumUntil && user.premiumUntil > new Date();
+
+  if (!isPremium) {
+    const text = '👤 *Моя подписка*\n\nУ вас нет активной подписки Premium.\n\nОформите подписку в каталоге, чтобы получить безлимит коллекций, x2 награды, +15% XP и заморозку стрика каждую неделю.';
+    const keyboard: InlineKeyboardButton[][] = [
+      [{ text: '⭐ Оформить Premium', callback_data: 'product_premium' }],
+      backRow,
+    ];
+    if (messageId) {
+      await editScreen(chatId, messageId, text, keyboard);
+    } else {
+      await sendScreen(chatId, text, keyboard);
+    }
+    return;
+  }
+
+  const planLabel = user.premiumPlan === 'year' ? 'годовая' : 'месячная';
+  const until = user.premiumUntil!.toLocaleDateString('ru-RU');
+  const autoRenewLabel = user.autoRenew ? '✅ включено' : '❌ отключено';
+  const cardLabel = user.savedPaymentMethodId ? '✅ привязана' : '❌ не привязана';
+
+  const text = `👤 *Моя подписка*
+
+⭐ *Wordy Premium* (${planLabel})
+📅 Действует до: ${until}
+🔄 Автопродление: ${autoRenewLabel}
+💳 Карта: ${cardLabel}`;
+
+  const keyboard: InlineKeyboardButton[][] = [];
+
+  if (user.autoRenew) {
+    keyboard.push([{ text: '🔄 Отключить автопродление', callback_data: 'sub_cancel_renew' }]);
+  }
+  if (user.savedPaymentMethodId) {
+    keyboard.push([{ text: '💳 Отвязать карту', callback_data: 'sub_unlink_card' }]);
+  }
+  keyboard.push(backRow);
+
+  if (messageId) {
+    await editScreen(chatId, messageId, text, keyboard);
+  } else {
+    await sendScreen(chatId, text, keyboard);
+  }
+}
+
 // ─── Настройка бота ──────────────────────────────────────────────────────────
 
 export async function setupBot() {
@@ -210,6 +284,7 @@ export async function setupBot() {
     commands: [
       { command: 'start', description: 'Начать' },
       { command: 'catalog', description: 'Каталог товаров' },
+      { command: 'subscription', description: 'Моя подписка' },
       { command: 'offer', description: 'Условия использования' },
       { command: 'contacts', description: 'Контакты' },
     ],
@@ -225,6 +300,9 @@ export default async function botRoutes(app: FastifyInstance) {
     const { message, callback_query } = request.body;
 
     // Текстовые команды
+    // NB: текстовые команды создают НОВОЕ сообщение (sendScreen).
+    // Чтобы избежать размножения меню, используем "Закрыть" (удаляет сообщение)
+    // вместо "Назад → start" (который бы превратил его в ещё одно меню).
     if (message?.text) {
       const chatId = message.chat.id;
       const command = message.text.split('@')[0]; // strip @botname
@@ -233,11 +311,22 @@ export default async function botRoutes(app: FastifyInstance) {
         const name = message.from?.first_name ?? '';
         await sendScreen(chatId, startText(name), START_KEYBOARD);
       } else if (command === '/catalog') {
-        await sendScreen(chatId, CATALOG_TEXT, CATALOG_KEYBOARD);
+        await sendScreen(chatId, CATALOG_TEXT, [
+          [{ text: '⭐ Подписка Premium', callback_data: 'product_premium' }],
+          [{ text: '❄️ Заморозка стрика', callback_data: 'product_freezes' }],
+          [{ text: '✖️ Закрыть', callback_data: 'close' }],
+        ]);
       } else if (command === '/offer') {
-        await sendScreen(chatId, OFFER_TEXT, OFFER_BACK_KEYBOARD);
+        await sendScreen(chatId, OFFER_TEXT, [
+          [{ text: '✖️ Закрыть', callback_data: 'close' }],
+        ]);
       } else if (command === '/contacts') {
-        await sendScreen(chatId, CONTACTS_TEXT, CONTACTS_KEYBOARD);
+        await sendScreen(chatId, CONTACTS_TEXT, [
+          [{ text: '✉️ Написать на email', url: 'mailto:wordylang@mail.ru' }],
+          [{ text: '✖️ Закрыть', callback_data: 'close' }],
+        ]);
+      } else if (command === '/subscription') {
+        await sendSubscriptionScreen(chatId);
       }
     }
 
@@ -308,10 +397,44 @@ export default async function botRoutes(app: FastifyInstance) {
         return reply.status(200).send({ ok: true });
       }
 
+      // Закрыть — удалить сообщение (для текстовых команд, чтобы не дублировать меню)
+      if (data === 'close') {
+        await callTelegramApi('answerCallbackQuery', { callback_query_id: callback_query.id });
+        await callTelegramApi('deleteMessage', { chat_id: chatId, message_id: messageId });
+        return reply.status(200).send({ ok: true });
+      }
+
       // Отмена платежа — удалить сообщение со ссылкой
       if (data === 'cancel_payment') {
         await callTelegramApi('answerCallbackQuery', { callback_query_id: callback_query.id });
         await callTelegramApi('deleteMessage', { chat_id: chatId, message_id: messageId });
+        return reply.status(200).send({ ok: true });
+      }
+
+      // Управление подпиской
+      if (data === 'sub_cancel_renew') {
+        await callTelegramApi('answerCallbackQuery', {
+          callback_query_id: callback_query.id,
+          text: 'Автопродление отключено',
+        });
+        await db
+          .update(users)
+          .set({ autoRenew: false })
+          .where(eq(users.telegramId, BigInt(chatId)));
+        await sendSubscriptionScreen(chatId, messageId);
+        return reply.status(200).send({ ok: true });
+      }
+
+      if (data === 'sub_unlink_card') {
+        await callTelegramApi('answerCallbackQuery', {
+          callback_query_id: callback_query.id,
+          text: 'Карта отвязана',
+        });
+        await db
+          .update(users)
+          .set({ savedPaymentMethodId: null, autoRenew: false })
+          .where(eq(users.telegramId, BigInt(chatId)));
+        await sendSubscriptionScreen(chatId, messageId);
         return reply.status(200).send({ ok: true });
       }
 
@@ -327,10 +450,11 @@ export default async function botRoutes(app: FastifyInstance) {
       } else if (data === 'product_freezes') {
         await editScreen(chatId, messageId, FREEZES_TEXT, FREEZES_KEYBOARD);
       } else if (data === 'offer') {
-        // Оферта длинная — отправляем новым сообщением вместо editMessage
-        await sendScreen(chatId, OFFER_TEXT, OFFER_BACK_KEYBOARD);
+        await editScreen(chatId, messageId, OFFER_TEXT, OFFER_BACK_KEYBOARD);
       } else if (data === 'contacts') {
         await editScreen(chatId, messageId, CONTACTS_TEXT, CONTACTS_KEYBOARD);
+      } else if (data === 'my_subscription') {
+        await sendSubscriptionScreen(chatId, messageId);
       }
     }
 
