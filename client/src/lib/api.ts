@@ -16,6 +16,7 @@ import type {
   AllWordsResponse,
   QuizQuestion,
   InfiniteAnswerResponse,
+  MatchPairsAnswerResponse,
   DictionaryLookupResult,
   LeagueStatusResponse,
   LeaderboardEntry,
@@ -250,8 +251,8 @@ export function quizNext(
   if (collectionId) params.set('collectionId', String(collectionId));
 
   // Определяем параметры генерации
-  if (generatorMode === 'spelling') {
-    params.set('type', 'spelling');
+  if (generatorMode === 'spelling' || generatorMode === 'match-pairs') {
+    params.set('type', generatorMode);
   } else if (generatorMode && generatorMode !== 'auto') {
     // en-ru или ru-en — устанавливаем направление
     params.set('lang', generatorMode);
@@ -270,6 +271,13 @@ export function quizAnswerInfinite(meaningId: number, selectedMeaningId: number 
   return fetchApi<InfiniteAnswerResponse>('POST', '/api/quiz/answer-infinite', {
     meaningId,
     selectedMeaningId,
+    streak,
+  });
+}
+
+export function quizAnswerMatchPairs(results: Array<{ meaningId: number; isCorrect: boolean }>, streak: number) {
+  return fetchApi<MatchPairsAnswerResponse>('POST', '/api/quiz/answer-match-pairs', {
+    results,
     streak,
   });
 }

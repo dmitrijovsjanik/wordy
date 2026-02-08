@@ -26,7 +26,7 @@ export type AuthResponse = {
   };
 };
 
-export type QuizQuestion = {
+export type QuizQuestionBase = {
   type?: 'multiple-choice' | 'spelling'; // Тип вопроса (по умолчанию multiple-choice для совместимости)
   meaningId: number;
   word: string;
@@ -37,6 +37,13 @@ export type QuizQuestion = {
   options: string[];
   direction: string;
 };
+
+export type MatchPairsApiQuestion = {
+  type: 'match-pairs';
+  pairs: Array<{ meaningId: number; word: string; translation: string }>;
+};
+
+export type QuizQuestion = QuizQuestionBase | MatchPairsApiQuestion;
 
 export type QuizStartResponse = {
   sessionId: number;
@@ -249,6 +256,20 @@ export type InfiniteAnswerResponse = {
   totalLp?: number;
   gemsEarned?: number; // гемы за стрик ответов / level-up
   dailyCorrectCount?: number; // правильных ответов за день
+};
+
+export type MatchPairsAnswerResponse = {
+  correctCount: number;
+  totalCount: number;
+  totalXpEarned: number;
+  xpModifier?: number;
+  totalLpEarned: number;
+  lpModifier?: number;
+  totalXp?: number;
+  totalLp?: number;
+  level?: number;
+  levelUp?: number;
+  gemsEarned?: number;
 };
 
 // ─── Leagues ─────────────────────────────────────────────────────────────────

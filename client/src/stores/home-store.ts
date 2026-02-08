@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { QuizQuestion, InfiniteAnswerResponse } from '@/types/api';
-import { quizNext, quizAnswerInfinite, ERRORS_COLLECTION_ID } from '@/lib/api';
+import type { QuizQuestion, InfiniteAnswerResponse, MatchPairsAnswerResponse } from '@/types/api';
+import { quizNext, quizAnswerInfinite, quizAnswerMatchPairs, ERRORS_COLLECTION_ID } from '@/lib/api';
 import { useLeagueStore } from './league-store';
 
 const MAX_RECENT = 20;
@@ -39,10 +39,12 @@ export type QuestionGeneratorMode =
   | 'auto'          // Случайное направление, multiple-choice
   | 'en-ru'         // EN → RU, multiple-choice
   | 'ru-en'         // RU → EN, multiple-choice
-  | 'spelling';     // Spelling (всегда ru-en)
+  | 'spelling'      // Spelling (всегда ru-en)
+  | 'match-pairs';  // Соединение пар
 
 /** Определяет тип генератора из ответа сервера */
 function getGeneratorTypeFromQuestion(question: QuizQuestion): string {
+  if (question.type === 'match-pairs') return 'match-pairs';
   if (question.type === 'spelling') return 'spelling';
   return question.direction; // 'en-ru' или 'ru-en'
 }
@@ -62,6 +64,7 @@ type HomeState = {
   setGeneratorMode: (mode: QuestionGeneratorMode) => void;
   fetchNext: () => Promise<void>;
   submitAnswer: (selectedMeaningId: number | null) => Promise<void>;
+  submitMatchPairsResults: (results: Array<{ meaningId: number; isCorrect: boolean }>) => Promise<void>;
   skip: () => Promise<void>;
   reset: () => void;
 };
@@ -105,7 +108,7 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
 
   submitAnswer: async (selectedMeaningId) => {
     const { currentQuestion, recentMeaningIds } = get();
-    if (!currentQuestion) return;
+    if (!currentQuestion || currentQuestion.type === 'match-pairs') return;
 
     set({ isLoading: true });
     try {
@@ -128,6 +131,55 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
       });
 
       // Автопереход к следующему вопросу
+      setTimeout(() => {
+        set({ feedback: null });
+        get().fetchNext();
+      }, 1200);
+    } catch {
+      set({ isLoading: false, error: 'Ошибка при отправке ответа' });
+    }
+  },
+
+  submitMatchPairsResults: async (results) => {
+    const { currentQuestion, recentMeaningIds } = get();
+    if (!currentQuestion || currentQuestion.type !== 'match-pairs') return;
+
+    set({ isLoading: true });
+    try {
+      const res = await quizAnswerMatchPairs(results, get().streak);
+
+      const newMeaningIds = currentQuestion.pairs.map((p) => p.meaningId);
+      const updatedRecent = [...recentMeaningIds, ...newMeaningIds].slice(-MAX_RECENT);
+
+      const allCorrect = results.every((r) => r.isCorrect);
+      const correctCount = results.filter((r) => r.isCorrect).length;
+      const newStreak = allCorrect ? get().streak + correctCount : 0;
+      saveStreak(newStreak);
+
+      if (res.totalLp !== undefined) {
+        useLeagueStore.getState().updateLp(res.totalLp);
+      }
+
+      set({
+        feedback: {
+          isCorrect: allCorrect,
+          correctTranslation: '',
+          xpEarned: res.totalXpEarned,
+          xpModifier: res.xpModifier,
+          lpEarned: res.totalLpEarned,
+          lpModifier: res.lpModifier,
+          totalXp: res.totalXp,
+          totalLp: res.totalLp,
+          level: res.level,
+          levelUp: res.levelUp,
+          gemsEarned: res.gemsEarned,
+          meaningId: currentQuestion.pairs[0]?.meaningId ?? 0,
+        },
+        recentMeaningIds: updatedRecent,
+        isLoading: false,
+        streak: newStreak,
+      });
+
       setTimeout(() => {
         set({ feedback: null });
         get().fetchNext();

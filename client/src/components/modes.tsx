@@ -9,6 +9,7 @@ const GENERATOR_MODES: { value: QuestionGeneratorMode; title: string; descriptio
   { value: 'en-ru', title: 'EN → RU', description: 'Слово на английском — выбери перевод' },
   { value: 'ru-en', title: 'RU → EN', description: 'Слово на русском — выбери английский' },
   { value: 'spelling', title: 'Spelling', description: 'Выбери правильное написание слова' },
+  { value: 'match-pairs', title: 'Пары', description: 'Соедините слово с переводом' },
 ];
 
 export function Modes() {

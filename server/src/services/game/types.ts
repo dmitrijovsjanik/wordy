@@ -82,7 +82,13 @@ export function reversePair(pair: LanguagePair): LanguagePair {
 
 // ─── Generator Rotation ────────────────────────────────────────────────────
 
-export type GeneratorType = 'en-ru' | 'ru-en' | 'spelling';
+export type GeneratorType = 'en-ru' | 'ru-en' | 'spelling' | 'match-pairs';
+
+// Match-pairs question (соединение пар)
+export type MatchPairsQuestion = {
+  type: 'match-pairs';
+  pairs: Array<{ meaningId: number; word: string; translation: string }>;
+};
 
 const ROTATION_LOOKBACK = 5;
 const MAX_CONSECUTIVE = 3;

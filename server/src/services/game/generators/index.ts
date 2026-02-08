@@ -9,6 +9,7 @@ export {
   generateTypoVariantsWithMeta,
 } from './typo-generators/index.js';
 
+export * from './match-pairs.js';
+
 // Future generators:
 // export * from './text-input.js';
-// export * from './match-pairs.js';

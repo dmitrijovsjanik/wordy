@@ -11,7 +11,8 @@ export type QuestionGeneratorMode =
   | 'auto'          // Случайное направление, multiple-choice
   | 'en-ru'         // EN → RU, multiple-choice
   | 'ru-en'         // RU → EN, multiple-choice
-  | 'spelling';     // Spelling (всегда ru-en)
+  | 'spelling'      // Spelling (всегда ru-en)
+  | 'match-pairs';  // Соединение пар
 
 type DirectionSelectProps = {
   value: QuestionGeneratorMode;
@@ -23,6 +24,7 @@ const GENERATOR_OPTIONS: { value: QuestionGeneratorMode; label: string }[] = [
   { value: 'en-ru', label: 'EN → RU' },
   { value: 'ru-en', label: 'RU → EN' },
   { value: 'spelling', label: 'Spelling' },
+  { value: 'match-pairs', label: 'Пары' },
 ];
 
 export function DirectionSelect({ value, onChange }: DirectionSelectProps) {

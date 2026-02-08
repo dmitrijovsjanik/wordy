@@ -65,11 +65,11 @@ export function Spelling({
           disabled={showResult || disabled}
           onClick={onSkip}
           className={cn(
-            'mt-4',
+            'mt-4 w-full',
             (showResult || disabled) && 'opacity-40',
           )}
         >
-          Не знаю
+          Пропустить
         </Button>
       )}
     </>

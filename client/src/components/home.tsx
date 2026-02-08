@@ -17,6 +17,7 @@ import { Spelling } from '@/components/game/question-types/spelling';
 import { RewardFeedback } from '@/components/game/reward-feedback';
 import { StreakIndicator } from '@/components/game/streak-indicator';
 import { QuizContainer } from '@/components/game/quiz-container';
+import { MatchPairs } from '@/components/game/question-types/match-pairs';
 import { StreakDaysIndicator } from '@/components/ui/streak-days-indicator';
 import { StreakInfoSheet } from '@/components/ui/streak-info-sheet';
 import { GemsIndicator } from '@/components/ui/gems-indicator';
@@ -40,6 +41,7 @@ export function Home() {
     streak,
     fetchNext,
     submitAnswer,
+    submitMatchPairsResults,
     skip,
   } = useHomeStore();
 
@@ -107,16 +109,19 @@ export function Home() {
     }
   }, []);
 
-  // Сброс выбора при новом вопросе
+  // Сброс выбора и награды при новом вопросе
   useEffect(() => {
     if (currentQuestion) {
       setSelectedOption(null);
+      setRewardDisplay(null);
     }
   }, [currentQuestion]);
 
   // Запоминаем ID первого вопроса
   if (currentQuestion && firstMeaningIdRef.current === null) {
-    firstMeaningIdRef.current = currentQuestion.meaningId;
+    firstMeaningIdRef.current = currentQuestion.type === 'match-pairs'
+      ? currentQuestion.pairs[0]?.meaningId ?? null
+      : currentQuestion.meaningId;
   }
 
   // Хаптик при фидбеке
@@ -173,7 +178,7 @@ export function Home() {
   }, [feedback]);
 
   const handleAnswer = useCallback((option: string) => {
-    if (feedback || isLoading || !currentQuestion) return;
+    if (feedback || isLoading || !currentQuestion || currentQuestion.type === 'match-pairs') return;
     hapticImpact('light');
     setSelectedOption(option);
 
@@ -193,6 +198,18 @@ export function Home() {
     skip();
   }, [feedback, isLoading, currentQuestion, hapticImpact, skip]);
 
+  const handleMatchPairsComplete = useCallback((results: Array<{ meaningId: number; isCorrect: boolean }>) => {
+    submitMatchPairsResults(results);
+  }, [submitMatchPairsResults]);
+
+  const handleMatchPairsSkip = useCallback(() => {
+    if (isLoading || !currentQuestion || currentQuestion.type !== 'match-pairs') return;
+    hapticImpact('light');
+    // Все пары считаются неправильными
+    const results = currentQuestion.pairs.map((p) => ({ meaningId: p.meaningId, isCorrect: false }));
+    submitMatchPairsResults(results);
+  }, [isLoading, currentQuestion, hapticImpact, submitMatchPairsResults]);
+
   // Преобразуем feedback в AnswerFeedback для компонента
   const answerFeedback: AnswerFeedback | null = feedback ? {
     isCorrect: feedback.isCorrect,
@@ -204,7 +221,7 @@ export function Home() {
   if (!user) return null;
 
   return (
-    <div className="flex min-h-full flex-col px-4 pt-4 pb-4">
+    <div className="flex h-full flex-col overflow-hidden px-4 pt-4 pb-4">
       {/* Row 1: Avatar | Gems (center) | Notifications */}
       <div className="mb-2 flex items-center gap-3">
         <button onClick={() => navigate('/profile')} className="shrink-0">
@@ -219,7 +236,7 @@ export function Home() {
       </div>
 
       {/* Quiz Card */}
-      <div className="mt-2 flex flex-1 flex-col">
+      <div className="mt-2 flex min-h-0 flex-1 flex-col">
         {/* Loading state */}
         {!currentQuestion && !feedback && isLoading && (
           <div className="flex flex-1 flex-col items-center justify-center">
@@ -257,64 +274,22 @@ export function Home() {
 
         {/* Question */}
         {currentQuestion && (
-          <div className="relative flex flex-1 flex-col">
-            <QuizContainer questionKey={currentQuestion.meaningId}>
-              <div className="flex flex-1 flex-col items-center justify-center">
-                {/* Word display */}
-                <WordDisplay
-                  word={currentQuestion.word}
-                  originalForm={currentQuestion.originalForm}
-                  transcription={currentQuestion.transcription}
-                  meaningId={currentQuestion.meaningId}
-                  skipInitialAnimation={currentQuestion.meaningId === firstMeaningIdRef.current}
-                  showSpeaker={currentQuestion.direction === 'en-ru'}
+          <div className="flex min-h-0 flex-1 flex-col">
+            {/* Streak + Status bar — outside QuizContainer so they don't fade */}
+            <div className="shrink-0 flex flex-col items-center">
+              <div className="pointer-events-none">
+                <StreakIndicator
+                  streak={streak}
+                  bounceKey={streakBounceKey}
+                  particleBurst={particleBurst}
+                  particleFading={particleFading}
+                  skipInitialAnimation={initialStreakRef.current >= 3}
                 />
               </div>
 
-              {/* Question type component */}
-              {currentQuestion.type === 'spelling' ? (
-                <Spelling
-                  options={currentQuestion.options}
-                  questionKey={currentQuestion.meaningId}
-                  selectedAnswer={selectedOption}
-                  feedback={answerFeedback}
-                  disabled={isLoading}
-                  onAnswer={handleAnswer}
-                  onSkip={handleSkip}
-                  showSkip
-                />
-              ) : (
-                <MultipleChoice
-                  options={currentQuestion.options}
-                  questionKey={currentQuestion.meaningId}
-                  selectedAnswer={selectedOption}
-                  feedback={answerFeedback}
-                  disabled={isLoading}
-                  onAnswer={handleAnswer}
-                  onSkip={handleSkip}
-                  showSkip
-                />
-              )}
-            </QuizContainer>
-
-            {/* Streak indicator — вне QuizContainer, над статус-баром */}
-            <div className="pointer-events-none absolute inset-x-0 top-[5%] flex justify-center">
-              <StreakIndicator
-                streak={streak}
-                bounceKey={streakBounceKey}
-                particleBurst={particleBurst}
-                particleFading={particleFading}
-                skipInitialAnimation={initialStreakRef.current >= 3}
-              />
-            </div>
-
-            {/* Status bar: league + level + streak — по центру */}
-            <div className="absolute inset-x-0 top-[15%] flex justify-center">
-              <div className="flex items-center gap-1.5">
+              <div className="mt-2 flex items-center gap-1.5">
                 {!isLeagueLoading && progress ? (
-                  <div
-                    className="flex h-8 items-center gap-1 rounded-full bg-[var(--gray-3)] pl-1 pr-2.5"
-                  >
+                  <div className="flex h-8 items-center gap-1 rounded-full bg-[var(--gray-3)] pl-1 pr-2.5">
                     {(() => {
                       const Icon = LEAGUE_ICONS[progress.tier];
                       return <Icon size={24} className="shrink-0" />;
@@ -329,36 +304,83 @@ export function Home() {
                 ) : (
                   <Skeleton className="h-8 w-24 rounded-full" />
                 )}
-
-                {/* Level badge with progress ring */}
                 <button className="relative flex items-center justify-center shrink-0" style={{ width: lvlRingSize, height: lvlRingSize }}>
                   <svg width={lvlRingSize} height={lvlRingSize} className="absolute inset-0 -rotate-90">
-                    <circle
-                      cx={lvlRingSize / 2} cy={lvlRingSize / 2} r={lvlRadius}
-                      fill="var(--gray-3)" stroke="var(--gray-5)" strokeWidth={lvlStroke}
-                    />
-                    <circle
-                      cx={lvlRingSize / 2} cy={lvlRingSize / 2} r={lvlRadius}
-                      fill="none" stroke="var(--brand-9)" strokeWidth={lvlStroke}
-                      strokeLinecap="round"
-                      strokeDasharray={lvlCircumference}
-                      strokeDashoffset={lvlDashoffset}
-                      className="transition-all duration-500"
-                    />
+                    <circle cx={lvlRingSize / 2} cy={lvlRingSize / 2} r={lvlRadius} fill="var(--gray-3)" stroke="var(--gray-5)" strokeWidth={lvlStroke} />
+                    <circle cx={lvlRingSize / 2} cy={lvlRingSize / 2} r={lvlRadius} fill="none" stroke="var(--brand-9)" strokeWidth={lvlStroke} strokeLinecap="round" strokeDasharray={lvlCircumference} strokeDashoffset={lvlDashoffset} className="transition-all duration-500" />
                   </svg>
                   <span className="relative text-xs font-bold text-[var(--gray-12)]">{user.level}</span>
                 </button>
-
                 <StreakDaysIndicator count={user.streakDays} onClick={() => setStreakSheetOpen(true)} />
               </div>
             </div>
 
-            {/* Reward feedback — вне QuizContainer, между словом и кнопками */}
-            {rewardDisplay && (
-              <div className="pointer-events-none absolute inset-x-0 top-[50%] flex justify-center">
-                <RewardFeedback reward={rewardDisplay} />
+            <QuizContainer questionKey={currentQuestion.type === 'match-pairs' ? currentQuestion.pairs[0]?.meaningId ?? 0 : currentQuestion.meaningId}>
+              {/* Word / Title area */}
+              {currentQuestion.type === 'match-pairs' ? (
+                <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
+                  <h2 className="mt-3 mb-1 text-xl font-bold text-[var(--gray-12)]">Соедините пары</h2>
+                  <p className="text-sm text-[var(--gray-11)]">Нажмите на слово, затем на его перевод</p>
+                </div>
+              ) : (
+                <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center">
+                  {/* Word display */}
+                  <div className="mt-3">
+                    <WordDisplay
+                      word={currentQuestion.word}
+                      originalForm={currentQuestion.originalForm}
+                      transcription={currentQuestion.transcription}
+                      meaningId={currentQuestion.meaningId}
+                      skipInitialAnimation={currentQuestion.meaningId === firstMeaningIdRef.current}
+                      showSpeaker={currentQuestion.direction === 'en-ru'}
+                    />
+                  </div>
+
+                  {/* Reward feedback */}
+                  {rewardDisplay && (
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
+                      <RewardFeedback reward={rewardDisplay} />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Answer buttons */}
+              <div className="shrink-0">
+                {currentQuestion.type === 'match-pairs' ? (
+                  <MatchPairs
+                    pairs={currentQuestion.pairs}
+                    questionKey={currentQuestion.pairs.map((p) => p.meaningId).join('-')}
+                    disabled={isLoading}
+                    onComplete={handleMatchPairsComplete}
+                    onSkip={handleMatchPairsSkip}
+                    showSkip
+                  />
+                ) : currentQuestion.type === 'spelling' ? (
+                  <Spelling
+                    options={currentQuestion.options}
+                    questionKey={currentQuestion.meaningId}
+                    selectedAnswer={selectedOption}
+                    feedback={answerFeedback}
+                    disabled={isLoading}
+                    onAnswer={handleAnswer}
+                    onSkip={handleSkip}
+                    showSkip
+                  />
+                ) : (
+                  <MultipleChoice
+                    options={currentQuestion.options}
+                    questionKey={currentQuestion.meaningId}
+                    selectedAnswer={selectedOption}
+                    feedback={answerFeedback}
+                    disabled={isLoading}
+                    onAnswer={handleAnswer}
+                    onSkip={handleSkip}
+                    showSkip
+                  />
+                )}
               </div>
-            )}
+            </QuizContainer>
           </div>
         )}
       </div>

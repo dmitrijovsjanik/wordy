@@ -7,11 +7,12 @@ import {
   getAnsweredMeaningIds,
   generateQuestionFromPool,
   recordInfiniteAnswer,
+  recordMatchPairsAnswer,
 } from '../services/quiz-service.js';
 import type { LanguagePair, GeneratorType } from '../services/game/types.js';
 import { ERRORS_COLLECTION_ID } from '../config/errors-config.js';
 
-const VALID_GENERATORS = new Set<string>(['en-ru', 'ru-en', 'spelling']);
+const VALID_GENERATORS = new Set<string>(['en-ru', 'ru-en', 'spelling', 'match-pairs']);
 
 export default async function quizRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
@@ -80,7 +81,7 @@ export default async function quizRoutes(app: FastifyInstance) {
       lang,
       collectionId,
       fixedDirection,
-      questionType as 'spelling' | undefined,
+      questionType as 'spelling' | 'match-pairs' | undefined,
       recentGenerators,
     );
     return { question };
@@ -94,6 +95,20 @@ export default async function quizRoutes(app: FastifyInstance) {
       request.user.id,
       meaningId,
       selectedMeaningId,
+      streak,
+    );
+    return result;
+  });
+
+  // ─── Match-Pairs Answer ─────────────────────────────────────────────────
+
+  app.post<{
+    Body: { results: Array<{ meaningId: number; isCorrect: boolean }>; streak?: number };
+  }>('/api/quiz/answer-match-pairs', async (request) => {
+    const { results, streak = 0 } = request.body;
+    const result = await recordMatchPairsAnswer(
+      request.user.id,
+      results,
       streak,
     );
     return result;

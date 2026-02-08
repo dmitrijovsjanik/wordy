@@ -23,7 +23,8 @@ import {
   generateSpellingFromCustomWord,
   canGenerateSpelling,
 } from './game/generators/spelling.js';
-import type { PooledMeaning, LegacyQuestion, LanguagePair, SpellingQuestion, GeneratorType } from './game/types.js';
+import { generateMatchPairsFromPool } from './game/generators/match-pairs.js';
+import type { PooledMeaning, LegacyQuestion, LanguagePair, SpellingQuestion, MatchPairsQuestion, GeneratorType } from './game/types.js';
 import { DEFAULT_LANG_PAIR, pickGenerator } from './game/types.js';
 
 const QUESTIONS_PER_SESSION = 10;
@@ -64,9 +65,9 @@ export async function generateQuestionFromPool(
   langPair: LanguagePair = DEFAULT_LANG_PAIR,
   collectionId?: number | typeof ERRORS_COLLECTION_ID,
   fixedDirection?: LanguagePair,
-  questionType?: 'spelling',
+  questionType?: 'spelling' | 'match-pairs',
   recentGenerators: GeneratorType[] = [],
-): Promise<LegacyQuestion | SpellingQuestion | null> {
+): Promise<LegacyQuestion | SpellingQuestion | MatchPairsQuestion | null> {
   // Для коллекции ошибок используем специальный пул
   const pool = collectionId === ERRORS_COLLECTION_ID
     ? await getErrorsPool(userId)
@@ -185,13 +186,29 @@ export async function generateQuestionFromPool(
     return generateSpellingQuestion(customWords, meaningIds, useCustom);
   }
 
+  if (questionType === 'match-pairs') {
+    return generateMatchPairsFromPool(meaningIds, customWords);
+  }
+
   if (fixedDirection) {
     return generateMultipleChoiceQuestion(customWords, meaningIds, useCustom, pool.customWords, langPair, fixedDirection);
   }
 
   // ─── Авто-ротация генераторов ─────────────────────────────────────────
-  // Сначала выбираем слово, потом определяем подходящие генераторы
+  // Match-pairs — pool-level генератор, проверяем ДО выбора одного слова
+  const canMatchPairs = totalAvailable >= 3;
+  const applicablePool = getApplicablePoolGenerators(canMatchPairs);
+  const poolGenerator = applicablePool.length > 0
+    ? pickGenerator([...getApplicableGenerators('dummy'), ...applicablePool], recentGenerators)
+    : null;
 
+  if (poolGenerator === 'match-pairs') {
+    const result = await generateMatchPairsFromPool(meaningIds, customWords);
+    if (result) return result;
+    // Fallback — продолжаем обычную логику
+  }
+
+  // Сначала выбираем слово, потом определяем подходящие генераторы
   if (useCustom && customWords.length > 0) {
     const correct = customWords[Math.floor(Math.random() * customWords.length)]!;
     const applicable = getApplicableGenerators(correct.wordText);
@@ -249,6 +266,13 @@ function getApplicableGenerators(englishWord: string): GeneratorType[] {
   if (canGenerateSpelling(englishWord)) {
     generators.push('spelling');
   }
+  return generators;
+}
+
+/** Генераторы, работающие на уровне пула (не одного слова) */
+function getApplicablePoolGenerators(canMatchPairs: boolean): GeneratorType[] {
+  const generators: GeneratorType[] = [];
+  if (canMatchPairs) generators.push('match-pairs');
   return generators;
 }
 
@@ -608,6 +632,232 @@ export async function recordInfiniteAnswer(
     totalLp: undefined,
     gemsEarned: 0,
     dailyCorrectCount: undefined,
+  };
+}
+
+// ─── Match-Pairs Answer ─────────────────────────────────────────────────────
+
+export async function recordMatchPairsAnswer(
+  userId: number,
+  results: Array<{ meaningId: number; isCorrect: boolean }>,
+  streak: number = 0,
+) {
+  let totalXpEarned = 0;
+  let totalLpEarned = 0;
+  let lastXpModifier: number | undefined;
+  let lastLpModifier: number | undefined;
+  let totalXp: number | undefined;
+  let totalLp: number | undefined;
+  let level: number | undefined;
+  let levelUp: number | undefined;
+  let totalGemsEarned = 0;
+  let correctCount = 0;
+  let currentStreak = streak;
+
+  for (const { meaningId, isCorrect } of results) {
+    const isCustom = meaningId < 0;
+    const realId = Math.abs(meaningId);
+
+    // Обновляем SRS-прогресс
+    if (isCustom) {
+      const [existing] = await db
+        .select()
+        .from(userCustomWordProgress)
+        .where(and(eq(userCustomWordProgress.userId, userId), eq(userCustomWordProgress.customWordId, realId)))
+        .limit(1);
+
+      if (existing) {
+        const srs = computeNextReview({
+          learningProgress: existing.srsStage,
+          hasPenalty: existing.hasPenalty,
+          reviewStage: existing.reviewStage,
+        }, isCorrect);
+        await db
+          .update(userCustomWordProgress)
+          .set({
+            correctCount: isCorrect ? sql`${userCustomWordProgress.correctCount} + 1` : userCustomWordProgress.correctCount,
+            incorrectCount: isCorrect ? userCustomWordProgress.incorrectCount : sql`${userCustomWordProgress.incorrectCount} + 1`,
+            srsStage: srs.newProgress,
+            hasPenalty: srs.newPenalty,
+            reviewStage: srs.newReviewStage,
+            nextReviewAt: srs.nextReviewAt,
+            masteredAt: srs.isLearned ? new Date() : existing.masteredAt,
+            lastSeenAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(userCustomWordProgress.id, existing.id));
+      } else {
+        const srs = computeNextReview({ learningProgress: 0, hasPenalty: false, reviewStage: 0 }, isCorrect);
+        await db.insert(userCustomWordProgress).values({
+          userId,
+          customWordId: realId,
+          correctCount: isCorrect ? 1 : 0,
+          incorrectCount: isCorrect ? 0 : 1,
+          srsStage: srs.newProgress,
+          hasPenalty: srs.newPenalty,
+          reviewStage: srs.newReviewStage,
+          nextReviewAt: srs.nextReviewAt,
+        });
+      }
+    } else {
+      const [existing] = await db
+        .select()
+        .from(userWordProgress)
+        .where(and(eq(userWordProgress.userId, userId), eq(userWordProgress.meaningId, meaningId)))
+        .limit(1);
+
+      if (existing) {
+        const srs = computeNextReview({
+          learningProgress: existing.srsStage,
+          hasPenalty: existing.hasPenalty,
+          reviewStage: existing.reviewStage,
+        }, isCorrect);
+        await db
+          .update(userWordProgress)
+          .set({
+            correctCount: isCorrect ? sql`${userWordProgress.correctCount} + 1` : userWordProgress.correctCount,
+            incorrectCount: isCorrect ? userWordProgress.incorrectCount : sql`${userWordProgress.incorrectCount} + 1`,
+            srsStage: srs.newProgress,
+            hasPenalty: srs.newPenalty,
+            reviewStage: srs.newReviewStage,
+            nextReviewAt: srs.nextReviewAt,
+            masteredAt: srs.isLearned ? new Date() : existing.masteredAt,
+            lastSeenAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(userWordProgress.id, existing.id));
+      } else {
+        const srs = computeNextReview({ learningProgress: 0, hasPenalty: false, reviewStage: 0 }, isCorrect);
+        await db.insert(userWordProgress).values({
+          userId,
+          meaningId,
+          correctCount: isCorrect ? 1 : 0,
+          incorrectCount: isCorrect ? 0 : 1,
+          srsStage: srs.newProgress,
+          hasPenalty: srs.newPenalty,
+          reviewStage: srs.newReviewStage,
+          nextReviewAt: srs.nextReviewAt,
+        });
+      }
+    }
+
+    // Награды за правильный ответ
+    if (isCorrect) {
+      correctCount++;
+      const reward = await rewardCorrectAnswer(userId, currentStreak);
+      totalXpEarned += reward.xpEarned;
+      totalLpEarned += reward.lpEarned;
+      lastXpModifier = reward.xpModifier;
+      lastLpModifier = reward.lpModifier;
+      totalXp = reward.totalXp;
+      totalLp = reward.totalLp;
+      level = reward.level;
+      if (reward.levelUp) levelUp = reward.levelUp;
+      totalGemsEarned += reward.gemsEarned;
+      currentStreak++;
+    } else {
+      currentStreak = 0;
+    }
+  }
+
+  // Обновляем дневные счётчики (один раз за весь batch)
+  if (correctCount > 0) {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: {
+        dailyCorrectCount: true,
+        dailyCorrectDate: true,
+        dailyStreakMilestonesDone: true,
+        dailyCorrectMilestonesDone: true,
+        lastLoginDate: true,
+      },
+    });
+
+    const now = new Date();
+    const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+
+    let isNewDay = !user?.lastLoginDate;
+    if (user?.lastLoginDate) {
+      const lastLogin = new Date(
+        Date.UTC(user.lastLoginDate.getUTCFullYear(), user.lastLoginDate.getUTCMonth(), user.lastLoginDate.getUTCDate())
+      );
+      isNewDay = lastLogin.getTime() !== todayStart.getTime();
+    }
+
+    let streakGemsFromDay = 0;
+    if (isNewDay) {
+      const streakResult = await updateStreakDays(userId);
+      streakGemsFromDay = streakResult.gemsEarned;
+    }
+
+    let dailyCorrectCount = user?.dailyCorrectCount ?? 0;
+    let streakMilestonesDone = new Set((user?.dailyStreakMilestonesDone ?? '').split(',').filter(Boolean).map(Number));
+    let correctMilestonesDone = new Set((user?.dailyCorrectMilestonesDone ?? '').split(',').filter(Boolean).map(Number));
+
+    if (user?.dailyCorrectDate) {
+      const lastDate = new Date(
+        Date.UTC(user.dailyCorrectDate.getUTCFullYear(), user.dailyCorrectDate.getUTCMonth(), user.dailyCorrectDate.getUTCDate())
+      );
+      if (lastDate.getTime() !== todayStart.getTime()) {
+        dailyCorrectCount = 0;
+        streakMilestonesDone = new Set();
+        correctMilestonesDone = new Set();
+      }
+    } else {
+      dailyCorrectCount = 0;
+      streakMilestonesDone = new Set();
+      correctMilestonesDone = new Set();
+    }
+
+    let milestoneGems = 0;
+
+    // Стрик ответов
+    const finalStreak = currentStreak;
+    for (const [threshold, gems] of ANSWER_STREAK_MILESTONES) {
+      if (finalStreak >= threshold && !streakMilestonesDone.has(threshold)) {
+        await addGems(userId, gems);
+        milestoneGems += gems;
+        streakMilestonesDone.add(threshold);
+      }
+    }
+
+    const newDailyCorrectCount = dailyCorrectCount + correctCount;
+
+    for (const [threshold, gems] of DAILY_CORRECT_MILESTONES) {
+      if (newDailyCorrectCount >= threshold && !correctMilestonesDone.has(threshold)) {
+        await addGems(userId, gems);
+        milestoneGems += gems;
+        correctMilestonesDone.add(threshold);
+      }
+    }
+
+    await db
+      .update(users)
+      .set({
+        dailyCorrectCount: newDailyCorrectCount,
+        dailyCorrectDate: todayStart,
+        dailyStreakMilestonesDone: [...streakMilestonesDone].join(','),
+        dailyCorrectMilestonesDone: [...correctMilestonesDone].join(','),
+        bestAnswerStreak: sql`GREATEST(${users.bestAnswerStreak}, ${finalStreak})`,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+
+    totalGemsEarned += milestoneGems + streakGemsFromDay;
+  }
+
+  return {
+    correctCount,
+    totalCount: results.length,
+    totalXpEarned,
+    xpModifier: lastXpModifier,
+    totalLpEarned,
+    lpModifier: lastLpModifier,
+    totalXp,
+    totalLp,
+    level,
+    levelUp,
+    gemsEarned: totalGemsEarned,
   };
 }
 
