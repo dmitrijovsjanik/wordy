@@ -1,7 +1,7 @@
 import { eq, and, gte, asc, isNotNull, count } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { users, quizSessions, duels, streakActivityDays, userLeagueProgress, userSeasonStats, userWordProgress } from '../db/schema.js';
-import { STREAK_FREEZE_COST, MAX_STREAK_FREEZES } from '../config/gems-config.js';
+import { MAX_STREAK_FREEZES, FREEZE_PACKS } from '../config/gems-config.js';
 import { LEAGUE_TIERS } from '../config/league-config.js';
 
 export async function getProfile(userId: number) {
@@ -179,7 +179,10 @@ export async function getDailyRewards(userId: number) {
   };
 }
 
-export async function purchaseStreakFreeze(userId: number) {
+export async function purchaseStreakFreeze(userId: number, days: number) {
+  const pack = FREEZE_PACKS.find((p) => p.days === days);
+  if (!pack) throw new Error('INVALID_PACK');
+
   const user = await db.query.users.findFirst({
     where: eq(users.id, userId),
     columns: { gems: true, streakFreezes: true },
@@ -187,7 +190,7 @@ export async function purchaseStreakFreeze(userId: number) {
 
   if (!user) throw new Error('Пользователь не найден');
 
-  if (user.gems < STREAK_FREEZE_COST) {
+  if (user.gems < pack.gems) {
     throw new Error('INSUFFICIENT_GEMS');
   }
 
@@ -198,8 +201,8 @@ export async function purchaseStreakFreeze(userId: number) {
   const [updated] = await db
     .update(users)
     .set({
-      gems: user.gems - STREAK_FREEZE_COST,
-      streakFreezes: user.streakFreezes + 1,
+      gems: user.gems - pack.gems,
+      streakFreezes: user.streakFreezes + pack.days,
       updatedAt: new Date(),
     })
     .where(eq(users.id, userId))

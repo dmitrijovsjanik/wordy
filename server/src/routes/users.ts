@@ -36,17 +36,27 @@ export default async function userRoutes(app: FastifyInstance) {
     return getStreakCalendar(request.user.id, months);
   });
 
-  app.post('/api/users/me/streak-freeze/purchase', async (request, reply) => {
+  app.post<{
+    Body: { days: number };
+  }>('/api/users/me/streak-freeze/purchase', async (request, reply) => {
+    const { days } = request.body;
+    if (!days || typeof days !== 'number') {
+      return reply.code(400).send({ error: 'Укажите количество дней', code: 'INVALID_PACK' });
+    }
+
     try {
-      const result = await purchaseStreakFreeze(request.user.id);
+      const result = await purchaseStreakFreeze(request.user.id, days);
       return { success: true, gems: result.gems, streakFreezes: result.streakFreezes };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Неизвестная ошибка';
+      if (message === 'INVALID_PACK') {
+        return reply.code(400).send({ error: 'Недопустимый пак', code: 'INVALID_PACK' });
+      }
       if (message === 'INSUFFICIENT_GEMS') {
         return reply.code(400).send({ error: 'Недостаточно кристаллов', code: 'INSUFFICIENT_GEMS' });
       }
       if (message === 'MAX_FREEZES_REACHED') {
-        return reply.code(400).send({ error: 'У вас уже есть заморозка', code: 'MAX_FREEZES_REACHED' });
+        return reply.code(400).send({ error: 'Достигнут лимит заморозок', code: 'MAX_FREEZES_REACHED' });
       }
       throw error;
     }

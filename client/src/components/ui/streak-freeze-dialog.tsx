@@ -14,11 +14,22 @@ import { useTelegram } from '@/hooks/use-telegram';
 import snowflakeData from '@/assets/snowflake-freeze.json';
 import gemSpinData from '@/assets/gem-spin.json';
 
-const FREEZE_COST = 200;
+export type FreezePack = {
+  days: number;
+  gems: number;
+  rubPrice: number;
+};
+
+function pluralizeDays(n: number): string {
+  if (n === 1) return '1 день';
+  if (n >= 2 && n <= 4) return `${n} дня`;
+  return `${n} дней`;
+}
 
 type StreakFreezeDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  pack: FreezePack | null;
   currentFreezes: number;
   currentGems: number;
   onPurchaseSuccess: () => void;
@@ -27,6 +38,7 @@ type StreakFreezeDialogProps = {
 export function StreakFreezeDialog({
   open,
   onOpenChange,
+  pack,
   currentFreezes,
   currentGems,
   onPurchaseSuccess,
@@ -35,15 +47,18 @@ export function StreakFreezeDialog({
   const [error, setError] = useState<string | null>(null);
   const { hapticNotification } = useTelegram();
 
-  const canAfford = currentGems >= FREEZE_COST;
+  if (!pack) return null;
 
-  const handlePurchase = async () => {
+  const canAfford = currentGems >= pack.gems;
+
+  const handlePurchaseGems = async () => {
     if (!canAfford) return;
+
     setIsPurchasing(true);
     setError(null);
 
     try {
-      await purchaseStreakFreeze();
+      await purchaseStreakFreeze(pack.days);
       hapticNotification('success');
       onPurchaseSuccess();
       onOpenChange(false);
@@ -61,66 +76,59 @@ export function StreakFreezeDialog({
       <DrawerContent>
         <DrawerHeader>
           <div className="flex justify-center">
-            <Lottie
-              animationData={snowflakeData}
-              loop
-              autoplay
-              className="h-20 w-20"
-            />
+            <Lottie animationData={snowflakeData} loop autoplay className="h-16 w-16" />
           </div>
-          <DrawerTitle className="text-center">Заморозка стрика</DrawerTitle>
+          <DrawerTitle className="text-center">
+            Заморозка на {pluralizeDays(pack.days)}
+          </DrawerTitle>
           <DrawerDescription className="text-center">
-            Защита на 1 пропущенный день. У вас: {currentFreezes} в запасе.
+            Защитит стрик от {pack.days === 1 ? '1 пропущенного дня' : `${pack.days} пропущенных дней`}. В запасе: {currentFreezes}
           </DrawerDescription>
         </DrawerHeader>
 
-        <div className="flex flex-col items-center gap-3 px-4">
-          {/* Цена */}
-          <div className="flex items-center gap-2 rounded-xl bg-[var(--gray-3)] px-4 py-3">
-            <span className="text-sm text-[var(--gray-11)]">Цена:</span>
-            <div className="flex items-center gap-1">
-              <Lottie
-                animationData={gemSpinData}
-                loop
-                autoplay
-                className="h-6 w-6 shrink-0"
-              />
-              <span className="text-lg font-bold text-[var(--blue-11)]">{FREEZE_COST}</span>
+        <div className="flex flex-col gap-3 px-4">
+          {/* За кристаллы */}
+          <button
+            onClick={handlePurchaseGems}
+            disabled={!canAfford || isPurchasing}
+            className="flex items-center gap-3 rounded-2xl bg-[var(--gray-2)] px-4 py-3.5 transition-colors active:bg-[var(--gray-3)] disabled:opacity-50"
+          >
+            <Lottie animationData={gemSpinData} loop autoplay className="h-8 w-8 shrink-0" />
+            <div className="flex flex-1 flex-col items-start">
+              <span className="text-sm font-semibold">За кристаллы</span>
+              {!canAfford && (
+                <span className="text-[11px] text-[var(--red-11)]">Недостаточно кристаллов</span>
+              )}
             </div>
-          </div>
-
-          {/* Баланс */}
-          <div className="flex items-center gap-1.5 text-sm">
-            <span className="text-[var(--gray-11)]">У вас:</span>
-            <Lottie
-              animationData={gemSpinData}
-              loop
-              autoplay
-              className="h-5 w-5 shrink-0"
-            />
-            <span className={`font-semibold ${canAfford ? 'text-[var(--blue-11)]' : 'text-[var(--red-11)]'}`}>
-              {currentGems}
+            <span className={`text-lg font-bold ${canAfford ? 'text-[var(--blue-11)]' : 'text-[var(--red-11)]'}`}>
+              {pack.gems}
             </span>
-          </div>
+          </button>
 
-          {/* Статус */}
-          {!canAfford && (
-            <p className="text-sm text-[var(--red-11)]">
-              Недостаточно кристаллов
-            </p>
-          )}
+          {/* За рубли (Telegram Stars — скоро) */}
+          <button
+            disabled
+            className="flex items-center gap-3 rounded-2xl bg-[var(--gray-2)] px-4 py-3.5 opacity-50"
+          >
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center text-lg">₽</span>
+            <div className="flex flex-1 flex-col items-start">
+              <span className="text-sm font-semibold">За рубли</span>
+              <span className="text-[11px] text-[var(--gray-9)]">Скоро</span>
+            </div>
+            <span className="text-lg font-bold text-[var(--gray-9)]">
+              {pack.rubPrice} ₽
+            </span>
+          </button>
+
+          {/* Ошибка */}
           {error && (
-            <p className="text-sm text-[var(--red-11)]">{error}</p>
+            <p className="text-center text-sm text-[var(--red-11)]">{error}</p>
           )}
         </div>
 
         <DrawerFooter>
-          <Button
-            onClick={handlePurchase}
-            disabled={!canAfford || isPurchasing}
-            className="w-full"
-          >
-            {isPurchasing ? 'Покупка...' : 'Купить заморозку'}
+          <Button variant="secondary" onClick={() => onOpenChange(false)} className="w-full">
+            {isPurchasing ? 'Покупка...' : 'Отмена'}
           </Button>
         </DrawerFooter>
       </DrawerContent>

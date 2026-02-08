@@ -14,6 +14,18 @@ async function authPlugin(app: FastifyInstance) {
       reply.status(401).send({ error: 'Не авторизован', code: 'UNAUTHORIZED' });
     }
   });
+
+  app.decorate('authenticateAdmin', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      await request.jwtVerify();
+      const payload = request.user as { role?: string };
+      if (payload.role !== 'admin') {
+        reply.status(403).send({ error: 'Доступ запрещён', code: 'FORBIDDEN' });
+      }
+    } catch {
+      reply.status(401).send({ error: 'Не авторизован', code: 'UNAUTHORIZED' });
+    }
+  });
 }
 
 export default fp(authPlugin);

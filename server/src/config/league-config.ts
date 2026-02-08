@@ -94,9 +94,9 @@ type TierRewards = {
 };
 
 export const SEASON_REWARDS: Record<LeagueTier, TierRewards> = {
-  bronze:   { maintain: 50,  promotion: 100 },
-  silver:   { maintain: 50,  promotion: 100 },
-  gold:     { maintain: 50,  promotion: 100 },
+  bronze:   { maintain: 25,  promotion: 50 },
+  silver:   { maintain: 25,  promotion: 50 },
+  gold:     { maintain: 50,  promotion: 75 },
   amber:    { maintain: 75,  promotion: 150 },
   sapphire: { maintain: 75,  promotion: 150 },
   amethyst: { maintain: 100, promotion: 200 },

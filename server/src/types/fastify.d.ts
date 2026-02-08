@@ -2,13 +2,14 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 
 declare module '@fastify/jwt' {
   interface FastifyJWT {
-    payload: { id: number; telegramId: string };
-    user: { id: number; telegramId: string };
+    payload: { id: number; telegramId: string; role?: string };
+    user: { id: number; telegramId: string; role?: string };
   }
 }
 
 declare module 'fastify' {
   interface FastifyInstance {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    authenticateAdmin: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }

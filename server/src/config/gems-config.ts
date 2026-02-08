@@ -38,7 +38,7 @@ export const ANSWER_STREAK_MILESTONES: ReadonlyArray<[number, number]> = [
 export const GEMS_DAILY_CORRECT_25 = 10;
 
 /** 50 правильных за день */
-export const GEMS_DAILY_CORRECT_50 = 20;
+export const GEMS_DAILY_CORRECT_50 = 15;
 
 /** Мильники правильных ответов за день: [порог, награда] */
 export const DAILY_CORRECT_MILESTONES: ReadonlyArray<[number, number]> = [
@@ -53,3 +53,19 @@ export const STREAK_FREEZE_COST = 200;
 
 /** Максимум заморозок в запасе (без ограничения) */
 export const MAX_STREAK_FREEZES = Infinity;
+
+// ─── Паки заморозок ──────────────────────────────────────────────────────────
+
+export type FreezePack = {
+  days: number;
+  gems: number;
+  rubPrice: number;
+};
+
+/** Паки заморозок для магазина (скидка за объём) */
+export const FREEZE_PACKS: readonly FreezePack[] = [
+  { days: 1,  gems: 200,  rubPrice: 49  },
+  { days: 2,  gems: 350,  rubPrice: 79  },
+  { days: 7,  gems: 1000, rubPrice: 249 },
+  { days: 14, gems: 1800, rubPrice: 449 },
+];

@@ -2,11 +2,11 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Lottie from 'lottie-react';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { HeartCheckIcon, UserIcon, Award01Icon, InformationCircleIcon, Clock01Icon } from '@hugeicons/core-free-icons';
+import { UserIcon, Award01Icon, InformationCircleIcon, Clock01Icon } from '@hugeicons/core-free-icons';
 import { useUserStore } from '@/stores/user-store';
 import { useBackButton } from '@/hooks/use-back-button';
 import { useResetTimer } from '@/hooks/use-reset-timer';
-import { StreakFreezeDialog } from '@/components/ui/streak-freeze-dialog';
+import { StreakFreezeDialog, type FreezePack } from '@/components/ui/streak-freeze-dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { getDailyRewards, type DailyRewardsResponse } from '@/lib/api';
@@ -21,32 +21,40 @@ import {
 import gemSpinData from '@/assets/gem-spin.json';
 import snowflakeData from '@/assets/snowflake-freeze.json';
 
+// ─── Паки заморозок ──────────────────────────────────────────────────────────
+
+const FREEZE_PACKS: FreezePack[] = [
+  { days: 1,  gems: 200,  rubPrice: 49  },
+  { days: 2,  gems: 350,  rubPrice: 79  },
+  { days: 7,  gems: 1000, rubPrice: 249 },
+  { days: 14, gems: 1800, rubPrice: 449 },
+];
+
+const BASE_PRICE_PER_DAY = FREEZE_PACKS[0].gems;
+
+function getDiscount(pack: FreezePack): number {
+  const fullPrice = BASE_PRICE_PER_DAY * pack.days;
+  return Math.round(((fullPrice - pack.gems) / fullPrice) * 100);
+}
+
+function pluralizeDays(n: number): string {
+  if (n === 1) return '1 день';
+  if (n >= 2 && n <= 4) return `${n} дня`;
+  return `${n} дней`;
+}
+
+// ─── Прочие товары (будущие) ─────────────────────────────────────────────────
+
 type ShopItem = {
   id: string;
   title: string;
   description: string;
   price: number;
   available: boolean;
-  icon: 'freeze' | 'hearts' | 'frame' | 'title';
+  icon: 'frame' | 'title';
 };
 
 const SHOP_ITEMS: ShopItem[] = [
-  {
-    id: 'streak-freeze',
-    title: 'Заморозка стрика',
-    description: 'Защита на 1 пропущенный день',
-    price: 200,
-    available: true,
-    icon: 'freeze',
-  },
-  {
-    id: 'hearts-restore',
-    title: 'Восстановление жизней',
-    description: 'Мгновенно восстановить все жизни',
-    price: 100,
-    available: false,
-    icon: 'hearts',
-  },
   {
     id: 'profile-frame',
     title: 'Рамка профиля',
@@ -66,18 +74,12 @@ const SHOP_ITEMS: ShopItem[] = [
 ];
 
 function ItemIcon({ type, className }: { type: ShopItem['icon']; className?: string }) {
-  if (type === 'freeze') {
-    return <Lottie animationData={snowflakeData} loop autoplay className={className} />;
-  }
-
   const icons = {
-    hearts: HeartCheckIcon,
     frame: UserIcon,
     title: Award01Icon,
   } as const;
 
   const colors = {
-    hearts: 'text-[var(--red-9)]',
     frame: 'text-[var(--purple-9)]',
     title: 'text-[var(--amber-9)]',
   } as const;
@@ -113,7 +115,7 @@ export function Shop() {
   const navigate = useNavigate();
   const user = useUserStore((s) => s.user);
   const refreshProfile = useUserStore((s) => s.refreshProfile);
-  const [freezeDialogOpen, setFreezeDialogOpen] = useState(false);
+  const [selectedPack, setSelectedPack] = useState<FreezePack | null>(null);
   const [resourceInfoType, setResourceInfoType] = useState<'gems' | 'freezes' | null>(null);
   const [dailyRewards, setDailyRewards] = useState<DailyRewardsResponse | null>(null);
   const resetTimer = useResetTimer();
@@ -135,13 +137,6 @@ export function Shop() {
   }, []);
 
   if (!user) return null;
-
-  const handleItemClick = (item: ShopItem) => {
-    if (!item.available) return;
-    if (item.id === 'streak-freeze') {
-      setFreezeDialogOpen(true);
-    }
-  };
 
   return (
     <div className="flex flex-col gap-5 px-4 pt-6 pb-4">
@@ -174,46 +169,76 @@ export function Shop() {
         </div>
       </div>
 
-      {/* Товары */}
+      {/* Паки заморозок */}
       <div className="flex flex-col gap-2">
-        {SHOP_ITEMS.map((item) => {
-          const canAfford = user.gems >= item.price;
+        <span className="text-xs font-semibold uppercase tracking-wide text-[var(--gray-9)]">
+          Заморозка стрика
+        </span>
+        {FREEZE_PACKS.map((pack) => {
+          const canAfford = user.gems >= pack.gems;
+          const discount = getDiscount(pack);
 
           return (
             <button
-              key={item.id}
-              onClick={() => handleItemClick(item)}
-              disabled={!item.available}
-              className="flex w-full items-center gap-3 rounded-2xl bg-[var(--gray-2)] px-4 py-3 text-left transition-colors active:bg-[var(--gray-3)] disabled:opacity-50"
+              key={pack.days}
+              onClick={() => setSelectedPack(pack)}
+              className="flex w-full items-center gap-3 rounded-2xl bg-[var(--gray-2)] px-4 py-3 text-left transition-colors active:bg-[var(--gray-3)]"
             >
-              <ItemIcon type={item.icon} className="h-10 w-10 shrink-0" />
+              <Lottie animationData={snowflakeData} loop autoplay className="h-9 w-9 shrink-0" />
 
-              <div className="flex flex-1 flex-col">
-                <span className="text-sm font-semibold">{item.title}</span>
-                <span className="text-xs text-[var(--gray-11)]">{item.description}</span>
-              </div>
+              <span className="flex-1 text-sm font-semibold">{pluralizeDays(pack.days)}</span>
 
-              {item.available ? (
-                <div className="flex items-center gap-1">
-                  <Lottie animationData={gemSpinData} loop autoplay className="h-5 w-5 shrink-0" />
-                  <span className={`text-sm font-semibold ${canAfford ? 'text-[var(--blue-11)]' : 'text-[var(--red-11)]'}`}>
-                    {item.price}
+              <div className="flex items-center gap-2">
+                {discount > 0 && (
+                  <span className="rounded-full bg-[var(--green-3)] px-2 py-0.5 text-[11px] font-semibold text-[var(--green-11)]">
+                    -{discount}%
                   </span>
+                )}
+                <div className="flex flex-col items-end gap-0.5">
+                  <div className="flex items-center gap-1">
+                    <Lottie animationData={gemSpinData} loop autoplay className="h-4 w-4 shrink-0" />
+                    <span className={`text-sm font-semibold ${canAfford ? 'text-[var(--blue-11)]' : 'text-[var(--red-11)]'}`}>
+                      {pack.gems}
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-[var(--gray-9)]">{pack.rubPrice} ₽</span>
                 </div>
-              ) : (
-                <span className="rounded-full bg-[var(--gray-4)] px-2.5 py-1 text-[10px] font-medium text-[var(--gray-11)]">
-                  Скоро
-                </span>
-              )}
+              </div>
             </button>
           );
         })}
       </div>
 
-      {/* Sheet покупки заморозки */}
+      {/* Прочие товары */}
+      {SHOP_ITEMS.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-[var(--gray-9)]">
+            Скоро
+          </span>
+          {SHOP_ITEMS.map((item) => (
+            <button
+              key={item.id}
+              disabled
+              className="flex w-full items-center gap-3 rounded-2xl bg-[var(--gray-2)] px-4 py-3 text-left opacity-50"
+            >
+              <ItemIcon type={item.icon} className="h-10 w-10 shrink-0" />
+              <div className="flex flex-1 flex-col">
+                <span className="text-sm font-semibold">{item.title}</span>
+                <span className="text-xs text-[var(--gray-11)]">{item.description}</span>
+              </div>
+              <span className="rounded-full bg-[var(--gray-4)] px-2.5 py-1 text-[10px] font-medium text-[var(--gray-11)]">
+                Скоро
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Sheet покупки конкретного пака */}
       <StreakFreezeDialog
-        open={freezeDialogOpen}
-        onOpenChange={setFreezeDialogOpen}
+        open={selectedPack !== null}
+        onOpenChange={(open) => !open && setSelectedPack(null)}
+        pack={selectedPack}
         currentFreezes={user.streakFreezes}
         currentGems={user.gems}
         onPurchaseSuccess={refreshProfile}
@@ -271,7 +296,7 @@ export function Shop() {
                     <DailyRewardRow label="Первая победа в дуэли" value="+15" done={dailyRewards?.duelWinDone} />
                     <DailyRewardRow label="5 ответов подряд" value="+5" done={dailyRewards?.streakMilestonesDone.includes(5)} />
                     <DailyRewardRow label="25 правильных за день" value="+10" done={dailyRewards?.correctMilestonesDone.includes(25)} />
-                    <DailyRewardRow label="50 правильных за день" value="+20" done={dailyRewards?.correctMilestonesDone.includes(50)} />
+                    <DailyRewardRow label="50 правильных за день" value="+15" done={dailyRewards?.correctMilestonesDone.includes(50)} />
                   </div>
 
                   {/* Прогресс */}
@@ -283,8 +308,8 @@ export function Shop() {
                 </>
               ) : (
                 <div className="flex flex-col gap-1.5">
-                  <ResourceInfoRow label="Цена в магазине" value="200 💎" />
-                  <ResourceInfoRow label="Защита" value="1 пропущенный день" />
+                  <ResourceInfoRow label="Защита" value="1 заморозка = 1 день" />
+                  <ResourceInfoRow label="Активация" value="Автоматически" />
                   <ResourceInfoRow label="Лимит в запасе" value="∞" />
                 </div>
               )}

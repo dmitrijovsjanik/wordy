@@ -153,10 +153,11 @@ export function updateSettings(settings: { repeatMastered?: boolean }) {
   return fetchApi<{ repeatMastered?: boolean }>('PATCH', '/api/users/me/settings', settings);
 }
 
-export function purchaseStreakFreeze() {
+export function purchaseStreakFreeze(days: number) {
   return fetchApi<{ success: boolean; gems: number; streakFreezes: number }>(
     'POST',
     '/api/users/me/streak-freeze/purchase',
+    { days },
   );
 }
 

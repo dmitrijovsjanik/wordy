@@ -10,6 +10,7 @@ import dictionaryRoutes from './routes/dictionary.js';
 import leagueRoutes from './routes/leagues.js';
 import friendRoutes from './routes/friends.js';
 import botRoutes, { setupBot } from './routes/bot.js';
+import adminRoutes from './routes/admin.js';
 import { runStartupMigrations } from './db/startup-migrations.js';
 import './cron/league-cron.js';
 
@@ -21,7 +22,7 @@ const isDev = process.env.NODE_ENV !== 'production';
 const app = Fastify({ logger: true });
 
 await app.register(cors, {
-  origin: isDev ? 'http://localhost:5173' : false,
+  origin: isDev ? ['http://localhost:5173', 'http://localhost:5174'] : false,
 });
 
 await app.register(authPlugin);
@@ -39,6 +40,7 @@ await app.register(dictionaryRoutes);
 await app.register(leagueRoutes);
 await app.register(friendRoutes);
 await app.register(botRoutes);
+await app.register(adminRoutes);
 
 const port = Number(process.env.PORT) || 3000;
 
