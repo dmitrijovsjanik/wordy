@@ -55,20 +55,35 @@ else
 fi
 
 # Ensure nginx serves admin panel at /admin/
-NGINX_CONF="/etc/nginx/sites-enabled/wordy"
-if [ ! -f "$NGINX_CONF" ]; then
-  NGINX_CONF="/etc/nginx/sites-enabled/wordy-lang.ru"
-fi
-if [ -f "$NGINX_CONF" ] && ! grep -q 'location /admin/' "$NGINX_CONF"; then
-  echo "==> Adding /admin/ location to nginx config"
-  # Insert admin location block before the last closing brace
-  sed -i '/^}/i \
-    location /admin/ {\
-        alias /var/www/wordy/current/admin/dist/;\
-        try_files $uri $uri/ /admin/index.html;\
-    }' "$NGINX_CONF"
+NGINX_CONF=""
+for f in /etc/nginx/sites-enabled/wordy /etc/nginx/sites-enabled/wordy-lang.ru; do
+  [ -f "$f" ] && NGINX_CONF="$f" && break
+done
+if [ -n "$NGINX_CONF" ] && ! grep -q 'location /admin/' "$NGINX_CONF"; then
+  echo "==> Adding /admin/ location to nginx config: $NGINX_CONF"
+  # Write admin nginx snippet to temp file, then insert before last } in config
+  ADMIN_SNIPPET=$(mktemp)
+  cat > "$ADMIN_SNIPPET" << 'EOF'
+
+    location /admin/ {
+        alias /var/www/wordy/current/admin/dist/;
+        index index.html;
+        try_files $uri $uri/ /admin/index.html;
+    }
+EOF
+  # Find line number of last }, insert snippet before it
+  LAST_BRACE=$(grep -n '}' "$NGINX_CONF" | tail -1 | cut -d: -f1)
+  if [ -n "$LAST_BRACE" ]; then
+    head -n $((LAST_BRACE - 1)) "$NGINX_CONF" > "${NGINX_CONF}.tmp"
+    cat "$ADMIN_SNIPPET" >> "${NGINX_CONF}.tmp"
+    tail -n +"$LAST_BRACE" "$NGINX_CONF" >> "${NGINX_CONF}.tmp"
+    mv "${NGINX_CONF}.tmp" "$NGINX_CONF"
+  fi
+  rm -f "$ADMIN_SNIPPET"
   nginx -t && nginx -s reload
   echo "==> Nginx updated for /admin/"
+else
+  echo "==> Nginx config not found or /admin/ already configured"
 fi
 
 # Restart or start PM2 process
