@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '@/stores/auth-store';
 
 declare global {
@@ -13,7 +13,8 @@ export function Login() {
   const loginWithTelegram = useAuthStore((s) => s.loginWithTelegram);
   const error = useAuthStore((s) => s.error);
   const isLoading = useAuthStore((s) => s.isLoading);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const widgetRef = useRef<HTMLDivElement>(null);
+  const [widgetFailed, setWidgetFailed] = useState(false);
 
   useEffect(() => {
     // Telegram Login Widget callback
@@ -27,15 +28,24 @@ export function Login() {
     script.async = true;
     script.setAttribute('data-telegram-login', BOT_USERNAME);
     script.setAttribute('data-size', 'large');
+    script.setAttribute('data-radius', '8');
     script.setAttribute('data-onauth', 'onTelegramAuth(user)');
     script.setAttribute('data-request-access', 'write');
 
-    if (containerRef.current) {
-      containerRef.current.innerHTML = '';
-      containerRef.current.appendChild(script);
+    // If widget doesn't render within 3s, show fallback message
+    const timer = setTimeout(() => {
+      if (!widgetRef.current?.querySelector('iframe')) {
+        setWidgetFailed(true);
+      }
+    }, 3000);
+
+    if (widgetRef.current) {
+      widgetRef.current.innerHTML = '';
+      widgetRef.current.appendChild(script);
     }
 
     return () => {
+      clearTimeout(timer);
       delete (window as Partial<typeof window>).onTelegramAuth;
     };
   }, [loginWithTelegram]);
@@ -48,7 +58,14 @@ export function Login() {
           Войдите через Telegram для доступа к панели управления
         </p>
 
-        <div className="flex justify-center" ref={containerRef} />
+        {/* Telegram Widget renders its own button here */}
+        <div className="flex justify-center" ref={widgetRef} />
+
+        {widgetFailed && (
+          <p className="mt-4 text-center text-xs text-[var(--muted-foreground)]">
+            Виджет не загрузился. Убедитесь, что домен добавлен в @BotFather → /setdomain
+          </p>
+        )}
 
         {isLoading && (
           <p className="mt-4 text-center text-sm text-[var(--muted-foreground)]">
