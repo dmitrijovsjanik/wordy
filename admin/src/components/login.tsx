@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useAuthStore } from '@/stores/auth-store';
 
 declare global {
@@ -14,13 +14,17 @@ export function Login() {
   const error = useAuthStore((s) => s.error);
   const isLoading = useAuthStore((s) => s.isLoading);
   const widgetRef = useRef<HTMLDivElement>(null);
-  const [widgetFailed, setWidgetFailed] = useState(false);
+  const loginRef = useRef(loginWithTelegram);
+  loginRef.current = loginWithTelegram;
+
+  // Stable callback that won't cause re-renders
+  const handleAuth = useCallback((user: Record<string, string>) => {
+    loginRef.current(user);
+  }, []);
 
   useEffect(() => {
-    // Telegram Login Widget callback
-    window.onTelegramAuth = (user: Record<string, string>) => {
-      loginWithTelegram(user);
-    };
+    // Set global callback for Telegram widget
+    window.onTelegramAuth = handleAuth;
 
     // Inject Telegram Login Widget script
     const script = document.createElement('script');
@@ -32,23 +36,15 @@ export function Login() {
     script.setAttribute('data-onauth', 'onTelegramAuth(user)');
     script.setAttribute('data-request-access', 'write');
 
-    // If widget doesn't render within 3s, show fallback message
-    const timer = setTimeout(() => {
-      if (!widgetRef.current?.querySelector('iframe')) {
-        setWidgetFailed(true);
-      }
-    }, 3000);
-
     if (widgetRef.current) {
       widgetRef.current.innerHTML = '';
       widgetRef.current.appendChild(script);
     }
 
     return () => {
-      clearTimeout(timer);
       delete (window as Partial<typeof window>).onTelegramAuth;
     };
-  }, [loginWithTelegram]);
+  }, [handleAuth]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[var(--muted)]">
@@ -60,12 +56,6 @@ export function Login() {
 
         {/* Telegram Widget renders its own button here */}
         <div className="flex justify-center" ref={widgetRef} />
-
-        {widgetFailed && (
-          <p className="mt-4 text-center text-xs text-[var(--muted-foreground)]">
-            Виджет не загрузился. Убедитесь, что домен добавлен в @BotFather → /setdomain
-          </p>
-        )}
 
         {isLoading && (
           <p className="mt-4 text-center text-sm text-[var(--muted-foreground)]">
