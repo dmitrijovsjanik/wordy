@@ -1,25 +1,31 @@
 import { lazy, type ComponentType } from 'react';
 
+const RELOAD_KEY = 'chunk-reload';
+
 /**
- * React.lazy с автоматическим retry при ошибке загрузки чанка.
- * Помогает при нестабильной сети или проблемах кэширования WebView.
+ * React.lazy с автоматической перезагрузкой при ошибке загрузки чанка.
+ *
+ * После деплоя хеши чанков меняются, а закешированный index.html
+ * ссылается на старые файлы (404). Retry того же URL бесполезен —
+ * нужно перезагрузить страницу, чтобы получить новый index.html.
+ *
+ * Чтобы избежать бесконечного цикла перезагрузок, используется
+ * sessionStorage-флаг: перезагружаемся только один раз.
  */
 export function lazyWithRetry<T extends ComponentType<unknown>>(
   factory: () => Promise<{ default: T }>,
-  retries = 2,
 ) {
-  return lazy(() => retryImport(factory, retries));
-}
-
-async function retryImport<T>(
-  factory: () => Promise<T>,
-  retries: number,
-): Promise<T> {
-  try {
-    return await factory();
-  } catch (error) {
-    if (retries <= 0) throw error;
-    await new Promise((r) => setTimeout(r, 1000));
-    return retryImport(factory, retries - 1);
-  }
+  return lazy(async () => {
+    try {
+      return await factory();
+    } catch (error) {
+      // Если уже перезагружались — не зацикливаемся
+      const alreadyReloaded = sessionStorage.getItem(RELOAD_KEY);
+      if (!alreadyReloaded) {
+        sessionStorage.setItem(RELOAD_KEY, '1');
+        window.location.reload();
+      }
+      throw error;
+    }
+  });
 }

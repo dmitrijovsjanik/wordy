@@ -66,6 +66,10 @@ function PageSkeleton() {
   );
 }
 
+// Приложение загрузилось — сбрасываем флаг chunk-reload,
+// чтобы после следующего деплоя перезагрузка снова сработала
+sessionStorage.removeItem('chunk-reload');
+
 export function App() {
   return (
     <BrowserRouter>
