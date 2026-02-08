@@ -41,23 +41,13 @@ const PREMIUM_TEXT = `⭐ *Wordy Premium*
 • +15% к опыту — быстрее повышайте уровень
 • Заморозка стрика — одна бесплатная в неделю
 
-📌 Цифровой товар. Активируется мгновенно после оплаты.
-
-💰 *Цены:*
-• 1 месяц — 299 ₽
-• 12 месяцев — 2 388 ₽ (199 ₽/мес, скидка 33%)`;
+📌 Цифровой товар. Активируется мгновенно после оплаты.`;
 
 const FREEZES_TEXT = `❄️ *Заморозка стрика*
 
 Защищает ваш стрик дней. Если пропустите день — заморозка потратится автоматически и стрик сохранится. Можно накопить несколько на случай отпуска.
 
-📌 Цифровой товар. Активируется мгновенно после оплаты.
-
-💰 *Паки:*
-• 1 день — 49 ₽
-• 2 дня — 79 ₽
-• 7 дней — 249 ₽
-• 14 дней — 449 ₽`;
+📌 Цифровой товар. Активируется мгновенно после оплаты.`;
 
 const CONTACTS_TEXT = `📞 *Контакты*
 
@@ -127,7 +117,21 @@ const CATALOG_KEYBOARD: InlineKeyboardButton[][] = [
   [{ text: '⬅️ Назад', callback_data: 'start' }],
 ];
 
-const PRODUCT_BACK_KEYBOARD: InlineKeyboardButton[][] = [
+const PREMIUM_KEYBOARD: InlineKeyboardButton[][] = [
+  [{ text: '1 месяц — 299 ₽', callback_data: 'buy_premium_month' }],
+  [{ text: '12 месяцев — 2 388 ₽ (199 ₽/мес, -33%)', callback_data: 'buy_premium_year' }],
+  [{ text: '⬅️ Назад к каталогу', callback_data: 'catalog' }],
+];
+
+const FREEZES_KEYBOARD: InlineKeyboardButton[][] = [
+  [
+    { text: '1 день — 49 ₽', callback_data: 'buy_freeze_1' },
+    { text: '2 дня — 79 ₽', callback_data: 'buy_freeze_2' },
+  ],
+  [
+    { text: '7 дней — 249 ₽', callback_data: 'buy_freeze_7' },
+    { text: '14 дней — 449 ₽', callback_data: 'buy_freeze_14' },
+  ],
   [{ text: '⬅️ Назад к каталогу', callback_data: 'catalog' }],
 ];
 
@@ -238,6 +242,16 @@ export default async function botRoutes(app: FastifyInstance) {
       const messageId = callback_query.message.message_id;
       const data = callback_query.data;
 
+      // Заглушка для кнопок покупки — оплата ещё не подключена
+      if (data.startsWith('buy_')) {
+        await callTelegramApi('answerCallbackQuery', {
+          callback_query_id: callback_query.id,
+          text: 'Оплата скоро будет доступна!',
+          show_alert: true,
+        });
+        return reply.status(200).send({ ok: true });
+      }
+
       // Подтвердить callback (убрать "часики" на кнопке)
       await callTelegramApi('answerCallbackQuery', { callback_query_id: callback_query.id });
 
@@ -246,12 +260,11 @@ export default async function botRoutes(app: FastifyInstance) {
       } else if (data === 'catalog') {
         await editScreen(chatId, messageId, CATALOG_TEXT, CATALOG_KEYBOARD);
       } else if (data === 'product_premium') {
-        await editScreen(chatId, messageId, PREMIUM_TEXT, PRODUCT_BACK_KEYBOARD);
+        await editScreen(chatId, messageId, PREMIUM_TEXT, PREMIUM_KEYBOARD);
       } else if (data === 'product_freezes') {
-        await editScreen(chatId, messageId, FREEZES_TEXT, PRODUCT_BACK_KEYBOARD);
+        await editScreen(chatId, messageId, FREEZES_TEXT, FREEZES_KEYBOARD);
       } else if (data === 'offer') {
-        // Оферта может быть длинной — отправляем новым сообщением вместо editMessage
-        // потому что editMessage ломается если текст сильно отличается по длине
+        // Оферта длинная — отправляем новым сообщением вместо editMessage
         await sendScreen(chatId, OFFER_TEXT, OFFER_BACK_KEYBOARD);
       } else if (data === 'contacts') {
         await editScreen(chatId, messageId, CONTACTS_TEXT, CONTACTS_KEYBOARD);
