@@ -71,8 +71,16 @@ async function fetchApi<T>(method: string, path: string, body?: unknown): Promis
 }
 
 // Auth
-export function adminLoginTelegram(data: Record<string, string>) {
-  return fetchApi<{ token: string; admin: AdminInfo }>('POST', '/api/admin/auth/telegram', data);
+export async function adminLoginTelegram(data: Record<string, string>) {
+  console.log('[TG Auth API] Sending to /api/admin/auth/telegram:', JSON.stringify(data));
+  try {
+    const result = await fetchApi<{ token: string; admin: AdminInfo }>('POST', '/api/admin/auth/telegram', data);
+    console.log('[TG Auth API] Success, admin:', result.admin);
+    return result;
+  } catch (err) {
+    console.error('[TG Auth API] Failed:', err);
+    throw err;
+  }
 }
 
 // Dashboard
