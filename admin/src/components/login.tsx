@@ -7,7 +7,7 @@ declare global {
   }
 }
 
-const BOT_USERNAME = 'WordyEnBot';
+const BOT_USERNAME = 'wordylang_bot';
 
 export function Login() {
   const loginWithTelegram = useAuthStore((s) => s.loginWithTelegram);
