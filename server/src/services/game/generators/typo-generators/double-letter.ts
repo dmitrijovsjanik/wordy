@@ -1,11 +1,9 @@
 import type { TypoGenerator, TypoGeneratorContext, TypoResult } from './types.js';
 
-// Буквы, которые часто удваиваются в английском
-const DOUBABLE_CONSONANTS = /[bcdfgklmnprst]/;
-
 /**
- * Генератор опечаток с удвоением/упрощением букв
- * Примеры: hello→helo, necessary→neccessary, balloon→baloon
+ * Генератор опечаток с упрощением удвоенных букв
+ * Примеры: hello→helo, balloon→baloon, better→beter
+ * Только уменьшение повторяющихся букв, НЕ добавление новых
  */
 export class DoubleLetterGenerator implements TypoGenerator {
   readonly id = 'double-letter';
@@ -28,28 +26,6 @@ export class DoubleLetterGenerator implements TypoGenerator {
             confidence: 0.9,
           });
         }
-      }
-    }
-
-    // 2. Удвоение одиночных согласных (l→ll, t→tt, n→nn)
-    // НО только в СЕРЕДИНЕ слова (не в начале/конце)
-    for (let i = 1; i < word.length - 1; i++) {
-      const char = word[i]!;
-      // Пропускаем если уже удвоена или не подходит
-      if (!DOUBABLE_CONSONANTS.test(char)) continue;
-      if (word[i - 1] === char || word[i + 1] === char) continue;
-
-      const variant = word.slice(0, i + 1) + char + word.slice(i + 1);
-
-      // Проверяем что нет 3 букв подряд
-      const hasTriple = /([a-z])\1{2,}/.test(variant);
-      if (!hasTriple && !seen.has(variant)) {
-        seen.add(variant);
-        results.push({
-          variant,
-          type: 'double-add',
-          confidence: 0.75,
-        });
       }
     }
 

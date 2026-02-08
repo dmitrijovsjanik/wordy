@@ -5,7 +5,6 @@
  */
 export type TypoType =
   | 'double-simplify'      // Упрощение удвоенной буквы: ll→l
-  | 'double-add'           // Удвоение буквы: l→ll
   | 'phonetic-vowel'       // Замена гласной: ea→ee
   | 'phonetic-consonant'   // Замена согласной: ph→f
   | 'phonetic-ending'      // Замена окончания: tion→shun
