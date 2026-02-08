@@ -1,27 +1,29 @@
-import { lazy, Suspense, useEffect, useRef } from 'react';
+import { Suspense, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { TelegramProvider } from '@/components/telegram-provider';
 import { BottomTabs } from '@/components/bottom-tabs';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { useUserStore } from '@/stores/user-store';
 import { telegram } from '@/lib/telegram';
 import { acceptInvite, sendFriendRequest } from '@/lib/api';
+import { lazyWithRetry } from '@/lib/lazy-retry';
 
-const Home = lazy(() => import('@/components/home').then((m) => ({ default: m.Home })));
-const Collections = lazy(() => import('@/components/collections').then((m) => ({ default: m.Collections })));
-const CollectionDetail = lazy(() => import('@/components/collection-detail').then((m) => ({ default: m.CollectionDetail })));
-const CollectionCreate = lazy(() => import('@/components/collection-create').then((m) => ({ default: m.CollectionCreate })));
-const ErrorsCollection = lazy(() => import('@/components/errors-collection').then((m) => ({ default: m.ErrorsCollection })));
-const Profile = lazy(() => import('@/components/profile').then((m) => ({ default: m.Profile })));
-const DuelCreate = lazy(() => import('@/components/duel-create').then((m) => ({ default: m.DuelCreate })));
-const DuelGame = lazy(() => import('@/components/duel-game').then((m) => ({ default: m.DuelGame })));
-const DuelResult = lazy(() => import('@/components/duel-result').then((m) => ({ default: m.DuelResult })));
-const Leaderboard = lazy(() => import('@/components/leaderboard'));
-const Modes = lazy(() => import('@/components/modes').then((m) => ({ default: m.Modes })));
-const Shop = lazy(() => import('@/components/shop').then((m) => ({ default: m.Shop })));
-const FriendsPage = lazy(() => import('@/components/friends').then((m) => ({ default: m.Friends })));
-const Settings = lazy(() => import('@/components/settings').then((m) => ({ default: m.Settings })));
-const AllWords = lazy(() => import('@/components/all-words').then((m) => ({ default: m.AllWords })));
+const Home = lazyWithRetry(() => import('@/components/home').then((m) => ({ default: m.Home })));
+const Collections = lazyWithRetry(() => import('@/components/collections').then((m) => ({ default: m.Collections })));
+const CollectionDetail = lazyWithRetry(() => import('@/components/collection-detail').then((m) => ({ default: m.CollectionDetail })));
+const CollectionCreate = lazyWithRetry(() => import('@/components/collection-create').then((m) => ({ default: m.CollectionCreate })));
+const ErrorsCollection = lazyWithRetry(() => import('@/components/errors-collection').then((m) => ({ default: m.ErrorsCollection })));
+const Profile = lazyWithRetry(() => import('@/components/profile').then((m) => ({ default: m.Profile })));
+const DuelCreate = lazyWithRetry(() => import('@/components/duel-create').then((m) => ({ default: m.DuelCreate })));
+const DuelGame = lazyWithRetry(() => import('@/components/duel-game').then((m) => ({ default: m.DuelGame })));
+const DuelResult = lazyWithRetry(() => import('@/components/duel-result').then((m) => ({ default: m.DuelResult })));
+const Leaderboard = lazyWithRetry(() => import('@/components/leaderboard'));
+const Modes = lazyWithRetry(() => import('@/components/modes').then((m) => ({ default: m.Modes })));
+const Shop = lazyWithRetry(() => import('@/components/shop').then((m) => ({ default: m.Shop })));
+const FriendsPage = lazyWithRetry(() => import('@/components/friends').then((m) => ({ default: m.Friends })));
+const Settings = lazyWithRetry(() => import('@/components/settings').then((m) => ({ default: m.Settings })));
+const AllWords = lazyWithRetry(() => import('@/components/all-words').then((m) => ({ default: m.AllWords })));
 
 function DeepLinkHandler() {
   const navigate = useNavigate();
@@ -71,25 +73,27 @@ export function App() {
         <DeepLinkHandler />
         <div className="tg-safe-area mx-auto flex h-dvh max-w-md flex-col">
           <main className="flex-1 overflow-y-auto">
-            <Suspense fallback={<PageSkeleton />}>
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/collections" element={<Collections />} />
-                <Route path="/collections/create" element={<CollectionCreate />} />
-                <Route path="/collections/:id" element={<CollectionDetail />} />
-                <Route path="/errors" element={<ErrorsCollection />} />
-                <Route path="/profile" element={<Profile />} />
-                <Route path="/duel/create" element={<DuelCreate />} />
-                <Route path="/duel/:id" element={<DuelGame />} />
-                <Route path="/duel/:id/result" element={<DuelResult />} />
-                <Route path="/leaderboard" element={<Leaderboard />} />
-                <Route path="/modes" element={<Modes />} />
-                <Route path="/shop" element={<Shop />} />
-                <Route path="/friends" element={<FriendsPage />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/words" element={<AllWords />} />
-              </Routes>
-            </Suspense>
+            <ErrorBoundary>
+              <Suspense fallback={<PageSkeleton />}>
+                <Routes>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/collections" element={<Collections />} />
+                  <Route path="/collections/create" element={<CollectionCreate />} />
+                  <Route path="/collections/:id" element={<CollectionDetail />} />
+                  <Route path="/errors" element={<ErrorsCollection />} />
+                  <Route path="/profile" element={<Profile />} />
+                  <Route path="/duel/create" element={<DuelCreate />} />
+                  <Route path="/duel/:id" element={<DuelGame />} />
+                  <Route path="/duel/:id/result" element={<DuelResult />} />
+                  <Route path="/leaderboard" element={<Leaderboard />} />
+                  <Route path="/modes" element={<Modes />} />
+                  <Route path="/shop" element={<Shop />} />
+                  <Route path="/friends" element={<FriendsPage />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/words" element={<AllWords />} />
+                </Routes>
+              </Suspense>
+            </ErrorBoundary>
           </main>
           <BottomTabs />
         </div>
