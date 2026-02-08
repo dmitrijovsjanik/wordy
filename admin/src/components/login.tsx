@@ -1,102 +1,76 @@
 import { useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/auth-store';
 import { Button } from '@/components/ui/button';
 
 export function Login() {
   const loginWithTelegram = useAuthStore((s) => s.loginWithTelegram);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const error = useAuthStore((s) => s.error);
   const isLoading = useAuthStore((s) => s.isLoading);
   const processedRef = useRef(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/admin', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   // On mount: check if Telegram redirected back with auth data
   useEffect(() => {
     if (processedRef.current) return;
 
-    console.log('[TG Auth] Page loaded, checking for auth data...');
-    console.log('[TG Auth] Full URL:', window.location.href);
-    console.log('[TG Auth] Hash:', window.location.hash);
-    console.log('[TG Auth] Search:', window.location.search);
-
     let data: Record<string, string> | null = null;
 
-    // Format 1: hash fragment #tgAuthResult=<url-encoded-json>
+    // Format 1: hash fragment #tgAuthResult=<base64-json>
     const hash = window.location.hash;
     if (hash.startsWith('#tgAuthResult=')) {
       const encoded = hash.slice('#tgAuthResult='.length);
-      console.log('[TG Auth] Found tgAuthResult, encoded:', encoded);
       try {
-        const decoded = decodeURIComponent(encoded);
-        console.log('[TG Auth] URL-decoded:', decoded);
-        const parsed = JSON.parse(decoded) as Record<string, unknown>;
-        console.log('[TG Auth] Parsed JSON:', parsed);
+        const parsed = JSON.parse(atob(encoded)) as Record<string, unknown>;
         data = {};
         for (const [key, value] of Object.entries(parsed)) {
           data[key] = String(value);
         }
-      } catch (e) {
-        console.log('[TG Auth] URL-decode failed, trying base64...', e);
-        try {
-          const decoded = atob(encoded);
-          console.log('[TG Auth] Base64-decoded:', decoded);
-          const parsed = JSON.parse(decoded) as Record<string, unknown>;
-          console.log('[TG Auth] Parsed JSON:', parsed);
-          data = {};
-          for (const [key, value] of Object.entries(parsed)) {
-            data[key] = String(value);
-          }
-        } catch (e2) {
-          console.error('[TG Auth] Both decode attempts failed', e2);
-        }
+      } catch {
+        console.error('Failed to parse tgAuthResult');
       }
     }
 
     // Format 2: query params ?id=...&hash=...
     if (!data) {
       const params = new URLSearchParams(window.location.search);
-      const id = params.get('id');
-      const authHash = params.get('hash');
-      console.log('[TG Auth] Query params - id:', id, 'hash:', authHash);
-      if (id && authHash) {
+      if (params.get('id') && params.get('hash')) {
         data = {};
         for (const [key, value] of params.entries()) {
           data[key] = value;
         }
-        console.log('[TG Auth] Data from query params:', data);
       }
     }
 
     if (data) {
-      console.log('[TG Auth] Sending to server:', data);
       processedRef.current = true;
       window.history.replaceState({}, '', '/admin/login');
       loginWithTelegram(data);
-    } else {
-      console.log('[TG Auth] No auth data found on this page load');
     }
   }, [loginWithTelegram]);
 
   // Fetch numeric bot ID from server, then redirect to Telegram OAuth
   const handleLogin = async () => {
     try {
-      console.log('[TG Auth] Fetching bot config...');
       const res = await fetch('/api/admin/auth/config');
-      const config = (await res.json()) as { botId: string };
-      console.log('[TG Auth] Bot config:', config);
-      if (!config.botId) {
-        console.error('[TG Auth] No bot ID returned');
-        return;
-      }
+      const { botId } = (await res.json()) as { botId: string };
+      if (!botId) return;
       const returnTo = `${window.location.origin}/admin/login`;
       const origin = window.location.origin;
-      const url =
-        `https://oauth.telegram.org/auth?bot_id=${config.botId}` +
+      window.location.href =
+        `https://oauth.telegram.org/auth?bot_id=${botId}` +
         `&origin=${encodeURIComponent(origin)}` +
         `&request_access=write` +
         `&return_to=${encodeURIComponent(returnTo)}`;
-      console.log('[TG Auth] Redirecting to:', url);
-      window.location.href = url;
     } catch (err) {
-      console.error('[TG Auth] Failed to get bot config', err);
+      console.error('Failed to get bot config', err);
     }
   };
 
