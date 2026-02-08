@@ -181,6 +181,10 @@ export function cancelAutoRenew() {
   return fetchApi<{ ok: boolean }>('POST', '/api/payments/cancel-auto-renew');
 }
 
+export function enableAutoRenew() {
+  return fetchApi<{ ok: boolean }>('POST', '/api/payments/enable-auto-renew');
+}
+
 export function getStreakCalendar(months = 6) {
   return fetchApi<StreakCalendarResponse>('GET', `/api/users/me/streak-calendar?months=${months}`);
 }

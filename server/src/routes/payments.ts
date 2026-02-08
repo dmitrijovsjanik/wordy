@@ -52,6 +52,25 @@ export default async function paymentRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
+  // Включить автопродление (только если есть сохранённый способ оплаты)
+  app.post('/api/payments/enable-auto-renew', { onRequest: [app.authenticate] }, async (request, reply) => {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, request.user.id),
+      columns: { savedPaymentMethodId: true },
+    });
+
+    if (!user?.savedPaymentMethodId) {
+      return reply.code(400).send({ error: 'Нет сохранённого способа оплаты', code: 'NO_PAYMENT_METHOD' });
+    }
+
+    await db
+      .update(users)
+      .set({ autoRenew: true })
+      .where(eq(users.id, request.user.id));
+
+    return { ok: true };
+  });
+
   // Webhook от YooKassa (без авторизации)
   app.post('/api/payments/webhook', async (request, reply) => {
     try {

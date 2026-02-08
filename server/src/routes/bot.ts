@@ -244,6 +244,8 @@ async function sendSubscriptionScreen(chatId: number, messageId?: number) {
 
   if (user.autoRenew) {
     keyboard.push([{ text: '🔄 Отключить автопродление', callback_data: 'sub_cancel_renew' }]);
+  } else if (user.savedPaymentMethodId) {
+    keyboard.push([{ text: '🔄 Включить автопродление', callback_data: 'sub_enable_renew' }]);
   }
   if (user.savedPaymentMethodId) {
     keyboard.push([{ text: '💳 Отвязать карту', callback_data: 'sub_unlink_card' }]);
@@ -420,6 +422,19 @@ export default async function botRoutes(app: FastifyInstance) {
         await db
           .update(users)
           .set({ autoRenew: false })
+          .where(eq(users.telegramId, BigInt(chatId)));
+        await sendSubscriptionScreen(chatId, messageId);
+        return reply.status(200).send({ ok: true });
+      }
+
+      if (data === 'sub_enable_renew') {
+        await callTelegramApi('answerCallbackQuery', {
+          callback_query_id: callback_query.id,
+          text: 'Автопродление включено',
+        });
+        await db
+          .update(users)
+          .set({ autoRenew: true })
           .where(eq(users.telegramId, BigInt(chatId)));
         await sendSubscriptionScreen(chatId, messageId);
         return reply.status(200).send({ ok: true });

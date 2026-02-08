@@ -9,7 +9,7 @@ import { useResetTimer } from '@/hooks/use-reset-timer';
 import { StreakFreezeDialog, type FreezePack } from '@/components/ui/streak-freeze-dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { getDailyRewards, getPremiumStatus, cancelAutoRenew, type DailyRewardsResponse } from '@/lib/api';
+import { getDailyRewards, getPremiumStatus, cancelAutoRenew, enableAutoRenew, type DailyRewardsResponse } from '@/lib/api';
 import {
   Drawer,
   DrawerContent,
@@ -154,11 +154,16 @@ export function Shop() {
     }
   }, [refreshProfile]);
 
-  const handleCancelAutoRenew = async () => {
+  const handleToggleAutoRenew = async () => {
     setIsCancellingAutoRenew(true);
     try {
-      await cancelAutoRenew();
-      setPremiumStatus((prev) => prev ? { ...prev, autoRenew: false } : prev);
+      if (premiumStatus?.autoRenew) {
+        await cancelAutoRenew();
+        setPremiumStatus((prev) => prev ? { ...prev, autoRenew: false } : prev);
+      } else {
+        await enableAutoRenew();
+        setPremiumStatus((prev) => prev ? { ...prev, autoRenew: true } : prev);
+      }
     } catch {
       // ignore
     } finally {
@@ -218,21 +223,17 @@ export function Shop() {
                 </span>
               </div>
             </div>
-            {premiumStatus.autoRenew ? (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleCancelAutoRenew}
-                disabled={isCancellingAutoRenew}
-                className="w-full"
-              >
-                {isCancellingAutoRenew ? 'Отключение...' : 'Отключить автопродление'}
-              </Button>
-            ) : (
-              <p className="text-xs text-[var(--amber-11)]">
-                Автопродление отключено. Подписка завершится в указанную дату.
-              </p>
-            )}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleToggleAutoRenew}
+              disabled={isCancellingAutoRenew}
+              className="w-full"
+            >
+              {isCancellingAutoRenew
+                ? (premiumStatus.autoRenew ? 'Отключение...' : 'Включение...')
+                : (premiumStatus.autoRenew ? 'Отключить автопродление' : 'Включить автопродление')}
+            </Button>
           </div>
         </div>
       )}
