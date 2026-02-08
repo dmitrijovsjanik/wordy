@@ -11,7 +11,7 @@ import { cn, formatDate, formatDateTime } from '@/lib/utils';
 import { GiveGemsDialog } from './give-gems-dialog';
 
 const STAGE_LABELS = ['Новое', 'Стадия 1', 'Стадия 2', 'Выучено'];
-const STAGE_COLORS = ['bg-gray-200', 'bg-blue-200 text-blue-800', 'bg-yellow-200 text-yellow-800', 'bg-green-200 text-green-800'];
+const STAGE_COLORS = ['bg-[var(--gray-3)] text-[var(--gray-11)]', 'bg-[var(--blue-3)] text-[var(--blue-11)]', 'bg-[var(--amber-3)] text-[var(--amber-11)]', 'bg-[var(--green-3)] text-[var(--green-11)]'];
 
 export function UserDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -47,8 +47,8 @@ export function UserDetailPage() {
     return (
       <div className="space-y-4">
         <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-40 rounded-xl" />
-        <Skeleton className="h-80 rounded-xl" />
+        <Skeleton className="h-40 rounded-2xl" />
+        <Skeleton className="h-80 rounded-2xl" />
       </div>
     );
   }
@@ -83,7 +83,7 @@ export function UserDetailPage() {
           <CardContent className="p-4 text-center">
             <p className="text-xs text-[var(--muted-foreground)]">Гемы</p>
             <p className="text-2xl font-bold flex items-center justify-center gap-1">
-              <Gem className="h-4 w-4 text-cyan-500" />
+              <Gem className="h-4 w-4 text-[var(--blue-9)]" />
               {user.gems}
             </p>
           </CardContent>
@@ -172,11 +172,11 @@ export function UserDetailPage() {
       </Card>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-[var(--border)]">
+      <div className="flex gap-1 rounded-full bg-[var(--gray-3)] p-1 w-fit">
         <button
           className={cn(
-            'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors cursor-pointer',
-            tab === 'quizzes' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]',
+            'rounded-full px-4 py-1.5 text-sm font-medium transition-colors cursor-pointer',
+            tab === 'quizzes' ? 'bg-[var(--background)] text-[var(--foreground)] shadow-sm' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]',
           )}
           onClick={() => setTab('quizzes')}
         >
@@ -184,8 +184,8 @@ export function UserDetailPage() {
         </button>
         <button
           className={cn(
-            'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors cursor-pointer',
-            tab === 'words' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]',
+            'rounded-full px-4 py-1.5 text-sm font-medium transition-colors cursor-pointer',
+            tab === 'words' ? 'bg-[var(--background)] text-[var(--foreground)] shadow-sm' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]',
           )}
           onClick={() => setTab('words')}
         >
@@ -195,9 +195,9 @@ export function UserDetailPage() {
 
       {/* Tab content */}
       {tab === 'quizzes' && activity && (
-        <div className="rounded-xl border border-[var(--border)] overflow-hidden">
+        <div className="rounded-2xl bg-[var(--card)] overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-[var(--muted)] text-left">
+            <thead className="bg-[var(--gray-3)] text-left">
               <tr>
                 <th className="px-4 py-3 font-medium text-[var(--muted-foreground)]">ID</th>
                 <th className="px-4 py-3 font-medium text-[var(--muted-foreground)]">Тип</th>
@@ -206,7 +206,7 @@ export function UserDetailPage() {
                 <th className="px-4 py-3 font-medium text-[var(--muted-foreground)]">Дата</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[var(--border)]">
+            <tbody className="divide-y divide-[var(--gray-4)]">
               {activity.sessions.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-[var(--muted-foreground)]">
@@ -239,9 +239,9 @@ export function UserDetailPage() {
       )}
 
       {tab === 'words' && words && (
-        <div className="rounded-xl border border-[var(--border)] overflow-hidden">
+        <div className="rounded-2xl bg-[var(--card)] overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-[var(--muted)] text-left">
+            <thead className="bg-[var(--gray-3)] text-left">
               <tr>
                 <th className="px-4 py-3 font-medium text-[var(--muted-foreground)]">Слово</th>
                 <th className="px-4 py-3 font-medium text-[var(--muted-foreground)]">Перевод</th>
@@ -252,7 +252,7 @@ export function UserDetailPage() {
                 <th className="px-4 py-3 font-medium text-[var(--muted-foreground)]">Посл. просмотр</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[var(--border)]">
+            <tbody className="divide-y divide-[var(--gray-4)]">
               {words.words.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-8 text-center text-[var(--muted-foreground)]">
@@ -269,12 +269,12 @@ export function UserDetailPage() {
                       <Badge className={cn('text-xs', STAGE_COLORS[w.srsStage] ?? '')} variant="secondary">
                         {w.srsStage}
                       </Badge>
-                      {w.hasPenalty && <span className="ml-1 text-xs text-amber-600" title="Штраф">!</span>}
+                      {w.hasPenalty && <span className="ml-1 text-xs text-[var(--amber-11)]" title="Штраф">!</span>}
                     </td>
                     <td className="px-4 py-3 text-xs">
-                      <span className="text-green-600">{w.correctCount}</span>
+                      <span className="text-[var(--green-11)]">{w.correctCount}</span>
                       /
-                      <span className="text-red-500">{w.incorrectCount}</span>
+                      <span className="text-[var(--red-11)]">{w.incorrectCount}</span>
                     </td>
                     <td className="px-4 py-3 text-xs">{w.masteredAt ? formatDate(w.masteredAt) : '—'}</td>
                     <td className="px-4 py-3 text-xs">{formatDate(w.lastSeenAt)}</td>

@@ -3,15 +3,22 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BookOpen, Target, AlertTriangle } from 'lucide-react';
 import type { SrsStats } from '@/types/admin';
 
-const STAGE_COLORS = ['#94a3b8', '#3b82f6', '#f59e0b', '#22c55e'];
+const STAGE_COLORS = ['var(--gray-8)', 'var(--blue-9)', 'var(--amber-9)', 'var(--green-9)'];
 const STAGE_LABELS = ['Новые (0)', 'Изучаемые (1)', 'Повторяемые (2)', 'Выучено (3)'];
+
+const TOOLTIP_STYLE = {
+  fontSize: 12,
+  borderRadius: 12,
+  border: '1px solid var(--gray-4)',
+  backgroundColor: 'var(--gray-2)',
+};
 
 export function SrsStatsSection({ data }: { data: SrsStats }) {
   const cards = [
-    { label: 'Слов выучено', value: data.totalLearned, icon: BookOpen, color: 'text-green-600' },
-    { label: 'Среднее на юзера', value: data.avgLearnedPerUser, icon: BookOpen, color: 'text-emerald-600' },
-    { label: 'Accuracy', value: `${data.accuracy}%`, icon: Target, color: 'text-blue-600' },
-    { label: 'Со штрафом', value: data.wordsWithPenalty, icon: AlertTriangle, color: 'text-amber-600' },
+    { label: 'Слов выучено', value: data.totalLearned, icon: BookOpen, iconBg: 'bg-[var(--green-3)]', iconColor: 'text-[var(--green-11)]' },
+    { label: 'Среднее на юзера', value: data.avgLearnedPerUser, icon: BookOpen, iconBg: 'bg-[var(--green-3)]', iconColor: 'text-[var(--green-11)]' },
+    { label: 'Accuracy', value: `${data.accuracy}%`, icon: Target, iconBg: 'bg-[var(--blue-3)]', iconColor: 'text-[var(--blue-11)]' },
+    { label: 'Со штрафом', value: data.wordsWithPenalty, icon: AlertTriangle, iconBg: 'bg-[var(--amber-3)]', iconColor: 'text-[var(--amber-11)]' },
   ];
 
   const pieData = data.stageDistribution.map((item) => ({
@@ -27,11 +34,13 @@ export function SrsStatsSection({ data }: { data: SrsStats }) {
         {cards.map((card) => (
           <Card key={card.label}>
             <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <card.icon className={`h-4 w-4 ${card.color}`} />
-                <span className="text-xs text-[var(--muted-foreground)]">{card.label}</span>
+              <div className="flex items-center gap-2 mb-3">
+                <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${card.iconBg}`}>
+                  <card.icon className={`h-4 w-4 ${card.iconColor}`} />
+                </div>
               </div>
               <p className="text-2xl font-bold">{card.value}</p>
+              <span className="text-xs text-[var(--muted-foreground)]">{card.label}</span>
             </CardContent>
           </Card>
         ))}
@@ -56,10 +65,10 @@ export function SrsStatsSection({ data }: { data: SrsStats }) {
                     dataKey="value"
                   >
                     {pieData.map((_, index) => (
-                      <Cell key={index} fill={STAGE_COLORS[index] ?? '#6b7280'} />
+                      <Cell key={index} fill={STAGE_COLORS[index] ?? 'var(--gray-6)'} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid var(--border)' }} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
                   <Legend fontSize={12} />
                 </PieChart>
               </ResponsiveContainer>
@@ -79,7 +88,7 @@ export function SrsStatsSection({ data }: { data: SrsStats }) {
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-[var(--muted-foreground)]">Правильных</span>
-                <span className="font-semibold text-green-600">{data.correctAnswers.toLocaleString('ru-RU')}</span>
+                <span className="font-semibold text-[var(--green-11)]">{data.correctAnswers.toLocaleString('ru-RU')}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-[var(--muted-foreground)]">Accuracy</span>

@@ -75,9 +75,9 @@ export function Login() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[var(--muted)]">
-      <div className="w-full max-w-sm rounded-xl border border-[var(--border)] bg-[var(--card)] p-8 shadow-sm">
-        <h1 className="mb-2 text-center text-2xl font-bold">Wordy Admin</h1>
+    <div className="flex min-h-screen items-center justify-center bg-[var(--background)]">
+      <div className="w-full max-w-sm rounded-2xl bg-[var(--card)] p-8 shadow-lg shadow-black/5">
+        <h1 className="mb-2 text-center text-2xl font-bold text-[var(--brand-11)]">Wordy Admin</h1>
         <p className="mb-8 text-center text-sm text-[var(--muted-foreground)]">
           Войдите через Telegram для доступа к панели управления
         </p>

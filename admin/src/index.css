@@ -1,23 +1,84 @@
 @import "tailwindcss";
+@import "@radix-ui/colors/gray.css";
+@import "@radix-ui/colors/red.css";
+@import "@radix-ui/colors/green.css";
+@import "@radix-ui/colors/amber.css";
+@import "@radix-ui/colors/blue.css";
+@import "@radix-ui/colors/orange.css";
+@import "@radix-ui/colors/purple.css";
+@import "@radix-ui/colors/pink.css";
+@import "@radix-ui/colors/yellow.css";
+@import "@radix-ui/colors/bronze.css";
 
+/* Brand accent (same as main app) — base: hsl(216, 100%, 54%) */
 :root {
-  --background: #ffffff;
-  --foreground: #0a0a0a;
-  --muted: #f5f5f5;
-  --muted-foreground: #737373;
-  --border: #e5e5e5;
-  --card: #ffffff;
-  --card-foreground: #0a0a0a;
-  --primary: #2563eb;
-  --primary-foreground: #ffffff;
-  --secondary: #f5f5f5;
-  --secondary-foreground: #171717;
-  --destructive: #ef4444;
-  --destructive-foreground: #ffffff;
-  --accent: #f5f5f5;
-  --accent-foreground: #171717;
-  --ring: #2563eb;
-  --radius: 0.5rem;
+  --brand-1: hsl(216, 100%, 99%);
+  --brand-2: hsl(216, 100%, 97.5%);
+  --brand-3: hsl(216, 100%, 94.5%);
+  --brand-4: hsl(216, 100%, 90.5%);
+  --brand-5: hsl(216, 100%, 85.5%);
+  --brand-6: hsl(216, 100%, 78%);
+  --brand-7: hsl(216, 100%, 69%);
+  --brand-8: hsl(216, 100%, 59%);
+  --brand-9: hsl(216, 100%, 54%);
+  --brand-10: hsl(216, 100%, 49%);
+  --brand-11: hsl(216, 100%, 43%);
+  --brand-12: hsl(216, 100%, 18%);
+}
+
+/* Semantic tokens (matching main app) */
+:root {
+  --background: var(--gray-1);
+  --foreground: var(--gray-12);
+  --card: var(--gray-2);
+  --card-foreground: var(--gray-12);
+  --popover: var(--gray-2);
+  --popover-foreground: var(--gray-12);
+  --primary: var(--brand-9);
+  --primary-foreground: white;
+  --secondary: var(--gray-3);
+  --secondary-foreground: var(--gray-12);
+  --muted: var(--gray-3);
+  --muted-foreground: var(--gray-11);
+  --accent: var(--gray-3);
+  --accent-foreground: var(--gray-12);
+  --destructive: var(--red-9);
+  --destructive-foreground: white;
+  --border: var(--gray-6);
+  --input: var(--gray-6);
+  --ring: var(--brand-7);
+  --radius: 0.625rem;
+
+  --success: var(--green-9);
+  --warning: var(--amber-9);
+  --info: var(--blue-9);
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
 }
 
 * {
@@ -27,8 +88,15 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: system-ui, -apple-system, sans-serif;
   background: var(--background);
   color: var(--foreground);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
 }

@@ -16,9 +16,9 @@ export function Layout() {
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
-      <aside className="flex w-60 flex-col border-r border-[var(--border)] bg-[var(--muted)]/50">
-        <div className="p-4 border-b border-[var(--border)]">
-          <h2 className="text-lg font-bold">Wordy Admin</h2>
+      <aside className="flex w-60 flex-col border-r border-[var(--gray-4)] bg-[var(--gray-2)]">
+        <div className="p-4 border-b border-[var(--gray-4)]">
+          <h2 className="text-lg font-bold text-[var(--brand-11)]">Wordy Admin</h2>
         </div>
 
         <nav className="flex-1 p-3 space-y-1">
@@ -29,20 +29,20 @@ export function Layout() {
               end={item.end}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                  'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
                   isActive
-                    ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
-                    : 'text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]',
+                    ? 'bg-[var(--brand-3)] text-[var(--brand-11)]'
+                    : 'text-[var(--muted-foreground)] hover:bg-[var(--gray-3)] hover:text-[var(--foreground)]',
                 )
               }
             >
-              <item.icon className="h-4 w-4" />
+              <item.icon className="h-5 w-5" />
               {item.label}
             </NavLink>
           ))}
         </nav>
 
-        <div className="border-t border-[var(--border)] p-3">
+        <div className="border-t border-[var(--gray-4)] p-3">
           <div className="flex items-center gap-3 px-3 py-2">
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{admin?.firstName ?? 'Admin'}</p>

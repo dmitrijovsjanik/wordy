@@ -22,15 +22,15 @@ const SORTABLE_COLUMNS = [
 ] as const;
 
 const LEAGUE_COLORS: Record<string, string> = {
-  bronze: 'bg-amber-800/20 text-amber-800',
-  silver: 'bg-gray-400/20 text-gray-600',
-  gold: 'bg-yellow-500/20 text-yellow-700',
-  amber: 'bg-amber-500/20 text-amber-700',
-  sapphire: 'bg-blue-500/20 text-blue-700',
-  amethyst: 'bg-purple-500/20 text-purple-700',
-  topaz: 'bg-orange-500/20 text-orange-700',
-  ruby: 'bg-red-500/20 text-red-700',
-  legend: 'bg-pink-500/20 text-pink-700',
+  bronze: 'bg-[var(--bronze-3)] text-[var(--bronze-11)]',
+  silver: 'bg-[var(--gray-3)] text-[var(--gray-11)]',
+  gold: 'bg-[var(--yellow-3)] text-[var(--yellow-11)]',
+  amber: 'bg-[var(--amber-3)] text-[var(--amber-11)]',
+  sapphire: 'bg-[var(--blue-3)] text-[var(--blue-11)]',
+  amethyst: 'bg-[var(--purple-3)] text-[var(--purple-11)]',
+  topaz: 'bg-[var(--orange-3)] text-[var(--orange-11)]',
+  ruby: 'bg-[var(--red-3)] text-[var(--red-11)]',
+  legend: 'bg-[var(--pink-3)] text-[var(--pink-11)]',
 };
 
 export function UsersPage() {
@@ -120,10 +120,10 @@ export function UsersPage() {
       </div>
 
       {/* Table */}
-      <div className="rounded-xl border border-[var(--border)] overflow-hidden">
+      <div className="rounded-2xl bg-[var(--card)] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-[var(--muted)] text-left">
+            <thead className="bg-[var(--gray-3)] text-left">
               <tr>
                 {SORTABLE_COLUMNS.map((col) => (
                   <th
@@ -145,7 +145,7 @@ export function UsersPage() {
                 <th className="px-4 py-3 font-medium text-[var(--muted-foreground)]">Лига</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[var(--border)]">
+            <tbody className="divide-y divide-[var(--gray-4)]">
               {loading ? (
                 Array.from({ length: 10 }).map((_, i) => (
                   <tr key={i}>
@@ -166,7 +166,7 @@ export function UsersPage() {
                 data?.users.map((user) => (
                   <tr
                     key={user.id}
-                    className="hover:bg-[var(--muted)]/50 cursor-pointer transition-colors"
+                    className="hover:bg-[var(--gray-3)] cursor-pointer transition-colors"
                     onClick={() => navigate(`/admin/users/${user.id}`)}
                   >
                     <td className="px-4 py-3 font-mono text-xs">{user.id}</td>
@@ -201,7 +201,7 @@ export function UsersPage() {
 
         {/* Pagination */}
         {data && data.totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-[var(--border)] px-4 py-3 bg-[var(--muted)]/30">
+          <div className="flex items-center justify-between border-t border-[var(--gray-4)] px-4 py-3 bg-[var(--gray-3)]/50">
             <p className="text-sm text-[var(--muted-foreground)]">
               Стр. {data.page} из {data.totalPages} ({data.total} юзеров)
             </p>
