@@ -36,10 +36,10 @@ export default async function paymentRoutes(app: FastifyInstance) {
 
     const user = await db.query.users.findFirst({
       where: eq(users.id, request.user.id),
-      columns: { autoRenew: true },
+      columns: { autoRenew: true, savedPaymentMethodId: true },
     });
 
-    return { ...status, autoRenew: user?.autoRenew ?? false };
+    return { ...status, autoRenew: user?.autoRenew ?? false, hasCard: !!user?.savedPaymentMethodId };
   });
 
   // Отключить автопродление
@@ -66,6 +66,16 @@ export default async function paymentRoutes(app: FastifyInstance) {
     await db
       .update(users)
       .set({ autoRenew: true })
+      .where(eq(users.id, request.user.id));
+
+    return { ok: true };
+  });
+
+  // Отвязать карту
+  app.post('/api/payments/unlink-card', { onRequest: [app.authenticate] }, async (request) => {
+    await db
+      .update(users)
+      .set({ savedPaymentMethodId: null, autoRenew: false })
       .where(eq(users.id, request.user.id));
 
     return { ok: true };

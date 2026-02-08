@@ -16,12 +16,12 @@ import {
   userCustomWordProgress,
 } from '../db/schema.js';
 import { addGems } from './progression-service.js';
+import { getMskTodayStart } from '../lib/msk-date.js';
 
 // ─── General Stats ──────────────────────────────────────────────────────────
 
 export async function getGeneralStats() {
-  const now = new Date();
-  const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const todayStart = getMskTodayStart();
   const weekAgo = new Date(todayStart.getTime() - 7 * 24 * 60 * 60 * 1000);
 
   const [totalUsersRow] = await db.select({ value: count() }).from(users);

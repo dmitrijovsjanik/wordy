@@ -28,6 +28,7 @@ import type { PooledMeaning, LegacyQuestion, LanguagePair, SpellingQuestion, Mat
 import { DEFAULT_LANG_PAIR, pickGenerator } from './game/types.js';
 import { DOUBLE_XP_CHANCE, DOUBLE_XP_TIME_LIMITS, DOUBLE_XP_MULTIPLIER } from '../config/double-xp-config.js';
 import { setDoubleXp, validateAndConsume, makeKey, makeMatchPairsKey } from './double-xp-tracker.js';
+import { getMskTodayStart, toMskDayStart } from '../lib/msk-date.js';
 
 const QUESTIONS_PER_SESSION = 10;
 
@@ -582,14 +583,12 @@ export async function recordInfiniteAnswer(
     });
 
     const now = new Date();
-    const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const todayStart = getMskTodayStart(now);
 
     // Обновляем streak дней (если первый ответ за день)
     let isNewDay = !user?.lastLoginDate;
     if (user?.lastLoginDate) {
-      const lastLogin = new Date(
-        Date.UTC(user.lastLoginDate.getUTCFullYear(), user.lastLoginDate.getUTCMonth(), user.lastLoginDate.getUTCDate())
-      );
+      const lastLogin = toMskDayStart(user.lastLoginDate);
       isNewDay = lastLogin.getTime() !== todayStart.getTime();
     }
 
@@ -605,9 +604,7 @@ export async function recordInfiniteAnswer(
     let correctMilestonesDone = new Set((user?.dailyCorrectMilestonesDone ?? '').split(',').filter(Boolean).map(Number));
 
     if (user?.dailyCorrectDate) {
-      const lastDate = new Date(
-        Date.UTC(user.dailyCorrectDate.getUTCFullYear(), user.dailyCorrectDate.getUTCMonth(), user.dailyCorrectDate.getUTCDate())
-      );
+      const lastDate = toMskDayStart(user.dailyCorrectDate);
       if (lastDate.getTime() !== todayStart.getTime()) {
         dailyCorrectCount = 0;
         streakMilestonesDone = new Set();
@@ -857,9 +854,7 @@ export async function recordMatchPairsAnswer(
     let correctMilestonesDone = new Set((user?.dailyCorrectMilestonesDone ?? '').split(',').filter(Boolean).map(Number));
 
     if (user?.dailyCorrectDate) {
-      const lastDate = new Date(
-        Date.UTC(user.dailyCorrectDate.getUTCFullYear(), user.dailyCorrectDate.getUTCMonth(), user.dailyCorrectDate.getUTCDate())
-      );
+      const lastDate = toMskDayStart(user.dailyCorrectDate);
       if (lastDate.getTime() !== todayStart.getTime()) {
         dailyCorrectCount = 0;
         streakMilestonesDone = new Set();

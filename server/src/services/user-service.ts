@@ -3,6 +3,7 @@ import { db } from '../db/index.js';
 import { users, quizSessions, duels, streakActivityDays, userLeagueProgress, userSeasonStats, userWordProgress } from '../db/schema.js';
 import { MAX_STREAK_FREEZES, FREEZE_PACKS } from '../config/gems-config.js';
 import { LEAGUE_TIERS } from '../config/league-config.js';
+import { getMskTodayStart, toMskDayStart } from '../lib/msk-date.js';
 
 export async function getProfile(userId: number) {
   const user = await db.query.users.findFirst({
@@ -133,14 +134,12 @@ export async function getDailyRewards(userId: number) {
   if (!user) throw new Error('Пользователь не найден');
 
   const now = new Date();
-  const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const todayStart = getMskTodayStart(now);
 
   // Ежедневная игра — выполнено, если lastLoginDate сегодня
   let dailyPlayDone = false;
   if (user.lastLoginDate) {
-    const lastDate = new Date(
-      Date.UTC(user.lastLoginDate.getUTCFullYear(), user.lastLoginDate.getUTCMonth(), user.lastLoginDate.getUTCDate())
-    );
+    const lastDate = toMskDayStart(user.lastLoginDate);
     dailyPlayDone = lastDate.getTime() === todayStart.getTime();
   }
 
@@ -162,9 +161,7 @@ export async function getDailyRewards(userId: number) {
   let correctMilestonesDone: number[] = [];
 
   if (user.dailyCorrectDate) {
-    const lastDate = new Date(
-      Date.UTC(user.dailyCorrectDate.getUTCFullYear(), user.dailyCorrectDate.getUTCMonth(), user.dailyCorrectDate.getUTCDate())
-    );
+    const lastDate = toMskDayStart(user.dailyCorrectDate);
     if (lastDate.getTime() === todayStart.getTime()) {
       dailyCorrectCount = user.dailyCorrectCount;
       streakMilestonesDone = user.dailyStreakMilestonesDone.split(',').filter(Boolean).map(Number);
@@ -216,7 +213,8 @@ export async function purchaseStreakFreeze(userId: number, days: number) {
 
 export async function getStreakCalendar(userId: number, months: number) {
   const now = new Date();
-  const startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - months + 1, 1));
+  const mskNow = new Date(now.getTime() + 3 * 3600_000);
+  const startDate = new Date(Date.UTC(mskNow.getUTCFullYear(), mskNow.getUTCMonth() - months + 1, 1) - 3 * 3600_000);
 
   // Запрашиваем трекинговые дни из БД
   const trackedDays = await db.query.streakActivityDays.findMany({

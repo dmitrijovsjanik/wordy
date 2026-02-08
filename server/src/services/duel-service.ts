@@ -4,6 +4,7 @@ import { duels, quizSessions } from '../db/schema.js';
 import { generateQuestion } from './quiz-service.js';
 import { rewardDuelWin, addGems } from './progression-service.js';
 import { GEMS_DUEL_WIN_DAILY } from '../config/gems-config.js';
+import { getMskTodayStart } from '../lib/msk-date.js';
 
 export async function createDuel(challengerId: number) {
   const [session] = await db
@@ -144,8 +145,7 @@ export async function finishDuel(duelId: number) {
     await rewardDuelWin(winnerId);
 
     // Гемы за победу — макс. 1 раз в день
-    const todayStart = new Date();
-    todayStart.setUTCHours(0, 0, 0, 0);
+    const todayStart = getMskTodayStart();
 
     const otherWinsToday = await db.query.duels.findMany({
       where: and(

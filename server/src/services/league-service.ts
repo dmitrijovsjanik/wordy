@@ -26,6 +26,7 @@ import {
   type LeagueTier,
 } from '../config/league-config.js';
 import { addGems } from './progression-service.js';
+import { getMskTodayStart } from '../lib/msk-date.js';
 
 // ─── Season Management ──────────────────────────────────────────────────────
 
@@ -512,9 +513,7 @@ export async function sendSeasonEndingReminders(seasonId: number) {
 // ─── Daily Snapshots ─────────────────────────────────────────────────────────
 
 function getStartOfDay(date: Date = new Date()): Date {
-  const d = new Date(date);
-  d.setUTCHours(0, 0, 0, 0);
-  return d;
+  return getMskTodayStart(date);
 }
 
 function getYesterdayStart(): Date {

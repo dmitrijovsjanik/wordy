@@ -9,7 +9,7 @@ import { useResetTimer } from '@/hooks/use-reset-timer';
 import { StreakFreezeDialog, type FreezePack } from '@/components/ui/streak-freeze-dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { getDailyRewards, getPremiumStatus, cancelAutoRenew, enableAutoRenew, type DailyRewardsResponse } from '@/lib/api';
+import { getDailyRewards, getPremiumStatus, cancelAutoRenew, enableAutoRenew, unlinkCard, type DailyRewardsResponse } from '@/lib/api';
 import {
   Drawer,
   DrawerContent,
@@ -125,8 +125,8 @@ export function Shop() {
   const [selectedPack, setSelectedPack] = useState<FreezePack | null>(null);
   const [resourceInfoType, setResourceInfoType] = useState<'gems' | 'freezes' | null>(null);
   const [dailyRewards, setDailyRewards] = useState<DailyRewardsResponse | null>(null);
-  const [premiumStatus, setPremiumStatus] = useState<{ isPremium: boolean; premiumUntil: string | null; premiumPlan: string | null; autoRenew: boolean } | null>(null);
-  const [isCancellingAutoRenew, setIsCancellingAutoRenew] = useState(false);
+  const [premiumStatus, setPremiumStatus] = useState<{ isPremium: boolean; premiumUntil: string | null; premiumPlan: string | null; autoRenew: boolean; hasCard: boolean } | null>(null);
+  const [isToggling, setIsToggling] = useState(false);
   const resetTimer = useResetTimer();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollUp, setCanScrollUp] = useState(false);
@@ -155,7 +155,7 @@ export function Shop() {
   }, [refreshProfile]);
 
   const handleToggleAutoRenew = async () => {
-    setIsCancellingAutoRenew(true);
+    setIsToggling(true);
     try {
       if (premiumStatus?.autoRenew) {
         await cancelAutoRenew();
@@ -167,7 +167,19 @@ export function Shop() {
     } catch {
       // ignore
     } finally {
-      setIsCancellingAutoRenew(false);
+      setIsToggling(false);
+    }
+  };
+
+  const handleUnlinkCard = async () => {
+    setIsToggling(true);
+    try {
+      await unlinkCard();
+      setPremiumStatus((prev) => prev ? { ...prev, hasCard: false, autoRenew: false } : prev);
+    } catch {
+      // ignore
+    } finally {
+      setIsToggling(false);
     }
   };
 
@@ -223,17 +235,30 @@ export function Shop() {
                 </span>
               </div>
             </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleToggleAutoRenew}
-              disabled={isCancellingAutoRenew}
-              className="w-full"
-            >
-              {isCancellingAutoRenew
-                ? (premiumStatus.autoRenew ? 'Отключение...' : 'Включение...')
-                : (premiumStatus.autoRenew ? 'Отключить автопродление' : 'Включить автопродление')}
-            </Button>
+            {premiumStatus.hasCard && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleToggleAutoRenew}
+                disabled={isToggling}
+                className="w-full"
+              >
+                {isToggling
+                  ? (premiumStatus.autoRenew ? 'Отключение...' : 'Включение...')
+                  : (premiumStatus.autoRenew ? 'Отключить автопродление' : 'Включить автопродление')}
+              </Button>
+            )}
+            {premiumStatus.hasCard && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleUnlinkCard}
+                disabled={isToggling}
+                className="w-full text-[var(--gray-11)]"
+              >
+                Отвязать карту
+              </Button>
+            )}
           </div>
         </div>
       )}

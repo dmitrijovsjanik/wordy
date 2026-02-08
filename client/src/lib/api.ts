@@ -171,7 +171,7 @@ export function createPayment(itemType: string) {
 }
 
 export function getPremiumStatus() {
-  return fetchApi<{ isPremium: boolean; premiumUntil: string | null; premiumPlan: string | null; autoRenew: boolean }>(
+  return fetchApi<{ isPremium: boolean; premiumUntil: string | null; premiumPlan: string | null; autoRenew: boolean; hasCard: boolean }>(
     'GET',
     '/api/payments/premium',
   );
@@ -183,6 +183,10 @@ export function cancelAutoRenew() {
 
 export function enableAutoRenew() {
   return fetchApi<{ ok: boolean }>('POST', '/api/payments/enable-auto-renew');
+}
+
+export function unlinkCard() {
+  return fetchApi<{ ok: boolean }>('POST', '/api/payments/unlink-card');
 }
 
 export function getStreakCalendar(months = 6) {

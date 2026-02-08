@@ -28,6 +28,7 @@ import {
   addLpForDuelWin,
   addLpForStreak,
 } from './league-service.js';
+import { getMskTodayStart, toMskDayStart } from '../lib/msk-date.js';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -233,13 +234,11 @@ export async function updateStreakDays(userId: number): Promise<StreakUpdateResu
   let freezesUsed = 0;
   let gemsEarned = 0;
 
-  // Сбрасываем время до начала дня (UTC) для сравнения календарных дней
-  const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  // Сбрасываем время до начала дня (МСК) для сравнения календарных дней
+  const todayStart = getMskTodayStart(now);
 
   if (lastLogin) {
-    const lastLoginStart = new Date(
-      Date.UTC(lastLogin.getUTCFullYear(), lastLogin.getUTCMonth(), lastLogin.getUTCDate())
-    );
+    const lastLoginStart = toMskDayStart(lastLogin);
 
     // Разница в днях
     const diffDays = Math.floor((todayStart.getTime() - lastLoginStart.getTime()) / (1000 * 60 * 60 * 24));
@@ -304,9 +303,7 @@ export async function updateStreakDays(userId: number): Promise<StreakUpdateResu
 
   // Если использовались заморозки — записываем freeze-дни
   if (freezesUsed > 0 && lastLogin) {
-    const lastLoginStart = new Date(
-      Date.UTC(lastLogin.getUTCFullYear(), lastLogin.getUTCMonth(), lastLogin.getUTCDate())
-    );
+    const lastLoginStart = toMskDayStart(lastLogin);
     const freezeRecords: { userId: number; date: Date; type: string }[] = [];
     for (let i = 1; i <= freezesUsed; i++) {
       const freezeDate = new Date(lastLoginStart.getTime() + i * 24 * 60 * 60 * 1000);
