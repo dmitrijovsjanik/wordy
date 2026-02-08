@@ -293,7 +293,7 @@ export default async function botRoutes(app: FastifyInstance) {
             reply_markup: {
               inline_keyboard: [
                 [{ text: '💳 Оплатить', url: confirmationUrl }],
-                [{ text: '⬅️ Назад к каталогу', callback_data: 'catalog' }],
+                [{ text: '❌ Отменить', callback_data: 'cancel_payment' }],
               ],
             },
           });
@@ -305,6 +305,13 @@ export default async function botRoutes(app: FastifyInstance) {
           });
         }
 
+        return reply.status(200).send({ ok: true });
+      }
+
+      // Отмена платежа — удалить сообщение со ссылкой
+      if (data === 'cancel_payment') {
+        await callTelegramApi('answerCallbackQuery', { callback_query_id: callback_query.id });
+        await callTelegramApi('deleteMessage', { chat_id: chatId, message_id: messageId });
         return reply.status(200).send({ ok: true });
       }
 
