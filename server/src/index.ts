@@ -11,6 +11,7 @@ import leagueRoutes from './routes/leagues.js';
 import friendRoutes from './routes/friends.js';
 import botRoutes, { setupBot } from './routes/bot.js';
 import adminRoutes from './routes/admin.js';
+import paymentRoutes from './routes/payments.js';
 import { runStartupMigrations } from './db/startup-migrations.js';
 import './cron/league-cron.js';
 
@@ -41,6 +42,7 @@ await app.register(leagueRoutes);
 await app.register(friendRoutes);
 await app.register(botRoutes);
 await app.register(adminRoutes);
+await app.register(paymentRoutes);
 
 const port = Number(process.env.PORT) || 3000;
 

@@ -75,6 +75,8 @@ export async function generateQuestionFromPool(
   const totalPool = pool.meaningIds.length + pool.customWords.length;
 
   if (totalPool === 0) {
+    // Для коллекции ошибок — возвращаем null (все ошибки пройдены)
+    if (collectionId === ERRORS_COLLECTION_ID) return null;
     return generateRandom(excludeMeaningIds, langPair, fixedDirection);
   }
 
@@ -86,6 +88,7 @@ export async function generateQuestionFromPool(
   const repeatMastered = user?.repeatMastered ?? false;
 
   const now = new Date();
+  const skipSrsTimer = collectionId === ERRORS_COLLECTION_ID;
   let reviewReady: number[] = [];
   let unseen: number[] = [];
 
@@ -112,10 +115,10 @@ export async function generateQuestionFromPool(
         unseen.push(id);
       } else if (progress.srsStage >= LEARNED_PROGRESS && !repeatMastered) {
         // выученное — пропускаем
-      } else if (!progress.nextReviewAt || progress.nextReviewAt <= now) {
+      } else if (skipSrsTimer || !progress.nextReviewAt || progress.nextReviewAt <= now) {
         reviewReady.push(id);
       }
-      // nextReviewAt > now — ещё в таймауте, пропускаем
+      // nextReviewAt > now — ещё в таймауте, пропускаем (кроме ошибок)
     }
   }
 
@@ -147,10 +150,10 @@ export async function generateQuestionFromPool(
         customUnseen.push(cw);
       } else if (progress.srsStage >= LEARNED_PROGRESS && !repeatMastered) {
         // выученное — пропускаем
-      } else if (!progress.nextReviewAt || progress.nextReviewAt <= now) {
+      } else if (skipSrsTimer || !progress.nextReviewAt || progress.nextReviewAt <= now) {
         customReviewReady.push(cw);
       }
-      // nextReviewAt > now — ещё в таймауте, пропускаем
+      // nextReviewAt > now — ещё в таймауте, пропускаем (кроме ошибок)
     }
   }
 
@@ -431,7 +434,7 @@ export async function recordInfiniteAnswer(
         .update(userCustomWordProgress)
         .set({
           correctCount: isCorrect ? sql`${userCustomWordProgress.correctCount} + 1` : userCustomWordProgress.correctCount,
-          incorrectCount: isCorrect ? userCustomWordProgress.incorrectCount : sql`${userCustomWordProgress.incorrectCount} + 1`,
+          incorrectCount: isCorrect ? 0 : sql`${userCustomWordProgress.incorrectCount} + 1`,
           srsStage: srs.newProgress,
           hasPenalty: srs.newPenalty,
           reviewStage: srs.newReviewStage,
@@ -489,7 +492,7 @@ export async function recordInfiniteAnswer(
         .update(userWordProgress)
         .set({
           correctCount: isCorrect ? sql`${userWordProgress.correctCount} + 1` : userWordProgress.correctCount,
-          incorrectCount: isCorrect ? userWordProgress.incorrectCount : sql`${userWordProgress.incorrectCount} + 1`,
+          incorrectCount: isCorrect ? 0 : sql`${userWordProgress.incorrectCount} + 1`,
           srsStage: srs.newProgress,
           hasPenalty: srs.newPenalty,
           reviewStage: srs.newReviewStage,
@@ -676,7 +679,7 @@ export async function recordMatchPairsAnswer(
           .update(userCustomWordProgress)
           .set({
             correctCount: isCorrect ? sql`${userCustomWordProgress.correctCount} + 1` : userCustomWordProgress.correctCount,
-            incorrectCount: isCorrect ? userCustomWordProgress.incorrectCount : sql`${userCustomWordProgress.incorrectCount} + 1`,
+            incorrectCount: isCorrect ? 0 : sql`${userCustomWordProgress.incorrectCount} + 1`,
             srsStage: srs.newProgress,
             hasPenalty: srs.newPenalty,
             reviewStage: srs.newReviewStage,
@@ -716,7 +719,7 @@ export async function recordMatchPairsAnswer(
           .update(userWordProgress)
           .set({
             correctCount: isCorrect ? sql`${userWordProgress.correctCount} + 1` : userWordProgress.correctCount,
-            incorrectCount: isCorrect ? userWordProgress.incorrectCount : sql`${userWordProgress.incorrectCount} + 1`,
+            incorrectCount: isCorrect ? 0 : sql`${userWordProgress.incorrectCount} + 1`,
             srsStage: srs.newProgress,
             hasPenalty: srs.newPenalty,
             reviewStage: srs.newReviewStage,

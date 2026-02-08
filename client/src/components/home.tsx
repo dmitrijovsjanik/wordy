@@ -6,6 +6,7 @@ import { useLeagueStore } from '@/stores/league-store';
 import { useCollectionStore } from '@/stores/collection-store';
 import { useTelegram } from '@/hooks/use-telegram';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { WelcomeDrawer } from '@/components/ui/welcome-drawer';
 import { LEAGUE_ICONS } from '@/components/ui/league-icons';
@@ -15,6 +16,7 @@ import { WordDisplay } from '@/components/game/word-display';
 import { MultipleChoice } from '@/components/game/question-types/multiple-choice';
 import { Spelling } from '@/components/game/question-types/spelling';
 import { RewardFeedback } from '@/components/game/reward-feedback';
+import { motion, AnimatePresence } from 'framer-motion';
 import { StreakIndicator } from '@/components/game/streak-indicator';
 import { QuizContainer } from '@/components/game/quiz-container';
 import { MatchPairs } from '@/components/game/question-types/match-pairs';
@@ -23,7 +25,8 @@ import { StreakInfoSheet } from '@/components/ui/streak-info-sheet';
 import { GemsIndicator } from '@/components/ui/gems-indicator';
 import { Avatar } from '@/components/ui/avatar';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Clock01Icon, Notification03Icon } from '@hugeicons/core-free-icons';
+import { Cancel01Icon, Clock01Icon, Notification03Icon } from '@hugeicons/core-free-icons';
+import { ERRORS_COLLECTION_ID } from '@/lib/api';
 import { xpForLevel } from '@/lib/progression-config';
 import type { RewardDisplay, AnswerFeedback } from '@/types/game';
 
@@ -39,6 +42,8 @@ export function Home() {
     isLoading,
     error,
     streak,
+    collectionId,
+    errorsCleared,
     fetchNext,
     submitAnswer,
     submitMatchPairsResults,
@@ -98,6 +103,29 @@ export function Home() {
   const showWelcome = !isLoadingLibrary && !hasSystemCollection && !welcomeDismissed;
 
   useEffect(() => { fetchLibrary(); }, [fetchLibrary]);
+
+  // Название коллекции для бейджа фокусировки
+  const focusCollectionName = collectionId
+    ? collectionId === ERRORS_COLLECTION_ID
+      ? 'Ошибки'
+      : library.find((c) => c.id === collectionId)?.title ?? null
+    : null;
+
+  const handleExitFocus = useCallback(() => {
+    // Сбрасываем collectionId без очистки currentQuestion, чтобы QuizContainer
+    // анимировал переход плавно (fade out → fade in) вместо мигания скелетона
+    useHomeStore.setState({ collectionId: undefined, recentMeaningIds: [], recentGenerators: [] });
+    fetchNext();
+  }, [fetchNext]);
+
+  // Когда ошибки пройдены — показать сообщение, через паузу загрузить обычный вопрос
+  useEffect(() => {
+    if (!errorsCleared) return;
+    const t = setTimeout(() => {
+      fetchNext();
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [errorsCleared, fetchNext]);
 
   // Streak particles state
   const [particleBurst, setParticleBurst] = useState(false);
@@ -238,7 +266,7 @@ export function Home() {
       {/* Quiz Card */}
       <div className="mt-2 flex min-h-0 flex-1 flex-col">
         {/* Loading state */}
-        {!currentQuestion && !feedback && isLoading && (
+        {!currentQuestion && !feedback && isLoading && !errorsCleared && (
           <div className="flex flex-1 flex-col items-center justify-center">
             <Skeleton className="h-10 w-40" />
             <div className="mt-10 grid w-full grid-cols-2 gap-3">
@@ -261,7 +289,7 @@ export function Home() {
         )}
 
         {/* Empty state */}
-        {!currentQuestion && !feedback && !isLoading && !error && (
+        {!currentQuestion && !feedback && !isLoading && !error && !errorsCleared && (
           <div className="flex flex-1 flex-col items-center justify-center gap-4">
             <p className="text-center text-[var(--gray-11)]">
               Нет доступных слов. Добавьте коллекцию!
@@ -272,8 +300,8 @@ export function Home() {
           </div>
         )}
 
-        {/* Question */}
-        {currentQuestion && (
+        {/* Question / Errors Cleared */}
+        {(currentQuestion || errorsCleared) && (
           <div className="flex min-h-0 flex-1 flex-col">
             {/* Streak + Status bar — outside QuizContainer so they don't fade */}
             <div className="shrink-0 flex flex-col items-center">
@@ -289,7 +317,7 @@ export function Home() {
 
               <div className="mt-2 flex items-center gap-1.5">
                 {!isLeagueLoading && progress ? (
-                  <div className="flex h-8 items-center gap-1 rounded-full bg-[var(--gray-3)] pl-1 pr-2.5">
+                  <div className="flex h-8 items-center gap-1 rounded-full bg-[var(--gray-3)] pl-1 pr-3">
                     {(() => {
                       const Icon = LEAGUE_ICONS[progress.tier];
                       return <Icon size={24} className="shrink-0" />;
@@ -313,73 +341,105 @@ export function Home() {
                 </button>
                 <StreakDaysIndicator count={user.streakDays} onClick={() => setStreakSheetOpen(true)} />
               </div>
+
+              {/* Collection focus badge / errors cleared message */}
+              <AnimatePresence>
+                {focusCollectionName && (
+                  <motion.div
+                    key="focus-badge"
+                    initial={{ opacity: 0, height: 0, scaleX: 0.8 }}
+                    animate={{ opacity: 1, height: 'auto', scaleX: 1 }}
+                    exit={{ opacity: 0, height: 0, scaleX: 0.8 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                    className="mt-2 flex justify-center"
+                  >
+                    <Badge variant="primary" className="h-8 max-w-[calc(100vw-2rem)] gap-1.5 pr-1.5 text-xs">
+                      <span className="truncate">{focusCollectionName}</span>
+                      <button onClick={handleExitFocus} className="rounded-full p-0.5 hover:bg-white/20 transition-colors">
+                        <HugeiconsIcon icon={Cancel01Icon} size={14} className="text-white/80" />
+                      </button>
+                    </Badge>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
-            <QuizContainer questionKey={currentQuestion.type === 'match-pairs' ? currentQuestion.pairs[0]?.meaningId ?? 0 : currentQuestion.meaningId}>
-              {/* Word / Title area */}
-              {currentQuestion.type === 'match-pairs' ? (
-                <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
-                  <h2 className="mt-3 mb-1 text-xl font-bold text-[var(--gray-12)]">Соедините пары</h2>
-                  <p className="text-sm text-[var(--gray-11)]">Нажмите на слово, затем на его перевод</p>
+            <QuizContainer questionKey={errorsCleared ? 'errors-cleared' : (currentQuestion!.type === 'match-pairs' ? currentQuestion!.pairs[0]?.meaningId ?? 0 : currentQuestion!.meaningId)}>
+              {errorsCleared ? (
+                <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3">
+                  <span className="text-4xl">&#10003;</span>
+                  <h2 className="text-center text-xl font-bold text-[var(--gray-12)]">
+                    Все ошибки пройдены!
+                  </h2>
                 </div>
-              ) : (
-                <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center">
-                  {/* Word display */}
-                  <div className="mt-3">
-                    <WordDisplay
-                      word={currentQuestion.word}
-                      originalForm={currentQuestion.originalForm}
-                      transcription={currentQuestion.transcription}
-                      meaningId={currentQuestion.meaningId}
-                      skipInitialAnimation={currentQuestion.meaningId === firstMeaningIdRef.current}
-                      showSpeaker={currentQuestion.direction === 'en-ru'}
-                    />
-                  </div>
+              ) : currentQuestion && (
+                <>
+                  {/* Word / Title area */}
+                  {currentQuestion.type === 'match-pairs' ? (
+                    <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
+                      <h2 className="mt-3 mb-1 text-xl font-bold text-[var(--gray-12)]">Соедините пары</h2>
+                      <p className="text-sm text-[var(--gray-11)]">Нажмите на слово, затем на его перевод</p>
+                    </div>
+                  ) : (
+                    <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center">
+                      {/* Word display */}
+                      <div className="mt-3">
+                        <WordDisplay
+                          word={currentQuestion.word}
+                          originalForm={currentQuestion.originalForm}
+                          transcription={currentQuestion.transcription}
+                          meaningId={currentQuestion.meaningId}
+                          skipInitialAnimation={currentQuestion.meaningId === firstMeaningIdRef.current}
+                          showSpeaker={currentQuestion.direction === 'en-ru'}
+                        />
+                      </div>
 
-                  {/* Reward feedback */}
-                  {rewardDisplay && (
-                    <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
-                      <RewardFeedback reward={rewardDisplay} />
+                      {/* Reward feedback */}
+                      {rewardDisplay && (
+                        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
+                          <RewardFeedback reward={rewardDisplay} />
+                        </div>
+                      )}
                     </div>
                   )}
-                </div>
-              )}
 
-              {/* Answer buttons */}
-              <div className="shrink-0">
-                {currentQuestion.type === 'match-pairs' ? (
-                  <MatchPairs
-                    pairs={currentQuestion.pairs}
-                    questionKey={currentQuestion.pairs.map((p) => p.meaningId).join('-')}
-                    disabled={isLoading}
-                    onComplete={handleMatchPairsComplete}
-                    onSkip={handleMatchPairsSkip}
-                    showSkip
-                  />
-                ) : currentQuestion.type === 'spelling' ? (
-                  <Spelling
-                    options={currentQuestion.options}
-                    questionKey={currentQuestion.meaningId}
-                    selectedAnswer={selectedOption}
-                    feedback={answerFeedback}
-                    disabled={isLoading}
-                    onAnswer={handleAnswer}
-                    onSkip={handleSkip}
-                    showSkip
-                  />
-                ) : (
-                  <MultipleChoice
-                    options={currentQuestion.options}
-                    questionKey={currentQuestion.meaningId}
-                    selectedAnswer={selectedOption}
-                    feedback={answerFeedback}
-                    disabled={isLoading}
-                    onAnswer={handleAnswer}
-                    onSkip={handleSkip}
-                    showSkip
-                  />
-                )}
-              </div>
+                  {/* Answer buttons */}
+                  <div className="shrink-0">
+                    {currentQuestion.type === 'match-pairs' ? (
+                      <MatchPairs
+                        pairs={currentQuestion.pairs}
+                        questionKey={currentQuestion.pairs.map((p) => p.meaningId).join('-')}
+                        disabled={isLoading}
+                        onComplete={handleMatchPairsComplete}
+                        onSkip={handleMatchPairsSkip}
+                        showSkip
+                      />
+                    ) : currentQuestion.type === 'spelling' ? (
+                      <Spelling
+                        options={currentQuestion.options}
+                        questionKey={currentQuestion.meaningId}
+                        selectedAnswer={selectedOption}
+                        feedback={answerFeedback}
+                        disabled={isLoading}
+                        onAnswer={handleAnswer}
+                        onSkip={handleSkip}
+                        showSkip
+                      />
+                    ) : (
+                      <MultipleChoice
+                        options={currentQuestion.options}
+                        questionKey={currentQuestion.meaningId}
+                        selectedAnswer={selectedOption}
+                        feedback={answerFeedback}
+                        disabled={isLoading}
+                        onAnswer={handleAnswer}
+                        onSkip={handleSkip}
+                        showSkip
+                      />
+                    )}
+                  </div>
+                </>
+              )}
             </QuizContainer>
           </div>
         )}

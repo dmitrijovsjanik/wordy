@@ -76,6 +76,14 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    key: 'reset-incorrect-count',
+    description: 'Сброс incorrectCount — теперь сбрасывается при правильном ответе, старые данные нужно почистить',
+    run: async () => {
+      await db.execute(sql`UPDATE user_word_progress SET incorrect_count = 0 WHERE incorrect_count > 0`);
+      await db.execute(sql`UPDATE user_custom_word_progress SET incorrect_count = 0 WHERE incorrect_count > 0`);
+    },
+  },
 ];
 
 export async function runStartupMigrations(): Promise<void> {

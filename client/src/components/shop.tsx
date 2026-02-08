@@ -32,6 +32,13 @@ const FREEZE_PACKS: FreezePack[] = [
 
 const BASE_PRICE_PER_DAY = FREEZE_PACKS[0].gems;
 
+const FREEZE_ITEM_TYPE_MAP: Record<number, string> = {
+  1: 'freeze_1',
+  2: 'freeze_2',
+  7: 'freeze_7',
+  14: 'freeze_14',
+};
+
 function getDiscount(pack: FreezePack): number {
   const fullPrice = BASE_PRICE_PER_DAY * pack.days;
   return Math.round(((fullPrice - pack.gems) / fullPrice) * 100);
@@ -134,7 +141,14 @@ export function Shop() {
 
   useEffect(() => {
     getDailyRewards().then(setDailyRewards).catch(() => {});
-  }, []);
+
+    // После возврата с YooKassa — обновить профиль
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('payment') === 'complete') {
+      window.history.replaceState({}, '', '/shop');
+      refreshProfile();
+    }
+  }, [refreshProfile]);
 
   if (!user) return null;
 
@@ -239,6 +253,7 @@ export function Shop() {
         open={selectedPack !== null}
         onOpenChange={(open) => !open && setSelectedPack(null)}
         pack={selectedPack}
+        rubItemType={selectedPack ? FREEZE_ITEM_TYPE_MAP[selectedPack.days] : undefined}
         currentFreezes={user.streakFreezes}
         currentGems={user.gems}
         onPurchaseSuccess={refreshProfile}

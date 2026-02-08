@@ -227,14 +227,13 @@ function MatchPairRow({
       <Button
         variant={
           leftWrongFlash ? 'destructive' :
-          leftMatched ? 'success' :
           'secondary'
         }
         disabled={leftMatched || disabled}
         onClick={onLeftTap}
         className={cn(
           'h-auto min-h-14 whitespace-normal px-3 py-2 text-center text-sm leading-tight transition-all',
-          leftMatched && 'pointer-events-none',
+          leftMatched && 'pointer-events-none opacity-40 bg-[var(--green-3)] text-[var(--green-11)]',
           leftSelected && !leftMatched && 'ring-2 ring-[var(--brand-7)] bg-[var(--brand-3)] text-[var(--brand-12)]',
           leftWrongFlash && 'animate-shake',
         )}
@@ -244,14 +243,13 @@ function MatchPairRow({
       <Button
         variant={
           rightWrongFlash ? 'destructive' :
-          rightMatched ? 'success' :
           'secondary'
         }
         disabled={rightMatched || disabled}
         onClick={onRightTap}
         className={cn(
           'h-auto min-h-14 whitespace-normal px-3 py-2 text-center text-sm leading-tight transition-all',
-          rightMatched && 'pointer-events-none',
+          rightMatched && 'pointer-events-none opacity-40 bg-[var(--green-3)] text-[var(--green-11)]',
           rightSelected && !rightMatched && 'ring-2 ring-[var(--brand-7)] bg-[var(--brand-3)] text-[var(--brand-12)]',
           rightWrongFlash && 'animate-shake',
         )}

@@ -9,7 +9,7 @@ import {
   DrawerFooter,
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
-import { purchaseStreakFreeze } from '@/lib/api';
+import { purchaseStreakFreeze, createPayment } from '@/lib/api';
 import { useTelegram } from '@/hooks/use-telegram';
 import snowflakeData from '@/assets/snowflake-freeze.json';
 import gemSpinData from '@/assets/gem-spin.json';
@@ -30,6 +30,7 @@ type StreakFreezeDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   pack: FreezePack | null;
+  rubItemType?: string;
   currentFreezes: number;
   currentGems: number;
   onPurchaseSuccess: () => void;
@@ -39,6 +40,7 @@ export function StreakFreezeDialog({
   open,
   onOpenChange,
   pack,
+  rubItemType,
   currentFreezes,
   currentGems,
   onPurchaseSuccess,
@@ -65,6 +67,25 @@ export function StreakFreezeDialog({
     } catch (err) {
       hapticNotification('error');
       const message = err instanceof Error ? err.message : 'Ошибка при покупке';
+      setError(message);
+    } finally {
+      setIsPurchasing(false);
+    }
+  };
+
+  const handlePurchaseRub = async () => {
+    if (!rubItemType) return;
+
+    setIsPurchasing(true);
+    setError(null);
+
+    try {
+      const { confirmationUrl } = await createPayment(rubItemType);
+      window.open(confirmationUrl, '_blank');
+      onOpenChange(false);
+    } catch (err) {
+      hapticNotification('error');
+      const message = err instanceof Error ? err.message : 'Ошибка создания платежа';
       setError(message);
     } finally {
       setIsPurchasing(false);
@@ -105,17 +126,17 @@ export function StreakFreezeDialog({
             </span>
           </button>
 
-          {/* За рубли (Telegram Stars — скоро) */}
+          {/* За рубли */}
           <button
-            disabled
-            className="flex items-center gap-3 rounded-2xl bg-[var(--gray-2)] px-4 py-3.5 opacity-50"
+            onClick={handlePurchaseRub}
+            disabled={!rubItemType || isPurchasing}
+            className="flex items-center gap-3 rounded-2xl bg-[var(--gray-2)] px-4 py-3.5 transition-colors active:bg-[var(--gray-3)] disabled:opacity-50"
           >
             <span className="flex h-8 w-8 shrink-0 items-center justify-center text-lg">₽</span>
             <div className="flex flex-1 flex-col items-start">
               <span className="text-sm font-semibold">За рубли</span>
-              <span className="text-[11px] text-[var(--gray-9)]">Скоро</span>
             </div>
-            <span className="text-lg font-bold text-[var(--gray-9)]">
+            <span className="text-lg font-bold text-[var(--gray-12)]">
               {pack.rubPrice} ₽
             </span>
           </button>

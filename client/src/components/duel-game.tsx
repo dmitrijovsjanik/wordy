@@ -14,7 +14,7 @@ import { QuizContainer } from '@/components/game/quiz-container';
 import { MultipleChoice } from '@/components/game/question-types/multiple-choice';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Loading03Icon } from '@hugeicons/core-free-icons';
-import type { Duel } from '@/types/api';
+import type { Duel, QuizQuestionBase } from '@/types/api';
 
 const TOTAL_QUESTIONS = 10;
 
@@ -113,14 +113,15 @@ export function DuelGame() {
 
   const handleAnswer = useCallback((option: string) => {
     if (answerFeedback || isLoading || !currentQuestion) return;
+    const q = currentQuestion as QuizQuestionBase;
 
     hapticImpact('light');
     setSelectedOption(option);
 
     const timeMs = Date.now() - answerStartTime.current;
-    const isCorrectGuess = option === (currentQuestion.correctTranslation ?? '');
+    const isCorrectGuess = option === (q.correctTranslation ?? '');
 
-    submitAnswer(isCorrectGuess ? currentQuestion.meaningId : null, timeMs);
+    submitAnswer(isCorrectGuess ? q.meaningId : null, timeMs);
   }, [answerFeedback, isLoading, currentQuestion, hapticImpact, submitAnswer]);
 
   useEffect(() => {
@@ -205,38 +206,45 @@ export function DuelGame() {
 
       {/* Question content with animation */}
       <QuizContainer questionKey={questionIndex}>
-        {/* Direction hint */}
-        <div className="mt-8 flex flex-1 flex-col items-center justify-center">
-          <span className="mb-2 text-sm text-[var(--gray-11)]">
-            {currentQuestion?.direction === 'ru-en' ? 'Переведите на английский' : 'Как переводится?'}
-          </span>
+        {(() => {
+          const q = currentQuestion as QuizQuestionBase | null;
+          return (
+            <>
+              {/* Direction hint */}
+              <div className="mt-8 flex flex-1 flex-col items-center justify-center">
+                <span className="mb-2 text-sm text-[var(--gray-11)]">
+                  {q?.direction === 'ru-en' ? 'Переведите на английский' : 'Как переводится?'}
+                </span>
 
-          {/* Word display with transcription and speaker */}
-          {currentQuestion && (
-            <WordDisplay
-              word={currentQuestion.word}
-              originalForm={currentQuestion.originalForm}
-              transcription={currentQuestion.transcription}
-              meaningId={currentQuestion.meaningId}
-              showSpeaker={currentQuestion.direction !== 'ru-en'}
-            />
-          )}
-        </div>
+                {/* Word display with transcription and speaker */}
+                {q && (
+                  <WordDisplay
+                    word={q.word}
+                    originalForm={q.originalForm}
+                    transcription={q.transcription}
+                    meaningId={q.meaningId}
+                    showSpeaker={q.direction !== 'ru-en'}
+                  />
+                )}
+              </div>
 
-        {/* Options */}
-        <div className="mt-auto pb-4">
-          {currentQuestion && (
-            <MultipleChoice
-              options={currentQuestion.options}
-              questionKey={questionIndex}
-              selectedAnswer={selectedOption}
-              feedback={answerFeedback}
-              disabled={isLoading}
-              onAnswer={handleAnswer}
-              showSkip={false}
-            />
-          )}
-        </div>
+              {/* Options */}
+              <div className="mt-auto pb-4">
+                {q && (
+                  <MultipleChoice
+                    options={q.options}
+                    questionKey={questionIndex}
+                    selectedAnswer={selectedOption}
+                    feedback={answerFeedback}
+                    disabled={isLoading}
+                    onAnswer={handleAnswer}
+                    showSkip={false}
+                  />
+                )}
+              </div>
+            </>
+          );
+        })()}
       </QuizContainer>
     </div>
   );

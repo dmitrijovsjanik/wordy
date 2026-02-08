@@ -1,7 +1,8 @@
 import { create } from 'zustand';
-import type { QuizQuestion, InfiniteAnswerResponse, MatchPairsAnswerResponse } from '@/types/api';
+import type { QuizQuestion, InfiniteAnswerResponse } from '@/types/api';
 import { quizNext, quizAnswerInfinite, quizAnswerMatchPairs, ERRORS_COLLECTION_ID } from '@/lib/api';
 import { useLeagueStore } from './league-store';
+import { useCollectionStore } from './collection-store';
 
 const MAX_RECENT = 20;
 const MAX_RECENT_GENERATORS = 10;
@@ -59,6 +60,7 @@ type HomeState = {
   streak: number;
   collectionId: number | typeof ERRORS_COLLECTION_ID | undefined;
   generatorMode: QuestionGeneratorMode;
+  errorsCleared: boolean;
 
   setCollectionId: (id: number | typeof ERRORS_COLLECTION_ID | undefined) => void;
   setGeneratorMode: (mode: QuestionGeneratorMode) => void;
@@ -79,6 +81,7 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
   streak: loadStreak(),
   collectionId: undefined,
   generatorMode: 'auto',
+  errorsCleared: false,
 
   setCollectionId: (id) => {
     saveQuestion(null);
@@ -94,15 +97,21 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
       const { recentMeaningIds, collectionId, generatorMode, recentGenerators } = get();
       const res = await quizNext(recentMeaningIds, collectionId, generatorMode, recentGenerators);
 
+      // Если ошибки закончились — показываем сообщение, переход на обычный режим через паузу
+      if (!res.question && collectionId === ERRORS_COLLECTION_ID) {
+        set({ collectionId: undefined, currentQuestion: null, recentMeaningIds: [], recentGenerators: [], errorsCleared: true, isLoading: false });
+        return;
+      }
+
       // Трекаем тип генератора для авто-ротации
       const updatedGenerators = res.question
         ? [...recentGenerators, getGeneratorTypeFromQuestion(res.question)].slice(-MAX_RECENT_GENERATORS)
         : recentGenerators;
 
       saveQuestion(res.question);
-      set({ currentQuestion: res.question, recentGenerators: updatedGenerators, isLoading: false });
+      set({ currentQuestion: res.question, recentGenerators: updatedGenerators, isLoading: false, errorsCleared: false });
     } catch {
-      set({ isLoading: false, error: 'Не удалось загрузить вопрос' });
+      set({ isLoading: false, error: 'Не удалось загрузить вопрос', errorsCleared: false });
     }
   },
 
@@ -122,6 +131,9 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
       if (res.totalLp !== undefined) {
         useLeagueStore.getState().updateLp(res.totalLp);
       }
+
+      // Инвалидируем кеш коллекции ошибок (incorrectCount мог измениться)
+      useCollectionStore.setState({ errorsFetchedAt: null });
 
       set({
         feedback: { ...res, correctTranslation: currentQuestion.correctTranslation ?? '', meaningId: currentQuestion.meaningId },
@@ -159,6 +171,9 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
       if (res.totalLp !== undefined) {
         useLeagueStore.getState().updateLp(res.totalLp);
       }
+
+      // Инвалидируем кеш коллекции ошибок (incorrectCount мог измениться)
+      useCollectionStore.setState({ errorsFetchedAt: null });
 
       set({
         feedback: {

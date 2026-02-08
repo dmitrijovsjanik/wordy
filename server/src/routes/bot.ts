@@ -1,4 +1,9 @@
 import type { FastifyInstance } from 'fastify';
+import { eq } from 'drizzle-orm';
+import { db } from '../db/index.js';
+import { users } from '../db/schema.js';
+import { createPayment } from '../services/payment-service.js';
+import { RETURN_URL_BOT } from '../config/payment-config.js';
 
 const WEB_APP_URL = 'https://wordy-lang.ru';
 
@@ -242,13 +247,64 @@ export default async function botRoutes(app: FastifyInstance) {
       const messageId = callback_query.message.message_id;
       const data = callback_query.data;
 
-      // Заглушка для кнопок покупки — оплата ещё не подключена
+      // Покупка через YooKassa
       if (data.startsWith('buy_')) {
         await callTelegramApi('answerCallbackQuery', {
           callback_query_id: callback_query.id,
-          text: 'Оплата скоро будет доступна!',
-          show_alert: true,
+          text: 'Создаём платёж...',
         });
+
+        const itemTypeMap: Record<string, string> = {
+          buy_freeze_1: 'freeze_1',
+          buy_freeze_2: 'freeze_2',
+          buy_freeze_7: 'freeze_7',
+          buy_freeze_14: 'freeze_14',
+          buy_premium_month: 'premium_month',
+          buy_premium_year: 'premium_year',
+        };
+
+        const itemType = itemTypeMap[data];
+        if (!itemType) return reply.status(200).send({ ok: true });
+
+        const user = await db.query.users.findFirst({
+          where: eq(users.telegramId, BigInt(chatId)),
+          columns: { id: true },
+        });
+
+        if (!user) {
+          await callTelegramApi('sendMessage', {
+            chat_id: chatId,
+            text: 'Сначала откройте Wordy и зарегистрируйтесь!',
+          });
+          return reply.status(200).send({ ok: true });
+        }
+
+        try {
+          const { confirmationUrl } = await createPayment({
+            userId: user.id,
+            itemType,
+            returnUrl: RETURN_URL_BOT,
+            telegramChatId: chatId,
+          });
+
+          await callTelegramApi('sendMessage', {
+            chat_id: chatId,
+            text: '💳 Для оплаты перейдите по ссылке:',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '💳 Оплатить', url: confirmationUrl }],
+                [{ text: '⬅️ Назад к каталогу', callback_data: 'catalog' }],
+              ],
+            },
+          });
+        } catch (error) {
+          console.error('[bot] Payment creation error:', error);
+          await callTelegramApi('sendMessage', {
+            chat_id: chatId,
+            text: 'Произошла ошибка при создании платежа. Попробуйте позже.',
+          });
+        }
+
         return reply.status(200).send({ ok: true });
       }
 

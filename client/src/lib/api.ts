@@ -162,6 +162,14 @@ export function purchaseStreakFreeze(days: number) {
   );
 }
 
+export function createPayment(itemType: string) {
+  return fetchApi<{ confirmationUrl: string; paymentId: string }>(
+    'POST',
+    '/api/payments/create',
+    { itemType },
+  );
+}
+
 export function getStreakCalendar(months = 6) {
   return fetchApi<StreakCalendarResponse>('GET', `/api/users/me/streak-calendar?months=${months}`);
 }

@@ -51,7 +51,7 @@ export function WordDisplay({
     <AnimatePresence mode="wait">
       <motion.div
         key={meaningId}
-        className="flex flex-col items-center"
+        className="flex w-full flex-col items-center"
         initial={skipInitialAnimation ? false : { opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -8 }}
@@ -62,7 +62,7 @@ export function WordDisplay({
           type="button"
           onClick={canSpeak ? handleSpeak : undefined}
           disabled={!canSpeak}
-          className={`flex flex-col items-center ${
+          className={`flex w-full flex-col items-center ${
             canSpeak ? 'cursor-pointer' : 'cursor-default'
           }`}
         >

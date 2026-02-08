@@ -91,6 +91,8 @@ export const users = pgTable('users', {
   dailyCorrectDate: timestamp('daily_correct_date'), // Дата для сброса счётчика правильных ответов за день
   dailyStreakMilestonesDone: varchar('daily_streak_milestones_done', { length: 255 }).default('').notNull(),
   dailyCorrectMilestonesDone: varchar('daily_correct_milestones_done', { length: 255 }).default('').notNull(),
+  premiumUntil: timestamp('premium_until'),
+  premiumPlan: varchar('premium_plan', { length: 20 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -467,6 +469,50 @@ export const inviteTokens = pgTable('invite_tokens', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// ─── Payments ───────────────────────────────────────────────────────────
+
+export const paymentStatusEnum = pgEnum('payment_status', [
+  'pending',
+  'succeeded',
+  'canceled',
+  'refunded',
+]);
+
+export const paymentItemTypeEnum = pgEnum('payment_item_type', [
+  'freeze_1',
+  'freeze_2',
+  'freeze_7',
+  'freeze_14',
+  'premium_month',
+  'premium_year',
+]);
+
+export const payments = pgTable(
+  'payments',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    yookassaPaymentId: varchar('yookassa_payment_id', { length: 64 }).unique().notNull(),
+    idempotencyKey: varchar('idempotency_key', { length: 64 }).unique().notNull(),
+    status: paymentStatusEnum('status').default('pending').notNull(),
+    itemType: paymentItemTypeEnum('item_type').notNull(),
+    amount: integer('amount').notNull(),
+    currency: varchar('currency', { length: 3 }).default('RUB').notNull(),
+    description: varchar('description', { length: 255 }).notNull(),
+    fulfilledAt: timestamp('fulfilled_at'),
+    yookassaStatus: varchar('yookassa_status', { length: 50 }),
+    metadata: jsonb('metadata').$type<Record<string, string>>(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('payments_user_idx').on(table.userId),
+    index('payments_yookassa_id_idx').on(table.yookassaPaymentId),
+  ],
+);
+
 // ─── Relations ──────────────────────────────────────────────────────────────
 
 export const wordsRelations = relations(words, ({ many }) => ({
@@ -490,6 +536,7 @@ export const wordMeaningTopicsRelations = relations(wordMeaningTopics, ({ one })
 export const usersRelations = relations(users, ({ many }) => ({
   quizSessions: many(quizSessions),
   streakActivityDays: many(streakActivityDays),
+  payments: many(payments),
   challengedDuels: many(duels, { relationName: 'duelChallenger' }),
   opponentDuels: many(duels, { relationName: 'duelOpponent' }),
   sentFriendRequests: many(friendRequests, { relationName: 'sentRequests' }),
@@ -500,6 +547,10 @@ export const usersRelations = relations(users, ({ many }) => ({
 
 export const streakActivityDaysRelations = relations(streakActivityDays, ({ one }) => ({
   user: one(users, { fields: [streakActivityDays.userId], references: [users.id] }),
+}));
+
+export const paymentsRelations = relations(payments, ({ one }) => ({
+  user: one(users, { fields: [payments.userId], references: [users.id] }),
 }));
 
 export const quizSessionsRelations = relations(quizSessions, ({ one, many }) => ({

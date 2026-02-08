@@ -11,6 +11,8 @@ export type User = {
   nativeLanguage: string;
   learningLanguage: string;
   repeatMastered: boolean;
+  premiumUntil: string | null;
+  premiumPlan: string | null;
   lastActivityAt: string | null;
   createdAt: string;
 };

@@ -16,6 +16,7 @@ import {
   StarIcon,
 } from '@hugeicons/core-free-icons';
 import { cn } from '@/lib/utils';
+import { createPayment } from '@/lib/api';
 
 type LimitType = 'collections' | 'words';
 
@@ -65,6 +66,24 @@ type Plan = 'month' | 'year';
 
 export function PremiumDrawer({ open, onOpenChange, limitType }: PremiumDrawerProps) {
   const [selectedPlan, setSelectedPlan] = useState<Plan>('year');
+  const [isPurchasing, setIsPurchasing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handlePurchase = async () => {
+    const itemType = selectedPlan === 'month' ? 'premium_month' : 'premium_year';
+    setIsPurchasing(true);
+    setError(null);
+
+    try {
+      const { confirmationUrl } = await createPayment(itemType);
+      window.open(confirmationUrl, '_blank');
+      onOpenChange(false);
+    } catch {
+      setError('Ошибка создания платежа');
+    } finally {
+      setIsPurchasing(false);
+    }
+  };
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -136,11 +155,16 @@ export function PremiumDrawer({ open, onOpenChange, limitType }: PremiumDrawerPr
         </div>
 
         <DrawerFooter>
-          <Button disabled className="w-full">
-            Скоро
+          {error && (
+            <p className="text-center text-sm text-[var(--red-11)]">{error}</p>
+          )}
+          <Button onClick={handlePurchase} disabled={isPurchasing} className="w-full">
+            {isPurchasing
+              ? 'Создание платежа...'
+              : `Оформить за ${selectedPlan === 'month' ? `${MONTH_PRICE}₽` : `${YEAR_PRICE.toLocaleString('ru-RU')}₽`}`}
           </Button>
           <Button variant="secondary" onClick={() => onOpenChange(false)} className="w-full">
-            Понятно
+            Отмена
           </Button>
         </DrawerFooter>
       </DrawerContent>

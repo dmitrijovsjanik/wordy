@@ -25,7 +25,7 @@ export function StreakIndicator({
         <motion.div
           key="streak"
           className="overflow-visible"
-          initial={skipInitialAnimation ? false : { opacity: 0, height: 0, scaleX: 0 }}
+          initial={skipInitialAnimation ? false : { opacity: 0, height: 0, scaleX: 0.8 }}
           animate={{ opacity: 1, height: 'auto', scaleX: 1 }}
           exit={{ opacity: 0, height: 0, scaleX: 0.8 }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
@@ -51,7 +51,7 @@ export function StreakIndicator({
 
             <motion.div
               key={bounceKey}
-              className="relative z-10 flex h-8 items-center justify-center rounded-full border border-[var(--orange-6)] bg-[var(--orange-3)] px-2"
+              className="relative z-10 flex h-8 items-center justify-center rounded-full border border-[var(--orange-6)] bg-[var(--orange-3)] px-3"
               initial={false}
               animate={bounceKey === 0 ? {} : {
                 scaleX: [1, 1.15, 0.95, 1],

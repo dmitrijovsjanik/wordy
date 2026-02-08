@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { QuizQuestion, QuizResultResponse } from '@/types/api';
+import type { QuizQuestion, QuizQuestionBase, QuizResultResponse } from '@/types/api';
 import { quizStart, quizAnswer, quizFinish } from '@/lib/api';
 
 type AnswerRecord = {
@@ -47,22 +47,23 @@ export const useGameStore = create<GameState>()((set, get) => ({
 
     set({ isLoading: true });
     try {
+      const q = currentQuestion as QuizQuestionBase;
       const res = await quizAnswer({
         sessionId,
-        meaningId: currentQuestion.meaningId,
+        meaningId: q.meaningId,
         selectedMeaningId,
         answerTimeMs,
       });
 
       const newAnswer: AnswerRecord = {
-        meaningId: currentQuestion.meaningId,
+        meaningId: q.meaningId,
         selectedMeaningId,
         isCorrect: res.isCorrect,
       };
 
       set({
         answers: [...answers, newAnswer],
-        answerFeedback: { isCorrect: res.isCorrect, correctTranslation: currentQuestion.correctTranslation ?? '' },
+        answerFeedback: { isCorrect: res.isCorrect, correctTranslation: q.correctTranslation ?? '' },
         isLoading: false,
       });
 

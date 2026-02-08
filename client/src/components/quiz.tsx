@@ -11,6 +11,7 @@ import { BackButton } from '@/components/ui/back-button';
 import { WordDisplay } from '@/components/game/word-display';
 import { MultipleChoice } from '@/components/game/question-types/multiple-choice';
 import type { AnswerFeedback } from '@/types/game';
+import type { QuizQuestionBase } from '@/types/api';
 
 export function Quiz() {
   const navigate = useNavigate();
@@ -50,7 +51,7 @@ export function Quiz() {
 
   // Запоминаем ID первого вопроса
   if (currentQuestion && firstMeaningIdRef.current === null) {
-    firstMeaningIdRef.current = currentQuestion.meaningId;
+    firstMeaningIdRef.current = (currentQuestion as QuizQuestionBase).meaningId;
   }
 
   useEffect(() => {
@@ -61,15 +62,16 @@ export function Quiz() {
 
   const handleAnswer = useCallback((option: string) => {
     if (answerFeedback || isLoading || !currentQuestion) return;
+    const q = currentQuestion as QuizQuestionBase;
 
     hapticImpact('light');
     setSelectedOption(option);
 
     const timeMs = Date.now() - answerStartTime.current;
-    const isCorrectGuess = option === currentQuestion.correctTranslation;
+    const isCorrectGuess = option === q.correctTranslation;
 
     submitAnswer(
-      isCorrectGuess ? currentQuestion.meaningId : null,
+      isCorrectGuess ? q.meaningId : null,
       timeMs,
     );
   }, [answerFeedback, isLoading, currentQuestion, hapticImpact, submitAnswer]);
@@ -112,7 +114,7 @@ export function Quiz() {
     );
   }
 
-  const question = currentQuestion;
+  const question = currentQuestion as QuizQuestionBase | null;
 
   return (
     <div className="flex min-h-full flex-col items-center px-4 pt-6 pb-8">

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { QuizQuestion, QuizResultResponse } from '@/types/api';
+import type { QuizQuestion, QuizQuestionBase, QuizResultResponse } from '@/types/api';
 import type { GameMode, AnswerFeedback, RewardDisplay } from '@/types/game';
 import { quizStart, quizAnswer, quizFinish, quizNext, quizAnswerInfinite } from '@/lib/api';
 import { useLeagueStore } from './league-store';
@@ -11,6 +11,7 @@ const FEEDBACK_DELAY = 1200;
 
 /** Определяет тип генератора из ответа сервера */
 function getGeneratorTypeFromQuestion(question: QuizQuestion): string {
+  if (question.type === 'match-pairs') return 'match-pairs';
   if (question.type === 'spelling') return 'spelling';
   return question.direction; // 'en-ru' или 'ru-en'
 }
@@ -126,8 +127,9 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
     set({ isLoading: true, selectedAnswer: answer });
 
     // Определяем selectedMeaningId по выбранному ответу
-    const isCorrectGuess = answer === currentQuestion.correctTranslation;
-    const selectedMeaningId = isCorrectGuess ? currentQuestion.meaningId : null;
+    const q = currentQuestion as QuizQuestionBase;
+    const isCorrectGuess = answer === q.correctTranslation;
+    const selectedMeaningId = isCorrectGuess ? q.meaningId : null;
 
     try {
       if (mode === 'session') {
@@ -136,13 +138,13 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
         const answerTimeMs = 0; // TODO: трекать время
         const res = await quizAnswer({
           sessionId,
-          meaningId: currentQuestion.meaningId,
+          meaningId: q.meaningId,
           selectedMeaningId,
           answerTimeMs,
         });
 
         const newAnswer: AnswerRecord = {
-          meaningId: currentQuestion.meaningId,
+          meaningId: q.meaningId,
           selectedMeaningId,
           isCorrect: res.isCorrect,
         };
@@ -151,7 +153,7 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
           answers: [...answers, newAnswer],
           feedback: {
             isCorrect: res.isCorrect,
-            correctAnswer: currentQuestion.correctTranslation ?? '',
+            correctAnswer: q.correctTranslation ?? '',
           },
           isLoading: false,
         });
@@ -170,9 +172,9 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
           }, FEEDBACK_DELAY);
         }
       } else if (mode === 'infinite') {
-        const res = await quizAnswerInfinite(currentQuestion.meaningId, selectedMeaningId, get().streak);
+        const res = await quizAnswerInfinite(q.meaningId, selectedMeaningId, get().streak);
 
-        const updatedRecent = [...recentMeaningIds, currentQuestion.meaningId].slice(-MAX_RECENT);
+        const updatedRecent = [...recentMeaningIds, q.meaningId].slice(-MAX_RECENT);
         const newStreak = res.isCorrect ? get().streak + 1 : 0;
         saveStreak(newStreak);
 
@@ -184,7 +186,7 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
         set({
           feedback: {
             isCorrect: res.isCorrect,
-            correctAnswer: currentQuestion.correctTranslation ?? '',
+            correctAnswer: q.correctTranslation ?? '',
             xpEarned: res.xpEarned,
             xpModifier: res.xpModifier,
             lpEarned: res.lpEarned,

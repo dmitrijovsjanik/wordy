@@ -20,6 +20,8 @@ export async function getProfile(userId: number) {
       nativeLanguage: true,
       learningLanguage: true,
       repeatMastered: true,
+      premiumUntil: true,
+      premiumPlan: true,
       lastActivityAt: true,
       createdAt: true,
     },

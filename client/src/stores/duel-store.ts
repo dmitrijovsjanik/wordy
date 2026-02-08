@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Duel, DuelCreateResponse, QuizQuestion, QuizResultResponse } from '@/types/api';
+import type { Duel, DuelCreateResponse, QuizQuestion, QuizQuestionBase, QuizResultResponse } from '@/types/api';
 import type { AnswerFeedback } from '@/types/game';
 import { duelCreate, duelJoin, duelGet, duelFinish, quizAnswer, quizFinish } from '@/lib/api';
 
@@ -94,9 +94,10 @@ export const useDuelStore = create<DuelState>()((set, get) => ({
 
     set({ isLoading: true });
     try {
+      const q = currentQuestion as QuizQuestionBase;
       const res = await quizAnswer({
         sessionId,
-        meaningId: currentQuestion.meaningId,
+        meaningId: q.meaningId,
         selectedMeaningId,
         answerTimeMs,
       });
