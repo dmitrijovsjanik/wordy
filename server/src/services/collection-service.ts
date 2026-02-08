@@ -119,14 +119,15 @@ export async function getLibrary(userId: number) {
     .from(collections)
     .where(and(inArray(collections.id, collectionIds), isNull(collections.deletedAt)));
 
-  // SRS progress per collection: count mastered words
-  const progressRows = await db
+  // SRS progress per collection: count mastered WORDS (all meanings of a word must be srsStage >= 3)
+  const masteredSq = db
     .select({
       collectionId: collectionWords.collectionId,
-      masteredCount: sql<number>`count(*) filter (where ${userWordProgress.srsStage} >= 3)`,
+      wordId: wordMeanings.wordId,
     })
     .from(collectionWords)
-    .innerJoin(
+    .innerJoin(wordMeanings, eq(collectionWords.meaningId, wordMeanings.id))
+    .leftJoin(
       userWordProgress,
       and(
         eq(userWordProgress.meaningId, collectionWords.meaningId),
@@ -134,7 +135,17 @@ export async function getLibrary(userId: number) {
       ),
     )
     .where(inArray(collectionWords.collectionId, collectionIds))
-    .groupBy(collectionWords.collectionId);
+    .groupBy(collectionWords.collectionId, wordMeanings.wordId)
+    .having(sql`min(coalesce(${userWordProgress.srsStage}, 0)) >= 3`)
+    .as('mastered_words');
+
+  const progressRows = await db
+    .select({
+      collectionId: masteredSq.collectionId,
+      masteredCount: sql<number>`count(*)`,
+    })
+    .from(masteredSq)
+    .groupBy(masteredSq.collectionId);
 
   // SRS progress for custom words per collection
   const customProgressRows = await db

@@ -1,6 +1,6 @@
-import { eq, and, gte, asc, isNotNull, count } from 'drizzle-orm';
+import { eq, and, gte, asc, sql, count } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { users, quizSessions, duels, streakActivityDays, userLeagueProgress, userSeasonStats, userWordProgress } from '../db/schema.js';
+import { users, quizSessions, duels, streakActivityDays, userLeagueProgress, userSeasonStats, userWordProgress, wordMeanings } from '../db/schema.js';
 import { MAX_STREAK_FREEZES, FREEZE_PACKS } from '../config/gems-config.js';
 import { LEAGUE_TIERS } from '../config/league-config.js';
 import { getMskTodayStart, toMskDayStart } from '../lib/msk-date.js';
@@ -77,11 +77,19 @@ export async function getStats(userId: number) {
     }
   }
 
-  // Кол-во выученных слов (masteredAt IS NOT NULL)
+  // Кол-во выученных СЛОВ (все meanings слова должны иметь srsStage >= 3)
+  const masteredWordsSq = db
+    .select({ wordId: wordMeanings.wordId })
+    .from(userWordProgress)
+    .innerJoin(wordMeanings, eq(userWordProgress.meaningId, wordMeanings.id))
+    .where(eq(userWordProgress.userId, userId))
+    .groupBy(wordMeanings.wordId)
+    .having(sql`min(${userWordProgress.srsStage}) >= 3`)
+    .as('mastered_words');
+
   const [masteredRow] = await db
     .select({ value: count() })
-    .from(userWordProgress)
-    .where(and(eq(userWordProgress.userId, userId), isNotNull(userWordProgress.masteredAt)));
+    .from(masteredWordsSq);
 
   return {
     totalGames,
