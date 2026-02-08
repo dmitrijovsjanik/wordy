@@ -2,8 +2,6 @@ import { useEffect, useRef } from 'react';
 import { useAuthStore } from '@/stores/auth-store';
 import { Button } from '@/components/ui/button';
 
-const BOT_USERNAME = 'wordylang_bot';
-
 export function Login() {
   const loginWithTelegram = useAuthStore((s) => s.loginWithTelegram);
   const error = useAuthStore((s) => s.error);
@@ -60,15 +58,25 @@ export function Login() {
     }
   }, [loginWithTelegram]);
 
-  // Direct redirect to Telegram OAuth — no popup, no widget, no iframe
-  const handleLogin = () => {
-    const returnTo = `${window.location.origin}/admin/login`;
-    const origin = window.location.origin;
-    window.location.href =
-      `https://oauth.telegram.org/auth?bot_id=${BOT_USERNAME}` +
-      `&origin=${encodeURIComponent(origin)}` +
-      `&request_access=write` +
-      `&return_to=${encodeURIComponent(returnTo)}`;
+  // Fetch numeric bot ID from server, then redirect to Telegram OAuth
+  const handleLogin = async () => {
+    try {
+      const res = await fetch('/api/admin/auth/config');
+      const { botId } = (await res.json()) as { botId: string };
+      if (!botId) {
+        console.error('No bot ID returned');
+        return;
+      }
+      const returnTo = `${window.location.origin}/admin/login`;
+      const origin = window.location.origin;
+      window.location.href =
+        `https://oauth.telegram.org/auth?bot_id=${botId}` +
+        `&origin=${encodeURIComponent(origin)}` +
+        `&request_access=write` +
+        `&return_to=${encodeURIComponent(returnTo)}`;
+    } catch (err) {
+      console.error('Failed to get bot config', err);
+    }
   };
 
   return (

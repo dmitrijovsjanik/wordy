@@ -23,6 +23,16 @@ function verifyTelegramLogin(data: Record<string, string>, botToken: string): bo
 }
 
 export default async function adminRoutes(app: FastifyInstance) {
+  // ─── Public: bot config for login page ────────────────────────────────
+  app.get('/api/admin/auth/config', async (_request, reply) => {
+    const botToken = process.env.BOT_TOKEN;
+    if (!botToken) {
+      return reply.status(500).send({ error: 'BOT_TOKEN не настроен' });
+    }
+    const botId = botToken.split(':')[0];
+    return { botId };
+  });
+
   // ─── Auth: Telegram Login Widget ────────────────────────────────────────
   app.post<{ Body: Record<string, string> }>(
     '/api/admin/auth/telegram',
