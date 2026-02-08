@@ -59,31 +59,68 @@ NGINX_CONF=""
 for f in /etc/nginx/sites-enabled/wordy /etc/nginx/sites-enabled/wordy-lang.ru; do
   [ -f "$f" ] && NGINX_CONF="$f" && break
 done
-if [ -n "$NGINX_CONF" ] && ! grep -q 'location /admin/' "$NGINX_CONF"; then
-  echo "==> Adding /admin/ location to nginx config: $NGINX_CONF"
-  # Write admin nginx snippet to temp file, then insert before last } in config
-  ADMIN_SNIPPET=$(mktemp)
-  cat > "$ADMIN_SNIPPET" << 'EOF'
+if [ -n "$NGINX_CONF" ]; then
+  echo "==> Patching nginx config: $NGINX_CONF"
+  # Use a proper script file to avoid shell variable issues
+  PATCH_SCRIPT=$(mktemp /tmp/nginx_patch_XXXX.py)
+  cat > "$PATCH_SCRIPT" << 'PYEOF'
+import re, sys
 
-    location /admin/ {
-        alias /var/www/wordy/current/admin/dist/;
-        index index.html;
-        try_files $uri $uri/ /admin/index.html;
-    }
-EOF
-  # Find line number of last }, insert snippet before it
-  LAST_BRACE=$(grep -n '}' "$NGINX_CONF" | tail -1 | cut -d: -f1)
-  if [ -n "$LAST_BRACE" ]; then
-    head -n $((LAST_BRACE - 1)) "$NGINX_CONF" > "${NGINX_CONF}.tmp"
-    cat "$ADMIN_SNIPPET" >> "${NGINX_CONF}.tmp"
-    tail -n +"$LAST_BRACE" "$NGINX_CONF" >> "${NGINX_CONF}.tmp"
-    mv "${NGINX_CONF}.tmp" "$NGINX_CONF"
-  fi
-  rm -f "$ADMIN_SNIPPET"
+conf_path = sys.argv[1]
+with open(conf_path, 'r') as f:
+    content = f.read()
+
+# Step 1: Remove all existing admin location blocks (line-based)
+lines = content.split('\n')
+result = []
+skip_until_close = False
+for line in lines:
+    stripped = line.strip()
+    if stripped == '# Admin panel':
+        continue
+    if 'location /admin/' in stripped:
+        skip_until_close = True
+        continue
+    if skip_until_close:
+        if stripped == '}':
+            skip_until_close = False
+        continue
+    result.append(line)
+content = '\n'.join(result)
+
+# Clean up multiple blank lines
+content = re.sub(r'\n{3,}', '\n\n', content)
+
+# Step 2: Insert admin location before "# Static frontend files" or "location / {"
+admin_block = '\n'.join([
+    '    # Admin panel',
+    '    location /admin/ {',
+    '        alias /var/www/wordy/current/admin/dist/;',
+    '        index index.html;',
+    '        try_files $uri $uri/ /admin/index.html;',
+    '    }',
+    '',
+])
+
+if '# Static frontend files' in content:
+    content = content.replace('    # Static frontend files', admin_block + '    # Static frontend files')
+elif 'location / {' in content:
+    content = content.replace('location / {', admin_block + '    location / {', 1)
+else:
+    print("WARNING: Could not find insertion point", file=sys.stderr)
+    sys.exit(0)
+
+with open(conf_path, 'w') as f:
+    f.write(content)
+print("Nginx config patched successfully")
+PYEOF
+  python3 "$PATCH_SCRIPT" "$NGINX_CONF"
+  rm -f "$PATCH_SCRIPT"
+
   nginx -t && nginx -s reload
-  echo "==> Nginx updated for /admin/"
+  echo "==> Nginx config updated for /admin/"
 else
-  echo "==> Nginx config not found or /admin/ already configured"
+  echo "==> Nginx config not found, skipping admin location setup"
 fi
 
 # Restart or start PM2 process
