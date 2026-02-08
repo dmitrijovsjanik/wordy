@@ -54,6 +54,23 @@ else
   echo "==> Already have $COLLECTION_COUNT system collections, skipping"
 fi
 
+# Ensure nginx serves admin panel at /admin/
+NGINX_CONF="/etc/nginx/sites-enabled/wordy"
+if [ ! -f "$NGINX_CONF" ]; then
+  NGINX_CONF="/etc/nginx/sites-enabled/wordy-lang.ru"
+fi
+if [ -f "$NGINX_CONF" ] && ! grep -q 'location /admin/' "$NGINX_CONF"; then
+  echo "==> Adding /admin/ location to nginx config"
+  # Insert admin location block before the last closing brace
+  sed -i '/^}/i \
+    location /admin/ {\
+        alias /var/www/wordy/current/admin/dist/;\
+        try_files $uri $uri/ /admin/index.html;\
+    }' "$NGINX_CONF"
+  nginx -t && nginx -s reload
+  echo "==> Nginx updated for /admin/"
+fi
+
 # Restart or start PM2 process
 cd "$RELEASE_DIR"
 if pm2 describe wordy > /dev/null 2>&1; then
