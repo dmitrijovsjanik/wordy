@@ -147,9 +147,10 @@ export async function addXpWithStreak(
 export async function rewardCorrectAnswer(
   userId: number,
   streak: number = 0,
+  baseXp: number = XP_CORRECT_ANSWER,
 ): Promise<CorrectAnswerResult> {
   // XP с модификатором
-  const xpResult = await addXpWithStreak(userId, XP_CORRECT_ANSWER, streak);
+  const xpResult = await addXpWithStreak(userId, baseXp, streak);
 
   // LP с модификатором
   const lpModifier = getLpModifier(streak);

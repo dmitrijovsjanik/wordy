@@ -45,7 +45,7 @@ export function BottomTabs() {
   if (pathname.startsWith('/duel')) return null;
 
   return (
-    <nav className="shrink-0 bg-[var(--gray-1)]">
+    <nav className="relative z-[2] shrink-0">
       <div className="flex h-14 items-center justify-around mt-2 mb-2">
         {tabs.map((tab) => {
           const isActive = tab.match(pathname);

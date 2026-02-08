@@ -28,6 +28,7 @@ export type SpellingQuestion = {
   options: string[];         // Варианты написания (6 шт)
   correctSpelling: string;   // Правильное написание
   direction: 'ru-en';        // Spelling всегда ru→en
+  doubleXpTimeLimitMs?: number;
 };
 
 // Legacy format (для совместимости с текущим API)
@@ -39,6 +40,7 @@ export type LegacyQuestion = {
   correctTranslation: string;
   options: string[];
   direction: string;
+  doubleXpTimeLimitMs?: number;
 };
 
 // ─── Word Pool ──────────────────────────────────────────────────────────────
@@ -88,6 +90,7 @@ export type GeneratorType = 'en-ru' | 'ru-en' | 'spelling' | 'match-pairs';
 export type MatchPairsQuestion = {
   type: 'match-pairs';
   pairs: Array<{ meaningId: number; word: string; translation: string }>;
+  doubleXpTimeLimitMs?: number;
 };
 
 const ROTATION_LOOKBACK = 5;

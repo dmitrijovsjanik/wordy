@@ -88,14 +88,15 @@ export default async function quizRoutes(app: FastifyInstance) {
   });
 
   app.post<{
-    Body: { meaningId: number; selectedMeaningId: number | null; streak?: number };
+    Body: { meaningId: number; selectedMeaningId: number | null; streak?: number; doubleXpClaimed?: boolean };
   }>('/api/quiz/answer-infinite', async (request) => {
-    const { meaningId, selectedMeaningId, streak = 0 } = request.body;
+    const { meaningId, selectedMeaningId, streak = 0, doubleXpClaimed = false } = request.body;
     const result = await recordInfiniteAnswer(
       request.user.id,
       meaningId,
       selectedMeaningId,
       streak,
+      doubleXpClaimed,
     );
     return result;
   });
@@ -103,13 +104,14 @@ export default async function quizRoutes(app: FastifyInstance) {
   // ─── Match-Pairs Answer ─────────────────────────────────────────────────
 
   app.post<{
-    Body: { results: Array<{ meaningId: number; isCorrect: boolean }>; streak?: number };
+    Body: { results: Array<{ meaningId: number; isCorrect: boolean }>; streak?: number; doubleXpClaimed?: boolean };
   }>('/api/quiz/answer-match-pairs', async (request) => {
-    const { results, streak = 0 } = request.body;
+    const { results, streak = 0, doubleXpClaimed = false } = request.body;
     const result = await recordMatchPairsAnswer(
       request.user.id,
       results,
       streak,
+      doubleXpClaimed,
     );
     return result;
   });

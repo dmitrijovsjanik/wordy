@@ -61,6 +61,8 @@ type HomeState = {
   collectionId: number | typeof ERRORS_COLLECTION_ID | undefined;
   generatorMode: QuestionGeneratorMode;
   errorsCleared: boolean;
+  doubleXpTimeLimitMs: number | null;
+  doubleXpExpired: boolean;
 
   setCollectionId: (id: number | typeof ERRORS_COLLECTION_ID | undefined) => void;
   setGeneratorMode: (mode: QuestionGeneratorMode) => void;
@@ -69,6 +71,7 @@ type HomeState = {
   submitMatchPairsResults: (results: Array<{ meaningId: number; isCorrect: boolean }>) => Promise<void>;
   skip: () => Promise<void>;
   reset: () => void;
+  expireDoubleXp: () => void;
 };
 
 export const useHomeStore = create<HomeState>()((set, get) => ({
@@ -82,6 +85,8 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
   collectionId: undefined,
   generatorMode: 'auto',
   errorsCleared: false,
+  doubleXpTimeLimitMs: null,
+  doubleXpExpired: false,
 
   setCollectionId: (id) => {
     saveQuestion(null);
@@ -109,7 +114,8 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
         : recentGenerators;
 
       saveQuestion(res.question);
-      set({ currentQuestion: res.question, recentGenerators: updatedGenerators, isLoading: false, errorsCleared: false });
+      const doubleXpTimeLimitMs = res.question?.doubleXpTimeLimitMs ?? null;
+      set({ currentQuestion: res.question, recentGenerators: updatedGenerators, isLoading: false, errorsCleared: false, doubleXpTimeLimitMs, doubleXpExpired: false });
     } catch {
       set({ isLoading: false, error: 'Не удалось загрузить вопрос', errorsCleared: false });
     }
@@ -121,7 +127,9 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
 
     set({ isLoading: true });
     try {
-      const res = await quizAnswerInfinite(currentQuestion.meaningId, selectedMeaningId, get().streak);
+      const { doubleXpTimeLimitMs, doubleXpExpired } = get();
+      const doubleXpClaimed = !!doubleXpTimeLimitMs && !doubleXpExpired;
+      const res = await quizAnswerInfinite(currentQuestion.meaningId, selectedMeaningId, get().streak, doubleXpClaimed);
 
       const updatedRecent = [...recentMeaningIds, currentQuestion.meaningId].slice(-MAX_RECENT);
       const newStreak = res.isCorrect ? get().streak + 1 : 0;
@@ -158,7 +166,9 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
 
     set({ isLoading: true });
     try {
-      const res = await quizAnswerMatchPairs(results, get().streak);
+      const { doubleXpTimeLimitMs: mpDoubleXp, doubleXpExpired: mpExpired } = get();
+      const doubleXpClaimed = !!mpDoubleXp && !mpExpired;
+      const res = await quizAnswerMatchPairs(results, get().streak, doubleXpClaimed);
 
       const newMeaningIds = currentQuestion.pairs.map((p) => p.meaningId);
       const updatedRecent = [...recentMeaningIds, ...newMeaningIds].slice(-MAX_RECENT);
@@ -188,6 +198,7 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
           level: res.level,
           levelUp: res.levelUp,
           gemsEarned: res.gemsEarned,
+          doubleXpApplied: res.doubleXpApplied,
           meaningId: currentQuestion.pairs[0]?.meaningId ?? 0,
         },
         recentMeaningIds: updatedRecent,
@@ -211,6 +222,8 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
     await get().submitAnswer(null);
   },
 
+  expireDoubleXp: () => set({ doubleXpExpired: true }),
+
   reset: () => {
     saveQuestion(null);
     set({
@@ -221,6 +234,8 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
       isLoading: false,
       error: null,
       collectionId: undefined,
+      doubleXpTimeLimitMs: null,
+      doubleXpExpired: false,
     });
   },
 }));

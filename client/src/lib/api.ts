@@ -290,18 +290,20 @@ export function quizNext(
   return fetchApi<{ question: QuizQuestion | null }>('GET', `/api/quiz/next${query}`);
 }
 
-export function quizAnswerInfinite(meaningId: number, selectedMeaningId: number | null, streak: number) {
+export function quizAnswerInfinite(meaningId: number, selectedMeaningId: number | null, streak: number, doubleXpClaimed = false) {
   return fetchApi<InfiniteAnswerResponse>('POST', '/api/quiz/answer-infinite', {
     meaningId,
     selectedMeaningId,
     streak,
+    doubleXpClaimed,
   });
 }
 
-export function quizAnswerMatchPairs(results: Array<{ meaningId: number; isCorrect: boolean }>, streak: number) {
+export function quizAnswerMatchPairs(results: Array<{ meaningId: number; isCorrect: boolean }>, streak: number, doubleXpClaimed = false) {
   return fetchApi<MatchPairsAnswerResponse>('POST', '/api/quiz/answer-match-pairs', {
     results,
     streak,
+    doubleXpClaimed,
   });
 }
 

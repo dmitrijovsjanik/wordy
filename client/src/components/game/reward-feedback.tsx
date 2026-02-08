@@ -15,6 +15,11 @@ export function RewardFeedback({ reward }: RewardFeedbackProps) {
         <span className="text-sm font-semibold text-[var(--green-11)]">
           +{reward.xp} XP
         </span>
+        {reward.doubleXp && (
+          <span className="animate-multiplier-pop text-xs font-bold text-[var(--orange-10)]">
+            x2
+          </span>
+        )}
         {reward.xpMultiplier > 1 && (
           <span className="animate-multiplier-pop text-xs font-bold text-[var(--orange-10)]">
             x{reward.xpMultiplier.toFixed(1)}

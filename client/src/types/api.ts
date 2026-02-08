@@ -39,11 +39,13 @@ export type QuizQuestionBase = {
   correctSpelling?: string; // Для spelling
   options: string[];
   direction: string;
+  doubleXpTimeLimitMs?: number;
 };
 
 export type MatchPairsApiQuestion = {
   type: 'match-pairs';
   pairs: Array<{ meaningId: number; word: string; translation: string }>;
+  doubleXpTimeLimitMs?: number;
 };
 
 export type QuizQuestion = QuizQuestionBase | MatchPairsApiQuestion;
@@ -259,6 +261,7 @@ export type InfiniteAnswerResponse = {
   totalLp?: number;
   gemsEarned?: number; // гемы за стрик ответов / level-up
   dailyCorrectCount?: number; // правильных ответов за день
+  doubleXpApplied?: boolean;
 };
 
 export type MatchPairsAnswerResponse = {
@@ -273,6 +276,7 @@ export type MatchPairsAnswerResponse = {
   level?: number;
   levelUp?: number;
   gemsEarned?: number;
+  doubleXpApplied?: boolean;
 };
 
 // ─── Leagues ─────────────────────────────────────────────────────────────────

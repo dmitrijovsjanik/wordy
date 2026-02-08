@@ -17,9 +17,9 @@ import { MultipleChoice } from '@/components/game/question-types/multiple-choice
 import { Spelling } from '@/components/game/question-types/spelling';
 import { RewardFeedback } from '@/components/game/reward-feedback';
 import { motion, AnimatePresence } from 'framer-motion';
-import { StreakIndicator } from '@/components/game/streak-indicator';
 import { QuizContainer } from '@/components/game/quiz-container';
 import { MatchPairs } from '@/components/game/question-types/match-pairs';
+import { DoubleXpBackground } from '@/components/game/double-xp-background';
 import { StreakDaysIndicator } from '@/components/ui/streak-days-indicator';
 import { StreakInfoSheet } from '@/components/ui/streak-info-sheet';
 import { GemsIndicator } from '@/components/ui/gems-indicator';
@@ -44,10 +44,13 @@ export function Home() {
     streak,
     collectionId,
     errorsCleared,
+    doubleXpTimeLimitMs,
+    doubleXpExpired,
     fetchNext,
     submitAnswer,
     submitMatchPairsResults,
     skip,
+    expireDoubleXp,
   } = useHomeStore();
 
   const { progress, stats, season, isLoading: isLeagueLoading, fetchStatus } = useLeagueStore();
@@ -85,8 +88,6 @@ export function Home() {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [rewardDisplay, setRewardDisplay] = useState<RewardDisplay | null>(null);
   const rewardKeyRef = useRef(0);
-  const [streakBounceKey, setStreakBounceKey] = useState(0);
-  const initialStreakRef = useRef(streak);
   const prevStreakRef = useRef(streak);
   const firstMeaningIdRef = useRef<number | null>(null);
 
@@ -127,9 +128,13 @@ export function Home() {
     return () => clearTimeout(t);
   }, [errorsCleared, fetchNext]);
 
-  // Streak particles state
-  const [particleBurst, setParticleBurst] = useState(false);
-  const [particleFading, setParticleFading] = useState(false);
+  const handleDoubleXpExpired = useCallback(() => {
+    expireDoubleXp();
+    hapticNotification('warning');
+  }, [expireDoubleXp, hapticNotification]);
+
+  const showDoubleXpTimer = !!doubleXpTimeLimitMs && !doubleXpExpired && !feedback;
+
 
   useEffect(() => {
     if (!currentQuestion && !feedback && !isLoading) {
@@ -162,20 +167,9 @@ export function Home() {
     }
   }, [feedback, hapticNotification, refreshProfile]);
 
-  // Streak bounce + particles
+  // Track streak changes
   useEffect(() => {
-    if (streak === prevStreakRef.current) return;
     prevStreakRef.current = streak;
-    if (streak >= 3) {
-      setStreakBounceKey((k) => k + 1);
-      setParticleBurst(true);
-      setParticleFading(false);
-
-      const t1 = setTimeout(() => setParticleFading(true), 400);
-      const t2 = setTimeout(() => { setParticleBurst(false); setParticleFading(false); }, 1200);
-
-      return () => { clearTimeout(t1); clearTimeout(t2); };
-    }
   }, [streak]);
 
   // Reward display
@@ -198,6 +192,7 @@ export function Home() {
       lp: feedback.lpEarned,
       lpMultiplier,
       levelUp: feedback.levelUp,
+      doubleXp: feedback.doubleXpApplied,
       key: rewardKeyRef.current,
     });
 
@@ -249,7 +244,15 @@ export function Home() {
   if (!user) return null;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden px-4 pt-4 pb-4">
+    <>
+      {/* Full-screen double XP background — outside main container for correct z-stacking */}
+      <AnimatePresence>
+        {showDoubleXpTimer && doubleXpTimeLimitMs && (
+          <DoubleXpBackground timeLimitMs={doubleXpTimeLimitMs} onExpired={handleDoubleXpExpired} />
+        )}
+      </AnimatePresence>
+
+    <div className="relative z-[2] flex h-full flex-col overflow-hidden px-4 pt-4 pb-4">
       {/* Row 1: Avatar | Gems (center) | Notifications */}
       <div className="mb-2 flex items-center gap-3">
         <button onClick={() => navigate('/profile')} className="shrink-0">
@@ -305,16 +308,6 @@ export function Home() {
           <div className="flex min-h-0 flex-1 flex-col">
             {/* Streak + Status bar — outside QuizContainer so they don't fade */}
             <div className="shrink-0 flex flex-col items-center">
-              <div className="pointer-events-none">
-                <StreakIndicator
-                  streak={streak}
-                  bounceKey={streakBounceKey}
-                  particleBurst={particleBurst}
-                  particleFading={particleFading}
-                  skipInitialAnimation={initialStreakRef.current >= 3}
-                />
-              </div>
-
               <div className="mt-2 flex items-center gap-1.5">
                 {!isLeagueLoading && progress ? (
                   <div className="flex h-8 items-center gap-1 rounded-full bg-[var(--gray-3)] pl-1 pr-3">
@@ -340,6 +333,37 @@ export function Home() {
                   <span className="relative text-xs font-bold text-[var(--gray-12)]">{user.level}</span>
                 </button>
                 <StreakDaysIndicator count={user.streakDays} onClick={() => setStreakSheetOpen(true)} />
+              </div>
+
+              {/* Streak badge row — fixed height to prevent layout shift */}
+              <div className="flex h-10 items-end justify-center">
+                <AnimatePresence>
+                  {streak >= 3 && (
+                    <motion.div
+                      key="streak-badge"
+                      initial={{ opacity: 0, width: 0 }}
+                      animate={{ opacity: 1, width: 'auto' }}
+                      exit={{ opacity: 0, width: 0 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                      className="overflow-hidden"
+                    >
+                      <motion.div
+                        key={streak}
+                        initial={false}
+                        animate={{
+                          scaleX: [1, 1.15, 0.95, 1],
+                          scaleY: [1, 0.92, 1.04, 1],
+                        }}
+                        transition={{ duration: 0.35, ease: 'easeOut' }}
+                        className="mx-2 flex h-8 items-center justify-center rounded-full border border-[var(--orange-6)] bg-[var(--orange-3)] px-3"
+                      >
+                        <span className="whitespace-nowrap text-xs font-medium tracking-wide text-[var(--orange-11)]">
+                          {streak} подряд!
+                        </span>
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
               {/* Collection focus badge / errors cleared message */}
@@ -376,14 +400,44 @@ export function Home() {
                 <>
                   {/* Word / Title area */}
                   {currentQuestion.type === 'match-pairs' ? (
-                    <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
-                      <h2 className="mt-3 mb-1 text-xl font-bold text-[var(--gray-12)]">Соедините пары</h2>
+                    <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center pb-8">
+                      <div className="relative">
+                        <AnimatePresence>
+                          {showDoubleXpTimer && (
+                            <motion.span
+                              key="double-xp-label-mp"
+                              initial={{ opacity: 0, scale: 0.5 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.5 }}
+                              transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+                              className="absolute -top-8 left-1/2 -translate-x-1/2 select-none font-[Unbounded] text-2xl font-black text-[var(--green-9)]"
+                            >
+                              x2
+                            </motion.span>
+                          )}
+                        </AnimatePresence>
+                        <h2 className="mb-1 text-xl font-bold text-[var(--gray-12)]">Соедините пары</h2>
+                      </div>
                       <p className="text-sm text-[var(--gray-11)]">Нажмите на слово, затем на его перевод</p>
                     </div>
                   ) : (
-                    <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center">
+                    <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center pb-8">
                       {/* Word display */}
-                      <div className="mt-3">
+                      <div className="relative">
+                        <AnimatePresence>
+                          {showDoubleXpTimer && (
+                            <motion.span
+                              key="double-xp-label"
+                              initial={{ opacity: 0, scale: 0.5 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.5 }}
+                              transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+                              className="absolute -top-8 left-1/2 -translate-x-1/2 select-none font-[Unbounded] text-2xl font-black text-[var(--green-9)]"
+                            >
+                              x2
+                            </motion.span>
+                          )}
+                        </AnimatePresence>
                         <WordDisplay
                           word={currentQuestion.word}
                           originalForm={currentQuestion.originalForm}
@@ -458,5 +512,6 @@ export function Home() {
         onCollectionAdded={() => { fetchNext(); }}
       />
     </div>
+    </>
   );
 }

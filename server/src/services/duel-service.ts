@@ -147,15 +147,6 @@ export async function finishDuel(duelId: number) {
     const todayStart = new Date();
     todayStart.setUTCHours(0, 0, 0, 0);
 
-    const todayWin = await db.query.duels.findFirst({
-      where: and(
-        eq(duels.winnerId, winnerId),
-        eq(duels.status, 'finished'),
-        gte(duels.updatedAt, todayStart),
-      ),
-    });
-
-    // todayWin найдёт текущую дуэль (мы только что обновили), проверяем что нет другой
     const otherWinsToday = await db.query.duels.findMany({
       where: and(
         eq(duels.winnerId, winnerId),

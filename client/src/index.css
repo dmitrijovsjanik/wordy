@@ -306,6 +306,26 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
+/* ─── Double XP Timer ──────────────────────────────────────────────────────── */
+
+@keyframes double-xp-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.double-xp-urgent {
+  animation: double-xp-pulse 0.4s ease-in-out infinite;
+}
+
+@keyframes double-xp-badge-glow-pulse {
+  0%, 100% { box-shadow: 0 0 6px 1px var(--orange-6); }
+  50% { box-shadow: 0 0 12px 3px var(--orange-7); }
+}
+
+.double-xp-badge-glow {
+  animation: double-xp-badge-glow-pulse 1.2s ease-in-out infinite;
+}
+
 @keyframes xp-float {
   0% {
     opacity: 0;

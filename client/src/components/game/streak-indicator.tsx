@@ -17,19 +17,20 @@ export function StreakIndicator({
   particleFading,
   skipInitialAnimation = false,
 }: StreakIndicatorProps) {
-  const show = streak >= 3;
+  const showStreak = streak >= 3;
 
   return (
     <AnimatePresence>
-      {show && (
+      {showStreak && (
         <motion.div
-          key="streak"
-          className="overflow-visible"
-          initial={skipInitialAnimation ? false : { opacity: 0, height: 0, scaleX: 0.8 }}
-          animate={{ opacity: 1, height: 'auto', scaleX: 1 }}
-          exit={{ opacity: 0, height: 0, scaleX: 0.8 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          key="streak-row"
+          className="overflow-hidden"
+          initial={skipInitialAnimation ? false : { opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 30 }}
         >
+          <div className="flex items-center justify-center overflow-visible">
           <div className="relative">
             {/* Particles */}
             <div className={cn(
@@ -64,6 +65,7 @@ export function StreakIndicator({
                 {streak} подряд!
               </span>
             </motion.div>
+          </div>
           </div>
         </motion.div>
       )}

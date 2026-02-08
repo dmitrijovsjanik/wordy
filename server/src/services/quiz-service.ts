@@ -26,6 +26,8 @@ import {
 import { generateMatchPairsFromPool } from './game/generators/match-pairs.js';
 import type { PooledMeaning, LegacyQuestion, LanguagePair, SpellingQuestion, MatchPairsQuestion, GeneratorType } from './game/types.js';
 import { DEFAULT_LANG_PAIR, pickGenerator } from './game/types.js';
+import { DOUBLE_XP_CHANCE, DOUBLE_XP_TIME_LIMITS, DOUBLE_XP_MULTIPLIER } from '../config/double-xp-config.js';
+import { setDoubleXp, validateAndConsume, makeKey, makeMatchPairsKey } from './double-xp-tracker.js';
 
 const QUESTIONS_PER_SESSION = 10;
 
@@ -60,6 +62,19 @@ export async function generateQuestion(
 
 // Генерация вопроса из пула пользователя (infinite quiz)
 export async function generateQuestionFromPool(
+  userId: number,
+  excludeMeaningIds: number[] = [],
+  langPair: LanguagePair = DEFAULT_LANG_PAIR,
+  collectionId?: number | typeof ERRORS_COLLECTION_ID,
+  fixedDirection?: LanguagePair,
+  questionType?: 'spelling' | 'match-pairs',
+  recentGenerators: GeneratorType[] = [],
+): Promise<LegacyQuestion | SpellingQuestion | MatchPairsQuestion | null> {
+  const question = await generateQuestionFromPoolInternal(userId, excludeMeaningIds, langPair, collectionId, fixedDirection, questionType, recentGenerators);
+  return maybeApplyDoubleXp(question, userId);
+}
+
+async function generateQuestionFromPoolInternal(
   userId: number,
   excludeMeaningIds: number[] = [],
   langPair: LanguagePair = DEFAULT_LANG_PAIR,
@@ -262,6 +277,31 @@ export async function generateQuestionFromPool(
   return generateFromMeaning(correct, langPair, generator === 'en-ru' ? 'en-ru' : 'ru-en');
 }
 
+// ─── Double XP Wrapper ──────────────────────────────────────────────────────
+
+function maybeApplyDoubleXp(
+  question: LegacyQuestion | SpellingQuestion | MatchPairsQuestion | null,
+  userId: number,
+): typeof question {
+  if (!question) return null;
+  if (Math.random() >= DOUBLE_XP_CHANCE) return question;
+
+  const questionType = ('type' in question && question.type) ? question.type : 'multiple-choice';
+  const timeLimitMs = DOUBLE_XP_TIME_LIMITS[questionType];
+  if (!timeLimitMs) return question;
+
+  const generatedAt = Date.now();
+
+  if (questionType === 'match-pairs' && 'pairs' in question) {
+    const meaningIds = question.pairs.map(p => p.meaningId);
+    setDoubleXp(makeMatchPairsKey(userId, meaningIds), { generatedAt, timeLimitMs });
+  } else if ('meaningId' in question) {
+    setDoubleXp(makeKey(userId, question.meaningId), { generatedAt, timeLimitMs });
+  }
+
+  return { ...question, doubleXpTimeLimitMs: timeLimitMs };
+}
+
 // ─── Helper: определяет подходящие генераторы для слова ──────────────────────
 
 function getApplicableGenerators(englishWord: string): GeneratorType[] {
@@ -402,6 +442,7 @@ export async function recordInfiniteAnswer(
   meaningId: number,
   selectedMeaningId: number | null,
   streak: number = 0,
+  doubleXpClaimed: boolean = false,
 ) {
   const isCustom = meaningId < 0;
   const realId = Math.abs(meaningId);
@@ -519,7 +560,14 @@ export async function recordInfiniteAnswer(
 
   // Начисляем XP и LP с модификаторами streak через progression-service
   if (isCorrect) {
-    const reward = await rewardCorrectAnswer(userId, streak);
+    // Double XP: проверяем серверный трекер
+    let doubleXpApplied = false;
+    if (doubleXpClaimed) {
+      const key = isCustom ? makeKey(userId, meaningId) : makeKey(userId, meaningId);
+      doubleXpApplied = validateAndConsume(key);
+    }
+    const baseXp = doubleXpApplied ? XP_CORRECT_ANSWER * DOUBLE_XP_MULTIPLIER : XP_CORRECT_ANSWER;
+    const reward = await rewardCorrectAnswer(userId, streak, baseXp);
 
     // Загружаем дневные счётчики пользователя
     const user = await db.query.users.findFirst({
@@ -621,6 +669,7 @@ export async function recordInfiniteAnswer(
       totalLp: reward.totalLp,
       gemsEarned: reward.gemsEarned + milestoneGems + streakGemsFromDay,
       dailyCorrectCount: newDailyCorrectCount,
+      doubleXpApplied,
     };
   }
 
@@ -644,7 +693,17 @@ export async function recordMatchPairsAnswer(
   userId: number,
   results: Array<{ meaningId: number; isCorrect: boolean }>,
   streak: number = 0,
+  doubleXpClaimed: boolean = false,
 ) {
+  // Double XP: проверяем серверный трекер один раз для всех пар
+  let doubleXpApplied = false;
+  if (doubleXpClaimed) {
+    const meaningIds = results.map(r => r.meaningId);
+    const key = makeMatchPairsKey(userId, meaningIds);
+    doubleXpApplied = validateAndConsume(key);
+  }
+  const baseXp = doubleXpApplied ? XP_CORRECT_ANSWER * DOUBLE_XP_MULTIPLIER : XP_CORRECT_ANSWER;
+
   let totalXpEarned = 0;
   let totalLpEarned = 0;
   let lastXpModifier: number | undefined;
@@ -747,7 +806,7 @@ export async function recordMatchPairsAnswer(
     // Награды за правильный ответ
     if (isCorrect) {
       correctCount++;
-      const reward = await rewardCorrectAnswer(userId, currentStreak);
+      const reward = await rewardCorrectAnswer(userId, currentStreak, baseXp);
       totalXpEarned += reward.xpEarned;
       totalLpEarned += reward.lpEarned;
       lastXpModifier = reward.xpModifier;
@@ -861,6 +920,7 @@ export async function recordMatchPairsAnswer(
     level,
     levelUp,
     gemsEarned: totalGemsEarned,
+    doubleXpApplied,
   };
 }
 

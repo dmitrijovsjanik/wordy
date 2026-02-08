@@ -131,5 +131,6 @@ export type RewardDisplay = {
   lp: number;
   lpMultiplier: number;
   levelUp?: number;
+  doubleXp?: boolean;
   key: number;
 };
