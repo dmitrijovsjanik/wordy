@@ -14,6 +14,7 @@ import adminRoutes from './routes/admin.js';
 import paymentRoutes from './routes/payments.js';
 import { runStartupMigrations } from './db/startup-migrations.js';
 import './cron/league-cron.js';
+import './cron/subscription-cron.js';
 
 // Одноразовые миграции данных (выполняются до старта сервера)
 await runStartupMigrations();

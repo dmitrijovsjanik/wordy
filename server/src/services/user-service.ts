@@ -22,6 +22,7 @@ export async function getProfile(userId: number) {
       repeatMastered: true,
       premiumUntil: true,
       premiumPlan: true,
+      autoRenew: true,
       lastActivityAt: true,
       createdAt: true,
     },

@@ -170,6 +170,17 @@ export function createPayment(itemType: string) {
   );
 }
 
+export function getPremiumStatus() {
+  return fetchApi<{ isPremium: boolean; premiumUntil: string | null; premiumPlan: string | null; autoRenew: boolean }>(
+    'GET',
+    '/api/payments/premium',
+  );
+}
+
+export function cancelAutoRenew() {
+  return fetchApi<{ ok: boolean }>('POST', '/api/payments/cancel-auto-renew');
+}
+
 export function getStreakCalendar(months = 6) {
   return fetchApi<StreakCalendarResponse>('GET', `/api/users/me/streak-calendar?months=${months}`);
 }

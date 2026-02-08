@@ -93,6 +93,8 @@ export const users = pgTable('users', {
   dailyCorrectMilestonesDone: varchar('daily_correct_milestones_done', { length: 255 }).default('').notNull(),
   premiumUntil: timestamp('premium_until'),
   premiumPlan: varchar('premium_plan', { length: 20 }),
+  autoRenew: boolean('auto_renew').default(false).notNull(),
+  savedPaymentMethodId: varchar('saved_payment_method_id', { length: 64 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

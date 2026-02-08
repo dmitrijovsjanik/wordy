@@ -2,14 +2,14 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Lottie from 'lottie-react';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { UserIcon, Award01Icon, InformationCircleIcon, Clock01Icon } from '@hugeicons/core-free-icons';
+import { UserIcon, Award01Icon, InformationCircleIcon, Clock01Icon, StarIcon } from '@hugeicons/core-free-icons';
 import { useUserStore } from '@/stores/user-store';
 import { useBackButton } from '@/hooks/use-back-button';
 import { useResetTimer } from '@/hooks/use-reset-timer';
 import { StreakFreezeDialog, type FreezePack } from '@/components/ui/streak-freeze-dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { getDailyRewards, type DailyRewardsResponse } from '@/lib/api';
+import { getDailyRewards, getPremiumStatus, cancelAutoRenew, type DailyRewardsResponse } from '@/lib/api';
 import {
   Drawer,
   DrawerContent,
@@ -125,6 +125,8 @@ export function Shop() {
   const [selectedPack, setSelectedPack] = useState<FreezePack | null>(null);
   const [resourceInfoType, setResourceInfoType] = useState<'gems' | 'freezes' | null>(null);
   const [dailyRewards, setDailyRewards] = useState<DailyRewardsResponse | null>(null);
+  const [premiumStatus, setPremiumStatus] = useState<{ isPremium: boolean; premiumUntil: string | null; premiumPlan: string | null; autoRenew: boolean } | null>(null);
+  const [isCancellingAutoRenew, setIsCancellingAutoRenew] = useState(false);
   const resetTimer = useResetTimer();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollUp, setCanScrollUp] = useState(false);
@@ -141,14 +143,28 @@ export function Shop() {
 
   useEffect(() => {
     getDailyRewards().then(setDailyRewards).catch(() => {});
+    getPremiumStatus().then(setPremiumStatus).catch(() => {});
 
     // После возврата с YooKassa — обновить профиль
     const params = new URLSearchParams(window.location.search);
     if (params.get('payment') === 'complete') {
       window.history.replaceState({}, '', '/shop');
       refreshProfile();
+      getPremiumStatus().then(setPremiumStatus).catch(() => {});
     }
   }, [refreshProfile]);
+
+  const handleCancelAutoRenew = async () => {
+    setIsCancellingAutoRenew(true);
+    try {
+      await cancelAutoRenew();
+      setPremiumStatus((prev) => prev ? { ...prev, autoRenew: false } : prev);
+    } catch {
+      // ignore
+    } finally {
+      setIsCancellingAutoRenew(false);
+    }
+  };
 
   if (!user) return null;
 
@@ -182,6 +198,44 @@ export function Shop() {
           <HugeiconsIcon icon={InformationCircleIcon} size={16} className="shrink-0 text-[var(--blue-8)]" strokeWidth={1.5} />
         </div>
       </div>
+
+      {/* Premium подписка */}
+      {premiumStatus?.isPremium && (
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-[var(--gray-9)]">
+            Подписка
+          </span>
+          <div className="flex flex-col gap-2 rounded-2xl bg-[var(--amber-3)] px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--amber-4)]">
+                <HugeiconsIcon icon={StarIcon} size={18} className="text-[var(--amber-11)]" strokeWidth={2} />
+              </div>
+              <div className="flex flex-1 flex-col">
+                <span className="text-sm font-semibold text-[var(--amber-12)]">Wordy Premium</span>
+                <span className="text-xs text-[var(--amber-11)]">
+                  до {premiumStatus.premiumUntil ? new Date(premiumStatus.premiumUntil).toLocaleDateString('ru-RU') : '—'}
+                  {premiumStatus.premiumPlan === 'year' ? ' (годовая)' : ' (месячная)'}
+                </span>
+              </div>
+            </div>
+            {premiumStatus.autoRenew ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleCancelAutoRenew}
+                disabled={isCancellingAutoRenew}
+                className="w-full"
+              >
+                {isCancellingAutoRenew ? 'Отключение...' : 'Отключить автопродление'}
+              </Button>
+            ) : (
+              <p className="text-xs text-[var(--amber-11)]">
+                Автопродление отключено. Подписка завершится в указанную дату.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Паки заморозок */}
       <div className="flex flex-col gap-2">

@@ -13,6 +13,7 @@ export type User = {
   repeatMastered: boolean;
   premiumUntil: string | null;
   premiumPlan: string | null;
+  autoRenew: boolean;
   lastActivityAt: string | null;
   createdAt: string;
 };

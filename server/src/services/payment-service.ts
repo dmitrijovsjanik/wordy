@@ -12,6 +12,7 @@ type YookassaPaymentResponse = {
   status: 'pending' | 'waiting_for_capture' | 'succeeded' | 'canceled';
   amount: { value: string; currency: string };
   confirmation?: { type: string; confirmation_url: string };
+  payment_method?: { id: string; saved: boolean };
   metadata?: Record<string, string>;
   created_at: string;
 };
@@ -85,6 +86,8 @@ export async function createPayment({
 
   const idempotencyKey = crypto.randomUUID();
 
+  const isPremium = itemType.startsWith('premium_');
+
   const paymentBody = {
     amount: {
       value: (item.amount / 100).toFixed(2),
@@ -95,6 +98,7 @@ export async function createPayment({
       return_url: returnUrl,
     },
     capture: true,
+    ...(isPremium ? { save_payment_method: true } : {}),
     description: item.description,
     metadata: {
       user_id: String(userId),
@@ -178,6 +182,21 @@ export async function handleWebhook(body: YookassaWebhookBody): Promise<void> {
 
     await fulfillOrder(payment.id, payment.userId, payment.itemType);
 
+    // Сохраняем способ оплаты для автопродления Premium
+    if (
+      paymentData.payment_method?.saved &&
+      paymentData.payment_method.id &&
+      (payment.itemType === 'premium_month' || payment.itemType === 'premium_year')
+    ) {
+      await db
+        .update(users)
+        .set({
+          savedPaymentMethodId: paymentData.payment_method.id,
+          autoRenew: true,
+        })
+        .where(eq(users.id, payment.userId));
+    }
+
     if (payment.metadata?.telegram_chat_id) {
       await notifyBotPaymentSuccess(Number(payment.metadata.telegram_chat_id), payment.itemType);
     }
@@ -190,6 +209,19 @@ export async function handleWebhook(body: YookassaWebhookBody): Promise<void> {
         updatedAt: new Date(),
       })
       .where(eq(payments.id, payment.id));
+
+    // Если рекуррентный платёж отклонён — отключаем автопродление
+    if (payment.itemType === 'premium_month' || payment.itemType === 'premium_year') {
+      await db
+        .update(users)
+        .set({ autoRenew: false })
+        .where(eq(users.id, payment.userId));
+
+      // Уведомляем пользователя через бот
+      if (payment.metadata?.telegram_chat_id) {
+        await notifyBotPaymentFailed(Number(payment.metadata.telegram_chat_id));
+      }
+    }
   }
 }
 
@@ -247,6 +279,86 @@ async function fulfillOrder(
 }
 
 // ─── Bot Notification ─────────────────────────────────────────────────────
+
+// ─── Recurring Payment ───────────────────────────────────────────────────
+
+export async function createRecurringPayment(
+  userId: number,
+  itemType: string,
+  paymentMethodId: string,
+  telegramChatId?: number,
+): Promise<string> {
+  const item = PAYMENT_ITEMS[itemType];
+  if (!item) throw new Error('INVALID_ITEM');
+
+  const idempotencyKey = crypto.randomUUID();
+
+  const paymentBody = {
+    amount: {
+      value: (item.amount / 100).toFixed(2),
+      currency: 'RUB',
+    },
+    capture: true,
+    payment_method_id: paymentMethodId,
+    description: `Автопродление: ${item.description}`,
+    metadata: {
+      user_id: String(userId),
+      item_type: itemType,
+      ...(telegramChatId ? { telegram_chat_id: String(telegramChatId) } : {}),
+    },
+    receipt: {
+      customer: { email: RECEIPT_EMAIL },
+      items: [
+        {
+          description: item.title,
+          quantity: '1.00',
+          amount: {
+            value: (item.amount / 100).toFixed(2),
+            currency: 'RUB',
+          },
+          vat_code: item.vatCode,
+          payment_subject: 'service',
+          payment_mode: 'full_payment',
+        },
+      ],
+    },
+  };
+
+  const response = await yookassaRequest<YookassaPaymentResponse>(
+    'POST',
+    '/payments',
+    paymentBody,
+    idempotencyKey,
+  );
+
+  await db.insert(payments).values({
+    userId,
+    yookassaPaymentId: response.id,
+    idempotencyKey,
+    status: 'pending',
+    itemType: item.itemType as typeof payments.$inferInsert.itemType,
+    amount: item.amount,
+    description: `Автопродление: ${item.description}`,
+    metadata: telegramChatId ? { telegram_chat_id: String(telegramChatId) } : {},
+  });
+
+  return response.id;
+}
+
+// ─── Bot Notifications ───────────────────────────────────────────────────
+
+async function notifyBotPaymentFailed(chatId: number) {
+  const token = process.env.BOT_TOKEN;
+  if (!token) return;
+
+  const text = '❌ Не удалось продлить подписку Premium — оплата не прошла.\n\nАвтопродление отключено. Вы можете оформить подписку заново в каталоге.';
+
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text }),
+  }).catch((err: unknown) => console.error('[bot] Payment failed notification error:', err));
+}
 
 async function notifyBotPaymentSuccess(chatId: number, itemType: string) {
   const item = PAYMENT_ITEMS[itemType];

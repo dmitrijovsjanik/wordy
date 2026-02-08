@@ -1,4 +1,7 @@
 import type { FastifyInstance } from 'fastify';
+import { eq } from 'drizzle-orm';
+import { db } from '../db/index.js';
+import { users } from '../db/schema.js';
 import { createPayment, handleWebhook } from '../services/payment-service.js';
 import { getPremiumStatus } from '../services/premium-service.js';
 import { PAYMENT_ITEMS, RETURN_URL_WEBAPP } from '../config/payment-config.js';
@@ -29,7 +32,24 @@ export default async function paymentRoutes(app: FastifyInstance) {
 
   // Статус Premium подписки
   app.get('/api/payments/premium', { onRequest: [app.authenticate] }, async (request) => {
-    return getPremiumStatus(request.user.id);
+    const status = await getPremiumStatus(request.user.id);
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, request.user.id),
+      columns: { autoRenew: true },
+    });
+
+    return { ...status, autoRenew: user?.autoRenew ?? false };
+  });
+
+  // Отключить автопродление
+  app.post('/api/payments/cancel-auto-renew', { onRequest: [app.authenticate] }, async (request) => {
+    await db
+      .update(users)
+      .set({ autoRenew: false })
+      .where(eq(users.id, request.user.id));
+
+    return { ok: true };
   });
 
   // Webhook от YooKassa (без авторизации)
