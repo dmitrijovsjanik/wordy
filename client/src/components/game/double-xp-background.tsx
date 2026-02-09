@@ -53,7 +53,7 @@ export function DoubleXpBackground({ timeLimitMs, onExpired }: DoubleXpBackgroun
       {/* Progress bar shrinking right to left */}
       <div
         ref={barRef}
-        className="absolute inset-y-0 left-0 w-full origin-left bg-[var(--green-1)] will-change-transform"
+        className="absolute inset-y-0 left-0 w-full origin-left bg-[var(--green-2)] will-change-transform"
       />
     </motion.div>
   );
