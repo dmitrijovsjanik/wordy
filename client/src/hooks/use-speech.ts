@@ -32,6 +32,7 @@ export function useSpeech(options: UseSpeechOptions = {}): UseSpeechReturn {
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const fadeAnimationRef = useRef<number | null>(null);
+  const endTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startTimeRef = useRef<number>(0);
   const durationRef = useRef<number>(0);
   const fadeStartTimeRef = useRef<number>(0);
@@ -100,11 +101,29 @@ export function useSpeech(options: UseSpeechOptions = {}): UseSpeechReturn {
       if (fadeAnimationRef.current) {
         cancelAnimationFrame(fadeAnimationRef.current);
       }
+      if (endTimeoutRef.current) {
+        clearTimeout(endTimeoutRef.current);
+      }
       if (isSupported) {
         window.speechSynthesis.cancel();
       }
     };
   }, [isSupported]);
+
+  const finishSpeaking = useCallback(() => {
+    setIsSpeaking(false);
+    setProgress(1);
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    if (endTimeoutRef.current) {
+      clearTimeout(endTimeoutRef.current);
+      endTimeoutRef.current = null;
+    }
+    // Запускаем плавное затухание
+    fadeStartTimeRef.current = Date.now();
+    setIsFading(true);
+  }, []);
 
   const speak = useCallback(
     (text: string) => {
@@ -114,6 +133,10 @@ export function useSpeech(options: UseSpeechOptions = {}): UseSpeechReturn {
       window.speechSynthesis.cancel();
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (endTimeoutRef.current) {
+        clearTimeout(endTimeoutRef.current);
+        endTimeoutRef.current = null;
       }
 
       const utterance = new SpeechSynthesisUtterance(text);
@@ -126,23 +149,20 @@ export function useSpeech(options: UseSpeechOptions = {}): UseSpeechReturn {
       const estimatedDuration = (text.length * 80) / rate;
       durationRef.current = estimatedDuration;
 
-      utterance.onstart = () => {
-        setIsSpeaking(true);
-        setProgress(0);
-        setOpacity(1);
-        setIsFading(false);
-        startTimeRef.current = Date.now();
-      };
+      // iOS Safari часто НЕ вызывает onstart — запускаем анимацию сразу
+      setIsSpeaking(true);
+      setProgress(0);
+      setOpacity(1);
+      setIsFading(false);
+      startTimeRef.current = Date.now();
+
+      // Fallback таймер: если onend не сработает (бывает на iOS), завершаем сами
+      endTimeoutRef.current = setTimeout(() => {
+        finishSpeaking();
+      }, estimatedDuration + 500);
 
       utterance.onend = () => {
-        setIsSpeaking(false);
-        setProgress(1);
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-        }
-        // Запускаем плавное затухание
-        fadeStartTimeRef.current = Date.now();
-        setIsFading(true);
+        finishSpeaking();
       };
 
       utterance.onerror = () => {
@@ -153,12 +173,16 @@ export function useSpeech(options: UseSpeechOptions = {}): UseSpeechReturn {
         if (animationFrameRef.current) {
           cancelAnimationFrame(animationFrameRef.current);
         }
+        if (endTimeoutRef.current) {
+          clearTimeout(endTimeoutRef.current);
+          endTimeoutRef.current = null;
+        }
       };
 
       utteranceRef.current = utterance;
       window.speechSynthesis.speak(utterance);
     },
-    [isSupported, lang, rate, pitch],
+    [isSupported, lang, rate, pitch, finishSpeaking],
   );
 
   const stop = useCallback(() => {
@@ -174,6 +198,10 @@ export function useSpeech(options: UseSpeechOptions = {}): UseSpeechReturn {
     }
     if (fadeAnimationRef.current) {
       cancelAnimationFrame(fadeAnimationRef.current);
+    }
+    if (endTimeoutRef.current) {
+      clearTimeout(endTimeoutRef.current);
+      endTimeoutRef.current = null;
     }
   }, [isSupported]);
 

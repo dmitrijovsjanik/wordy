@@ -23,7 +23,8 @@ export function DoubleXpBackground({ timeLimitMs, onExpired }: DoubleXpBackgroun
       const el = barRef.current;
 
       if (el) {
-        el.style.width = `${remaining * 100}%`;
+        // transform: scaleX — GPU-ускоренное свойство, надёжно работает на iOS
+        el.style.transform = `scaleX(${remaining})`;
       }
 
       if (remaining <= 0) {
@@ -52,8 +53,7 @@ export function DoubleXpBackground({ timeLimitMs, onExpired }: DoubleXpBackgroun
       {/* Progress bar shrinking right to left */}
       <div
         ref={barRef}
-        className="absolute inset-y-0 left-0 bg-[var(--green-1)]"
-        style={{ width: '100%' }}
+        className="absolute inset-y-0 left-0 w-full origin-left bg-[var(--green-1)] will-change-transform"
       />
     </motion.div>
   );
