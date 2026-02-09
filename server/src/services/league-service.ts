@@ -1,4 +1,4 @@
-import { eq, and, sql, desc, asc, inArray } from 'drizzle-orm';
+import { eq, and, sql, desc, asc, inArray, lte } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   users,
@@ -71,6 +71,14 @@ export async function createSeason() {
     .returning();
 
   return season!;
+}
+
+export async function getSeasonNumber(seasonId: number): Promise<number> {
+  const [result] = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(leagueSeasons)
+    .where(lte(leagueSeasons.id, seasonId));
+  return result?.count ?? 1;
 }
 
 // ─── User League Progress ───────────────────────────────────────────────────

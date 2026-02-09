@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import {
   getOrCreateCurrentSeason,
+  getSeasonNumber,
   getUserLeagueProgress,
+  ensureUserSeasonStats,
   getUserSeasonStats,
   getUserPosition,
   getLeaderboard,
@@ -21,8 +23,15 @@ export default async function leagueRoutes(app: FastifyInstance) {
     const progress = await getUserLeagueProgress(userId);
     const season = await getOrCreateCurrentSeason();
 
-    const stats = await getUserSeasonStats(userId, season.id);
-    const position = await getUserPosition(userId, season.id);
+    // Создаём запись в userSeasonStats при первом визите,
+    // чтобы пользователь сразу отображался в leaderboard (с 0 LP)
+    await ensureUserSeasonStats(userId, season.id);
+
+    const [stats, position, seasonNumber] = await Promise.all([
+      getUserSeasonStats(userId, season.id),
+      getUserPosition(userId, season.id),
+      getSeasonNumber(season.id),
+    ]);
 
     // Сохраняем снепшот при первом обращении за день
     if (stats && position.position > 0) {
@@ -50,7 +59,7 @@ export default async function leagueRoutes(app: FastifyInstance) {
       season: season
         ? {
             id: season.id,
-            weekNumber: season.weekNumber,
+            weekNumber: seasonNumber,
             year: season.year,
             startedAt: season.startedAt.toISOString(),
             endedAt: season.endedAt?.toISOString() ?? null,
@@ -103,10 +112,14 @@ export default async function leagueRoutes(app: FastifyInstance) {
   app.get('/api/leagues/history', async (request) => {
     const history = await getUserSeasonHistory(request.user.id, 10);
 
+    const seasonNumbers = await Promise.all(
+      history.map((h) => getSeasonNumber(h.seasonId)),
+    );
+
     return {
-      history: history.map((h) => ({
+      history: history.map((h, i) => ({
         seasonId: h.seasonId,
-        weekNumber: h.season.weekNumber,
+        weekNumber: seasonNumbers[i],
         year: h.season.year,
         leaguePoints: h.leaguePoints,
         tierAtStart: h.tierAtStart,

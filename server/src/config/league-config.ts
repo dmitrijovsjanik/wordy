@@ -75,15 +75,15 @@ type TierThresholds = {
 };
 
 export const TIER_THRESHOLDS: Record<LeagueTier, TierThresholds> = {
-  bronze:   { demotion: 0,    promotion: 2000 },
-  silver:   { demotion: 0,    promotion: 2500 },
-  gold:     { demotion: 0,    promotion: 3000 },
-  amber:    { demotion: 2000, promotion: 4000 },
-  sapphire: { demotion: 2500, promotion: 5000 },
-  amethyst: { demotion: 3000, promotion: 6500 },
-  topaz:    { demotion: 4000, promotion: 8000 },
-  ruby:     { demotion: 5000, promotion: 10000 },
-  legend:   { demotion: 6000, promotion: Infinity }, // нет повышения из Legend
+  bronze:   { demotion: 0,      promotion: 12_000 },
+  silver:   { demotion: 0,      promotion: 17_000 },
+  gold:     { demotion: 0,      promotion: 24_000 },
+  amber:    { demotion: 14_000, promotion: 36_000 },
+  sapphire: { demotion: 19_000, promotion: 48_000 },
+  amethyst: { demotion: 24_000, promotion: 60_000 },
+  topaz:    { demotion: 38_000, promotion: 95_000 },
+  ruby:     { demotion: 48_000, promotion: 120_000 },
+  legend:   { demotion: 60_000, promotion: Infinity },
 };
 
 // ─── Награды гемами за зоны по итогам сезона ────────────────────────────────
