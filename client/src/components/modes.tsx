@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Sword01Icon, Tick01Icon } from '@hugeicons/core-free-icons';
+import { Sword01Icon, Tick01Icon, BookOpen02Icon, Book02Icon, ArrowRight01Icon } from '@hugeicons/core-free-icons';
 import { useHomeStore, type QuestionGeneratorMode } from '@/stores/home-store';
 import { cn } from '@/lib/utils';
 
@@ -61,6 +61,38 @@ export function Modes() {
             </span>
           </button>
         </div>
+      </section>
+
+      {/* Грамматика */}
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold text-[var(--gray-11)]">Грамматика</h2>
+        <button
+          onClick={() => navigate('/grammar')}
+          className="flex w-full items-center gap-3 rounded-2xl bg-[var(--gray-2)] px-4 py-3 text-left transition-colors active:bg-[var(--gray-3)]"
+        >
+          <HugeiconsIcon strokeWidth={2} icon={BookOpen02Icon} size={20} className="text-[var(--brand-9)]" />
+          <div className="flex flex-1 flex-col">
+            <span className="text-sm font-semibold">Артикли и времена</span>
+            <span className="text-xs text-[var(--gray-11)]">Практика грамматики английского</span>
+          </div>
+          <HugeiconsIcon icon={ArrowRight01Icon} size={16} strokeWidth={2} className="text-[var(--gray-11)]" />
+        </button>
+      </section>
+
+      {/* Чтение */}
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold text-[var(--gray-11)]">Чтение</h2>
+        <button
+          onClick={() => navigate('/reading')}
+          className="flex w-full items-center gap-3 rounded-2xl bg-[var(--gray-2)] px-4 py-3 text-left transition-colors active:bg-[var(--gray-3)]"
+        >
+          <HugeiconsIcon strokeWidth={2} icon={Book02Icon} size={20} className="text-[var(--brand-9)]" />
+          <div className="flex flex-1 flex-col">
+            <span className="text-sm font-semibold">Мини-тексты</span>
+            <span className="text-xs text-[var(--gray-11)]">Читай и отвечай на вопросы</span>
+          </div>
+          <HugeiconsIcon icon={ArrowRight01Icon} size={16} strokeWidth={2} className="text-[var(--gray-11)]" />
+        </button>
       </section>
 
       {/* Формат квиза */}

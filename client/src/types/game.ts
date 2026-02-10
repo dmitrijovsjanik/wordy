@@ -23,7 +23,7 @@ export type GameModeConfig = {
 // ─── Question Types ─────────────────────────────────────────────────────────
 // Тип вопроса определяет UI и логику взаимодействия
 
-export type QuestionType = 'multiple-choice' | 'spelling' | 'text-input' | 'match-pairs';
+export type QuestionType = 'multiple-choice' | 'spelling' | 'text-input' | 'match-pairs' | 'cloze' | 'listening' | 'dictation' | 'free-recall';
 
 // ─── Question Data ──────────────────────────────────────────────────────────
 // Данные вопроса, специфичные для каждого типа
@@ -68,12 +68,59 @@ export type MatchPairsQuestion = {
   }>;
 };
 
+// Cloze question (заполни пропуск в предложении)
+export type ClozeQuestion = {
+  type: 'cloze';
+  meaningId: number;
+  sentence: string;
+  sentenceRu: string;
+  options: string[];
+  correctAnswer: string;
+  word: string;
+  transcription: string | null;
+};
+
+// Listening question (слушай → выбери перевод)
+export type ListeningQuestion = {
+  type: 'listening';
+  meaningId: number;
+  audioWord: string;
+  transcription: string | null;
+  options: string[];
+  correctAnswer: string;
+};
+
+// Dictation question (слушай → напиши)
+export type DictationQuestion = {
+  type: 'dictation';
+  meaningId: number;
+  audioWord: string;
+  hint: string;
+  correctAnswer: string;
+  acceptableAnswers: string[];
+};
+
+// Free Recall question (напиши перевод без вариантов)
+export type FreeRecallQuestion = {
+  type: 'free-recall';
+  meaningId: number;
+  direction: 'en-ru' | 'ru-en';
+  prompt: string;
+  transcription: string | null;
+  audioWord?: string;
+  acceptableAnswers: string[];
+};
+
 // Union type для всех вопросов
 export type Question =
   | MultipleChoiceQuestion
   | SpellingQuestion
   | TextInputQuestion
-  | MatchPairsQuestion;
+  | MatchPairsQuestion
+  | ClozeQuestion
+  | ListeningQuestion
+  | DictationQuestion
+  | FreeRecallQuestion;
 
 // ─── Answer Feedback ────────────────────────────────────────────────────────
 
@@ -89,6 +136,10 @@ export type AnswerFeedback = {
   totalLp?: number;
   level?: number;
   levelUp?: number;
+  // Примеры предложений (для глубокой обработки)
+  examples?: { en: string; ru: string }[];
+  // Milestones
+  milestones?: { id: string; type: string; threshold: number; title: string; description: string; gemsReward: number; icon: string }[];
 };
 
 // ─── Game State ─────────────────────────────────────────────────────────────
@@ -121,6 +172,17 @@ export type GameState = {
 
   // Для collection filter
   collectionId: number | undefined;
+};
+
+// ─── Answer History ─────────────────────────────────────────────────────────
+
+export type AnswerHistoryEntry = {
+  question: string;        // Что спрашивали (слово, предложение, prompt)
+  userAnswer: string;      // Что ответил пользователь
+  correctAnswer: string;   // Правильный ответ
+  isCorrect: boolean;
+  type: string;            // Тип вопроса (multiple-choice, spelling, cloze и т.д.)
+  timestamp: number;       // Date.now()
 };
 
 // ─── Reward Display ─────────────────────────────────────────────────────────

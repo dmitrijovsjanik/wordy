@@ -8,7 +8,6 @@ import { useTelegram } from '@/hooks/use-telegram';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { WelcomeDrawer } from '@/components/ui/welcome-drawer';
 import { LEAGUE_ICONS } from '@/components/ui/league-icons';
 
 // Новые модульные компоненты
@@ -19,15 +18,22 @@ import { RewardFeedback } from '@/components/game/reward-feedback';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QuizContainer } from '@/components/game/quiz-container';
 import { MatchPairs } from '@/components/game/question-types/match-pairs';
+import { Listening } from '@/components/game/question-types/listening';
+import { Dictation } from '@/components/game/question-types/dictation';
+import { Cloze } from '@/components/game/question-types/cloze';
+import { FreeRecall } from '@/components/game/question-types/free-recall';
+import { ExampleSentences } from '@/components/game/example-sentences';
+import { MilestoneModal } from '@/components/milestone-modal';
 import { DoubleXpBackground } from '@/components/game/double-xp-background';
 import { StreakDaysIndicator } from '@/components/ui/streak-days-indicator';
 import { StreakInfoSheet } from '@/components/ui/streak-info-sheet';
 import { GemsIndicator } from '@/components/ui/gems-indicator';
 import { Avatar } from '@/components/ui/avatar';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Cancel01Icon, Clock01Icon, Notification03Icon } from '@hugeicons/core-free-icons';
+import { Cancel01Icon, Clock01Icon, CheckListIcon } from '@hugeicons/core-free-icons';
 import { ERRORS_COLLECTION_ID } from '@/lib/api';
 import { xpForLevel } from '@/lib/progression-config';
+import { AnswerHistoryDrawer } from '@/components/answer-history-drawer';
 import type { RewardDisplay, AnswerFeedback } from '@/types/game';
 
 export function Home() {
@@ -46,11 +52,14 @@ export function Home() {
     errorsCleared,
     doubleXpTimeLimitMs,
     doubleXpExpired,
+    answerHistory,
     fetchNext,
     submitAnswer,
     submitMatchPairsResults,
     skip,
     expireDoubleXp,
+    setLastUserAnswer,
+    clearHistory,
   } = useHomeStore();
 
   const { progress, stats, season, isLoading: isLeagueLoading, fetchStatus } = useLeagueStore();
@@ -87,23 +96,40 @@ export function Home() {
 
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [rewardDisplay, setRewardDisplay] = useState<RewardDisplay | null>(null);
+  const [listeningRevealed, setListeningRevealed] = useState(false);
   const rewardKeyRef = useRef(0);
   const prevStreakRef = useRef(streak);
   const firstMeaningIdRef = useRef<number | null>(null);
 
+  // Milestone modal queue
+  const [milestoneQueue, setMilestoneQueue] = useState<Array<{ id: string; type: string; threshold: number; title: string; description: string; gemsReward: number; icon: string }>>([]);
+  const currentMilestone = milestoneQueue[0] ?? null;
+
+  const handleMilestoneClose = useCallback(() => {
+    setMilestoneQueue(prev => prev.slice(1));
+    refreshProfile();
+  }, [refreshProfile]);
+
   // Streak info sheet
   const [streakSheetOpen, setStreakSheetOpen] = useState(false);
 
-  // Welcome drawer — show once when user has no system collections
-  const WELCOME_KEY = 'wordy:welcomeShown';
+  // Answer history drawer
+  const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
+
+  // Onboarding redirect — new users go to /onboarding
   const library = useCollectionStore((s) => s.library);
   const isLoadingLibrary = useCollectionStore((s) => s.isLoadingLibrary);
   const fetchLibrary = useCollectionStore((s) => s.fetchLibrary);
-  const [welcomeDismissed, setWelcomeDismissed] = useState(() => localStorage.getItem(WELCOME_KEY) === '1');
   const hasSystemCollection = library.some((c) => c.type === 'system');
-  const showWelcome = !isLoadingLibrary && !hasSystemCollection && !welcomeDismissed;
 
   useEffect(() => { fetchLibrary(); }, [fetchLibrary]);
+
+  useEffect(() => {
+    if (!user || isLoadingLibrary) return;
+    if (!user.onboardingCompletedAt && !hasSystemCollection) {
+      navigate('/onboarding', { replace: true });
+    }
+  }, [user, isLoadingLibrary, hasSystemCollection, navigate]);
 
   // Название коллекции для бейджа фокусировки
   const focusCollectionName = collectionId
@@ -147,6 +173,7 @@ export function Home() {
     if (currentQuestion) {
       setSelectedOption(null);
       setRewardDisplay(null);
+      setListeningRevealed(false);
     }
   }, [currentQuestion]);
 
@@ -166,6 +193,13 @@ export function Home() {
       }
     }
   }, [feedback, hapticNotification, refreshProfile]);
+
+  // Queue milestones from feedback
+  useEffect(() => {
+    if (feedback?.milestones && feedback.milestones.length > 0) {
+      setMilestoneQueue(prev => [...prev, ...feedback.milestones!]);
+    }
+  }, [feedback]);
 
   // Track streak changes
   useEffect(() => {
@@ -206,12 +240,26 @@ export function Home() {
     setSelectedOption(option);
 
     // Определяем правильный ответ в зависимости от типа вопроса
-    const correctAnswer = currentQuestion.type === 'spelling'
-      ? currentQuestion.correctSpelling
-      : currentQuestion.correctTranslation;
+    // dictation и free-recall используют текстовый ввод, не попадают сюда
+    let correctAnswer: string | undefined;
+    switch (currentQuestion.type) {
+      case 'spelling':
+        correctAnswer = currentQuestion.correctSpelling;
+        break;
+      case 'cloze':
+      case 'listening':
+        correctAnswer = currentQuestion.correctAnswer;
+        break;
+      case 'dictation':
+      case 'free-recall':
+        // Текстовый ввод — обрабатываются отдельными компонентами
+        return;
+      default:
+        correctAnswer = currentQuestion.correctTranslation;
+    }
 
     const isCorrectGuess = option === correctAnswer;
-    submitAnswer(isCorrectGuess ? currentQuestion.meaningId : null);
+    submitAnswer(isCorrectGuess ? currentQuestion.meaningId : null, option);
   }, [feedback, isLoading, currentQuestion, hapticImpact, submitAnswer]);
 
   const handleSkip = useCallback(() => {
@@ -234,11 +282,24 @@ export function Home() {
   }, [isLoading, currentQuestion, hapticImpact, submitMatchPairsResults]);
 
   // Преобразуем feedback в AnswerFeedback для компонента
+  // ВАЖНО: для correctAnswer берём значение из вопроса (не из сервера),
+  // чтобы оно совпадало с текстом опций (сервер может вернуть другое из-за TRANSLATION_DISPLAY)
   const answerFeedback: AnswerFeedback | null = feedback ? {
     isCorrect: feedback.isCorrect,
     correctAnswer: currentQuestion?.type === 'spelling'
       ? (currentQuestion?.correctSpelling ?? feedback.correctTranslation)
-      : feedback.correctTranslation,
+      : currentQuestion?.type === 'cloze'
+        ? (currentQuestion?.correctAnswer ?? feedback.correctTranslation)
+        : currentQuestion?.type === 'listening'
+          ? (currentQuestion?.correctAnswer ?? feedback.correctTranslation)
+          : currentQuestion?.type === 'dictation'
+            ? (currentQuestion?.correctAnswer ?? feedback.correctTranslation)
+            : currentQuestion?.type === 'free-recall'
+              ? (currentQuestion?.acceptableAnswers?.[0] ?? feedback.correctTranslation)
+              : (currentQuestion && 'correctTranslation' in currentQuestion && currentQuestion.correctTranslation)
+                ? currentQuestion.correctTranslation
+                : feedback.correctTranslation,
+    examples: feedback.examples,
   } : null;
 
   if (!user) return null;
@@ -261,8 +322,8 @@ export function Home() {
         <div className="flex flex-1 justify-center">
           <GemsIndicator gems={user.gems} freezes={user.streakFreezes} onClick={() => navigate('/shop')} />
         </div>
-        <Button variant="secondary" size="icon">
-          <HugeiconsIcon icon={Notification03Icon} size={24} className="text-[var(--gray-11)]" />
+        <Button variant="secondary" size="icon" onClick={() => setHistoryDrawerOpen(true)}>
+          <HugeiconsIcon icon={CheckListIcon} size={24} className="text-[var(--gray-11)]" />
         </Button>
       </div>
 
@@ -416,13 +477,128 @@ export function Home() {
                             </motion.span>
                           )}
                         </AnimatePresence>
-                        <h2 className="mb-1 text-xl font-bold text-[var(--gray-12)]">Соедините пары</h2>
+                        <h2 className="mb-1 font-[Unbounded] font-bold text-[var(--gray-12)]" style={{ fontSize: 'clamp(1.75rem, 10vw, 2.25rem)' }}>Соедините пары</h2>
                       </div>
                       <p className="text-sm text-[var(--gray-11)]">Нажмите на слово, затем на его перевод</p>
                     </div>
+                  ) : currentQuestion.type === 'cloze' ? (
+                    <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center pb-8 px-4">
+                      {/* Cloze: предложение с пропуском */}
+                      <div className="relative text-center">
+                        <AnimatePresence>
+                          {showDoubleXpTimer && (
+                            <motion.span
+                              key="double-xp-label-cloze"
+                              initial={{ opacity: 0, scale: 0.5 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.5 }}
+                              transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+                              className="absolute -top-8 left-1/2 -translate-x-1/2 select-none font-[Unbounded] text-2xl font-black text-[var(--green-9)]"
+                            >
+                              x2
+                            </motion.span>
+                          )}
+                        </AnimatePresence>
+                        <p className="font-[Unbounded] font-bold leading-relaxed text-[var(--gray-12)]" style={{ fontSize: 'clamp(1.75rem, 10vw, 2.25rem)' }}>{currentQuestion.sentence}</p>
+                        <p className="mt-2 text-sm text-[var(--gray-11)]">{currentQuestion.sentenceRu}</p>
+                      </div>
+                      {rewardDisplay && (
+                        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
+                          <RewardFeedback reward={rewardDisplay} />
+                        </div>
+                      )}
+                    </div>
+                  ) : currentQuestion.type === 'listening' ? (
+                    <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center pb-8">
+                      <div className="relative">
+                        <AnimatePresence>
+                          {showDoubleXpTimer && (
+                            <motion.span
+                              key="double-xp-label-listen"
+                              initial={{ opacity: 0, scale: 0.5 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.5 }}
+                              transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+                              className="absolute -top-8 left-1/2 -translate-x-1/2 select-none font-[Unbounded] text-2xl font-black text-[var(--green-9)]"
+                            >
+                              x2
+                            </motion.span>
+                          )}
+                        </AnimatePresence>
+                        {listeningRevealed ? (
+                          <WordDisplay
+                            word={currentQuestion.audioWord}
+                            originalForm={null}
+                            transcription={currentQuestion.transcription ?? null}
+                            meaningId={currentQuestion.meaningId}
+                            skipInitialAnimation
+                            showSpeaker={false}
+                          />
+                        ) : (
+                          <h2 className="font-[Unbounded] font-bold text-[var(--gray-12)]" style={{ fontSize: 'clamp(1.75rem, 10vw, 2.25rem)' }}>Что вы слышите?</h2>
+                        )}
+                      </div>
+                      {rewardDisplay && (
+                        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
+                          <RewardFeedback reward={rewardDisplay} />
+                        </div>
+                      )}
+                    </div>
+                  ) : currentQuestion.type === 'dictation' ? (
+                    <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center pb-8">
+                      <div className="relative">
+                        <AnimatePresence>
+                          {showDoubleXpTimer && (
+                            <motion.span
+                              key="double-xp-label-dictation"
+                              initial={{ opacity: 0, scale: 0.5 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.5 }}
+                              transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+                              className="absolute -top-8 left-1/2 -translate-x-1/2 select-none font-[Unbounded] text-2xl font-black text-[var(--green-9)]"
+                            >
+                              x2
+                            </motion.span>
+                          )}
+                        </AnimatePresence>
+                        <WordDisplay
+                          word={currentQuestion.hint}
+                          originalForm={null}
+                          transcription={null}
+                          meaningId={currentQuestion.meaningId}
+                          skipInitialAnimation={currentQuestion.meaningId === firstMeaningIdRef.current}
+                          showSpeaker={false}
+                        />
+                      </div>
+                      <p className="mt-2 text-sm text-[var(--gray-11)]">Напишите слово на английском</p>
+                      {rewardDisplay && (
+                        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
+                          <RewardFeedback reward={rewardDisplay} />
+                        </div>
+                      )}
+                    </div>
+                  ) : currentQuestion.type === 'free-recall' ? (
+                    <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center pb-8">
+                      {/* Free Recall: напиши перевод */}
+                      <div className="relative">
+                        <WordDisplay
+                          word={currentQuestion.prompt}
+                          originalForm={null}
+                          transcription={currentQuestion.transcription}
+                          meaningId={currentQuestion.meaningId}
+                          skipInitialAnimation={currentQuestion.meaningId === firstMeaningIdRef.current}
+                          showSpeaker={currentQuestion.direction === 'en-ru'}
+                        />
+                      </div>
+                      {rewardDisplay && (
+                        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
+                          <RewardFeedback reward={rewardDisplay} />
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center pb-8">
-                      {/* Word display */}
+                      {/* Word display (multiple-choice / spelling) */}
                       <div className="relative">
                         <AnimatePresence>
                           {showDoubleXpTimer && (
@@ -479,6 +655,62 @@ export function Home() {
                         onSkip={handleSkip}
                         showSkip
                       />
+                    ) : currentQuestion.type === 'cloze' ? (
+                      <Cloze
+                        options={currentQuestion.options}
+                        questionKey={currentQuestion.meaningId}
+                        selectedAnswer={selectedOption}
+                        feedback={answerFeedback}
+                        disabled={isLoading}
+                        onAnswer={handleAnswer}
+                        onSkip={handleSkip}
+                        showSkip
+                      />
+                    ) : currentQuestion.type === 'listening' ? (
+                      <Listening
+                        options={currentQuestion.options}
+                        questionKey={currentQuestion.meaningId}
+                        selectedAnswer={selectedOption}
+                        feedback={answerFeedback}
+                        disabled={isLoading}
+                        onAnswer={handleAnswer}
+                        onSkip={handleSkip}
+                        showSkip
+                        audioWord={currentQuestion.audioWord}
+                        transcription={currentQuestion.transcription}
+                        onReveal={() => setListeningRevealed(true)}
+                      />
+                    ) : currentQuestion.type === 'dictation' ? (
+                      <Dictation
+                        questionKey={currentQuestion.meaningId}
+                        audioWord={currentQuestion.audioWord}
+                        hint={currentQuestion.hint}
+                        correctAnswer={currentQuestion.correctAnswer}
+                        acceptableAnswers={currentQuestion.acceptableAnswers}
+                        feedback={answerFeedback}
+                        disabled={isLoading}
+                        onAnswer={submitAnswer}
+                        onTextSubmit={setLastUserAnswer}
+                        onSkip={handleSkip}
+                        showSkip
+                        meaningId={currentQuestion.meaningId}
+                      />
+                    ) : currentQuestion.type === 'free-recall' ? (
+                      <FreeRecall
+                        questionKey={currentQuestion.meaningId}
+                        prompt={currentQuestion.prompt}
+                        direction={currentQuestion.direction}
+                        transcription={currentQuestion.transcription}
+                        audioWord={currentQuestion.audioWord}
+                        acceptableAnswers={currentQuestion.acceptableAnswers}
+                        feedback={null}
+                        disabled={isLoading}
+                        meaningId={currentQuestion.meaningId}
+                        onAnswer={submitAnswer}
+                        onTextSubmit={setLastUserAnswer}
+                        onSkip={handleSkip}
+                        showSkip
+                      />
                     ) : (
                       <MultipleChoice
                         options={currentQuestion.options}
@@ -492,6 +724,14 @@ export function Home() {
                       />
                     )}
                   </div>
+
+                  {/* Example sentences after correct answer */}
+                  {answerFeedback?.isCorrect && answerFeedback.examples && answerFeedback.examples.length > 0 && (
+                    <div className="mt-3 shrink-0">
+                      <ExampleSentences examples={answerFeedback.examples} />
+                    </div>
+                  )}
+
                 </>
               )}
             </QuizContainer>
@@ -506,12 +746,18 @@ export function Home() {
         createdAt={user.createdAt}
       />
 
-      <WelcomeDrawer
-        open={showWelcome}
-        onOpenChange={(open) => { if (!open) { localStorage.setItem(WELCOME_KEY, '1'); setWelcomeDismissed(true); } }}
-        onCollectionAdded={() => { fetchNext(); }}
-      />
     </div>
+
+    {/* Milestone modal */}
+    <MilestoneModal milestone={currentMilestone} onClose={handleMilestoneClose} />
+
+    {/* Answer history drawer */}
+    <AnswerHistoryDrawer
+      open={historyDrawerOpen}
+      onOpenChange={setHistoryDrawerOpen}
+      history={answerHistory}
+      onClear={clearHistory}
+    />
     </>
   );
 }

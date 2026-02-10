@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { QuizQuestion, InfiniteAnswerResponse } from '@/types/api';
+import type { AnswerHistoryEntry } from '@/types/game';
 import { quizNext, quizAnswerInfinite, quizAnswerMatchPairs, ERRORS_COLLECTION_ID } from '@/lib/api';
 import { useLeagueStore } from './league-store';
 import { useCollectionStore } from './collection-store';
@@ -8,6 +9,8 @@ const MAX_RECENT = 20;
 const MAX_RECENT_GENERATORS = 10;
 const STREAK_KEY = 'wordy:streak';
 const QUESTION_KEY = 'wordy:currentQuestion';
+const HISTORY_KEY = 'wordy:answerHistory';
+const HISTORY_DATE_KEY = 'wordy:answerHistoryDate';
 
 function loadStreak(): number {
   const raw = localStorage.getItem(STREAK_KEY);
@@ -36,17 +39,77 @@ function saveQuestion(question: QuizQuestion | null) {
   }
 }
 
+/** Текущий "день" по МСК (граница 04:00 UTC+3 = 01:00 UTC) */
+function getMskDay(): string {
+  const now = new Date();
+  // МСК = UTC+3, граница дня = 04:00 МСК = 01:00 UTC
+  const mskMs = now.getTime() + 3 * 60 * 60 * 1000;
+  const mskDate = new Date(mskMs);
+  // Вычитаем 4 часа — «день» начинается в 04:00
+  const adjusted = new Date(mskDate.getTime() - 4 * 60 * 60 * 1000);
+  return `${adjusted.getUTCFullYear()}-${String(adjusted.getUTCMonth() + 1).padStart(2, '0')}-${String(adjusted.getUTCDate()).padStart(2, '0')}`;
+}
+
+function loadHistory(): AnswerHistoryEntry[] {
+  try {
+    const savedDate = localStorage.getItem(HISTORY_DATE_KEY);
+    const currentDay = getMskDay();
+    if (savedDate !== currentDay) {
+      localStorage.removeItem(HISTORY_KEY);
+      localStorage.setItem(HISTORY_DATE_KEY, currentDay);
+      return [];
+    }
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as AnswerHistoryEntry[];
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(entries: AnswerHistoryEntry[]) {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(entries));
+  localStorage.setItem(HISTORY_DATE_KEY, getMskDay());
+}
+
+/** Извлекает текст вопроса из QuizQuestion */
+function getQuestionText(q: QuizQuestion): string {
+  if (q.type === 'match-pairs') return 'Соедини пары';
+  if (q.type === 'cloze') return q.sentence;
+  if (q.type === 'listening' || q.type === 'dictation') return q.audioWord;
+  if (q.type === 'free-recall') return q.prompt;
+  return q.word;
+}
+
+/** Извлекает правильный ответ из QuizQuestion */
+function getCorrectAnswer(q: QuizQuestion): string {
+  if (q.type === 'match-pairs') return '';
+  if (q.type === 'cloze' || q.type === 'listening') return q.correctAnswer;
+  if (q.type === 'dictation') return q.correctAnswer;
+  if (q.type === 'free-recall') return q.acceptableAnswers[0] ?? '';
+  if (q.type === 'spelling') return q.correctSpelling ?? '';
+  return q.correctTranslation ?? '';
+}
+
 export type QuestionGeneratorMode =
   | 'auto'          // Случайное направление, multiple-choice
   | 'en-ru'         // EN → RU, multiple-choice
   | 'ru-en'         // RU → EN, multiple-choice
   | 'spelling'      // Spelling (всегда ru-en)
-  | 'match-pairs';  // Соединение пар
+  | 'match-pairs'   // Соединение пар
+  | 'cloze'         // Заполни пропуск
+  | 'listening'     // Слушай → выбери перевод
+  | 'dictation'     // Слушай → напиши
+  | 'free-recall';  // Напиши перевод
 
 /** Определяет тип генератора из ответа сервера */
 function getGeneratorTypeFromQuestion(question: QuizQuestion): string {
   if (question.type === 'match-pairs') return 'match-pairs';
   if (question.type === 'spelling') return 'spelling';
+  if (question.type === 'cloze') return 'cloze';
+  if (question.type === 'listening') return 'listening';
+  if (question.type === 'dictation') return 'dictation';
+  if (question.type === 'free-recall') return 'free-recall';
   return question.direction; // 'en-ru' или 'ru-en'
 }
 
@@ -63,15 +126,21 @@ type HomeState = {
   errorsCleared: boolean;
   doubleXpTimeLimitMs: number | null;
   doubleXpExpired: boolean;
+  recentCorrectCount: number;
+  recentTotalCount: number;
+  answerHistory: AnswerHistoryEntry[];
+  lastUserAnswer: string | null;
 
   setCollectionId: (id: number | typeof ERRORS_COLLECTION_ID | undefined) => void;
   setGeneratorMode: (mode: QuestionGeneratorMode) => void;
   fetchNext: () => Promise<void>;
-  submitAnswer: (selectedMeaningId: number | null) => Promise<void>;
+  submitAnswer: (selectedMeaningId: number | null, userAnswer?: string) => Promise<void>;
   submitMatchPairsResults: (results: Array<{ meaningId: number; isCorrect: boolean }>) => Promise<void>;
   skip: () => Promise<void>;
   reset: () => void;
   expireDoubleXp: () => void;
+  setLastUserAnswer: (answer: string | null) => void;
+  clearHistory: () => void;
 };
 
 export const useHomeStore = create<HomeState>()((set, get) => ({
@@ -87,6 +156,16 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
   errorsCleared: false,
   doubleXpTimeLimitMs: null,
   doubleXpExpired: false,
+  recentCorrectCount: 0,
+  recentTotalCount: 0,
+  answerHistory: loadHistory(),
+  lastUserAnswer: null,
+
+  setLastUserAnswer: (answer) => set({ lastUserAnswer: answer }),
+  clearHistory: () => {
+    saveHistory([]);
+    set({ answerHistory: [] });
+  },
 
   setCollectionId: (id) => {
     saveQuestion(null);
@@ -100,7 +179,8 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const { recentMeaningIds, collectionId, generatorMode, recentGenerators } = get();
-      const res = await quizNext(recentMeaningIds, collectionId, generatorMode, recentGenerators);
+      const { recentCorrectCount, recentTotalCount } = get();
+      const res = await quizNext(recentMeaningIds, collectionId, generatorMode, recentGenerators, recentCorrectCount, recentTotalCount);
 
       // Если ошибки закончились — показываем сообщение, переход на обычный режим через паузу
       if (!res.question && collectionId === ERRORS_COLLECTION_ID) {
@@ -121,8 +201,8 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
     }
   },
 
-  submitAnswer: async (selectedMeaningId) => {
-    const { currentQuestion, recentMeaningIds } = get();
+  submitAnswer: async (selectedMeaningId, userAnswer?) => {
+    const { currentQuestion, recentMeaningIds, lastUserAnswer } = get();
     if (!currentQuestion || currentQuestion.type === 'match-pairs') return;
 
     set({ isLoading: true });
@@ -143,11 +223,37 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
       // Инвалидируем кеш коллекции ошибок (incorrectCount мог измениться)
       useCollectionStore.setState({ errorsFetchedAt: null });
 
+      // Track adaptive difficulty stats (last 10 answers)
+      const prevCorrect = get().recentCorrectCount;
+      const prevTotal = get().recentTotalCount;
+      const newCorrect = res.isCorrect ? prevCorrect + 1 : prevCorrect;
+      const newTotal = prevTotal + 1;
+      // Reset after 10 answers to keep the window fresh
+      const resetWindow = newTotal >= 10;
+
+      // Записываем в историю ответов
+      const answerText = userAnswer ?? lastUserAnswer ?? (res.isCorrect ? getCorrectAnswer(currentQuestion) : '—');
+      const entry: AnswerHistoryEntry = {
+        question: getQuestionText(currentQuestion),
+        userAnswer: answerText,
+        correctAnswer: res.correctTranslation || getCorrectAnswer(currentQuestion),
+        isCorrect: res.isCorrect,
+        type: currentQuestion.type ?? 'multiple-choice',
+        timestamp: Date.now(),
+      };
+      const updatedHistory = [entry, ...get().answerHistory].slice(0, 200);
+      saveHistory(updatedHistory);
+
       set({
-        feedback: { ...res, correctTranslation: currentQuestion.correctTranslation ?? '', meaningId: currentQuestion.meaningId },
+        feedback: { ...res, meaningId: currentQuestion.meaningId },
         recentMeaningIds: updatedRecent,
         isLoading: false,
         streak: newStreak,
+        recentCorrectCount: resetWindow ? (res.isCorrect ? 1 : 0) : newCorrect,
+        recentTotalCount: resetWindow ? 1 : newTotal,
+        answerHistory: updatedHistory,
+        lastUserAnswer: null,
+        doubleXpTimeLimitMs: null, // Сбрасываем сразу, чтобы x2 фон не мелькал при смене вопроса
       });
 
       // Автопереход к следующему вопросу
@@ -185,6 +291,21 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
       // Инвалидируем кеш коллекции ошибок (incorrectCount мог измениться)
       useCollectionStore.setState({ errorsFetchedAt: null });
 
+      // Записываем историю ответов для каждой пары
+      const pairEntries: AnswerHistoryEntry[] = currentQuestion.pairs.map((pair) => {
+        const pairResult = results.find((r) => r.meaningId === pair.meaningId);
+        return {
+          question: pair.word,
+          userAnswer: pair.translation,
+          correctAnswer: pair.translation,
+          isCorrect: pairResult?.isCorrect ?? false,
+          type: 'match-pairs',
+          timestamp: Date.now(),
+        };
+      });
+      const updatedHistory = [...pairEntries, ...get().answerHistory].slice(0, 200);
+      saveHistory(updatedHistory);
+
       set({
         feedback: {
           isCorrect: allCorrect,
@@ -204,6 +325,8 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
         recentMeaningIds: updatedRecent,
         isLoading: false,
         streak: newStreak,
+        answerHistory: updatedHistory,
+        doubleXpTimeLimitMs: null,
       });
 
       setTimeout(() => {
@@ -236,6 +359,9 @@ export const useHomeStore = create<HomeState>()((set, get) => ({
       collectionId: undefined,
       doubleXpTimeLimitMs: null,
       doubleXpExpired: false,
+      recentCorrectCount: 0,
+      recentTotalCount: 0,
+      lastUserAnswer: null,
     });
   },
 }));

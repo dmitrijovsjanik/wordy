@@ -25,6 +25,10 @@ import type {
   FriendInfo,
   FriendRequestInfo,
   StreakCalendarResponse,
+  CefrProgressResponse,
+  PlacementStartResponse,
+  PlacementAnswerResponse,
+  PlacementCompleteResponse,
 } from '@/types/api';
 
 const TOKEN_KEY = 'wordy_token';
@@ -272,10 +276,16 @@ export function quizNext(
   collectionId?: number | typeof ERRORS_COLLECTION_ID,
   generatorMode?: string,
   recentGenerators: string[] = [],
+  recentCorrect?: number,
+  recentTotal?: number,
 ) {
   const params = new URLSearchParams();
   if (excludeIds.length > 0) params.set('exclude', excludeIds.join(','));
   if (collectionId) params.set('collectionId', String(collectionId));
+
+  // Adaptive difficulty params
+  if (recentCorrect !== undefined) params.set('recentCorrect', String(recentCorrect));
+  if (recentTotal !== undefined) params.set('recentTotal', String(recentTotal));
 
   // Определяем параметры генерации
   if (generatorMode === 'spelling' || generatorMode === 'match-pairs') {
@@ -367,4 +377,100 @@ export function acceptInvite(token: string) {
 
 export function removeFriend(friendId: number) {
   return fetchApi<{ success: boolean }>('DELETE', `/api/friends/${friendId}`);
+}
+
+// CEFR Progress
+export function getCefrProgress() {
+  return fetchApi<CefrProgressResponse>('GET', '/api/users/me/cefr-progress');
+}
+
+// Grammar — Articles Quiz
+import type {
+  ArticleNextResponse,
+  ArticleAnswerRequest,
+  ArticleAnswerResponse,
+  TenseNextResponse,
+  TenseAnswerRequest,
+  TenseAnswerResponse,
+  CollocationNextResponse,
+  CollocationAnswerRequest,
+  CollocationAnswerResponse,
+} from '@/types/grammar';
+
+export function getNextArticleExercise(difficulty?: number) {
+  const params = difficulty ? `?difficulty=${difficulty}` : '';
+  return fetchApi<ArticleNextResponse>('GET', `/api/grammar/articles/next${params}`);
+}
+
+export function submitArticleAnswer(data: ArticleAnswerRequest) {
+  return fetchApi<ArticleAnswerResponse>('POST', '/api/grammar/articles/answer', data);
+}
+
+// Grammar — Tenses Quiz
+export function getNextTenseExercise(difficulty?: number) {
+  const params = difficulty ? `?difficulty=${difficulty}` : '';
+  return fetchApi<TenseNextResponse>('GET', `/api/grammar/tenses/next${params}`);
+}
+
+export function submitTenseAnswer(data: TenseAnswerRequest) {
+  return fetchApi<TenseAnswerResponse>('POST', '/api/grammar/tenses/answer', data);
+}
+
+// Grammar — Collocations Quiz
+export function getNextCollocationExercise(difficulty?: number) {
+  const params = difficulty ? `?difficulty=${difficulty}` : '';
+  return fetchApi<CollocationNextResponse>('GET', `/api/grammar/collocations/next${params}`);
+}
+
+export function submitCollocationAnswer(data: CollocationAnswerRequest) {
+  return fetchApi<CollocationAnswerResponse>('POST', '/api/grammar/collocations/answer', data);
+}
+
+// Grammar — False Friends Quiz
+export function getNextFalseFriend() {
+  return fetchApi<{ question: import('@/types/grammar').FalseFriendQuestion; questionIndex: number }>(
+    'GET',
+    '/api/grammar/false-friends/next',
+  );
+}
+
+export function submitFalseFriendAnswer(questionIndex: number, answer: string) {
+  return fetchApi<import('@/types/grammar').FalseFriendAnswerResult>(
+    'POST',
+    '/api/grammar/false-friends/answer',
+    { questionIndex, answer },
+  );
+}
+
+// Reading
+import type { ReadingNextResponse, ReadingAnswerRequest, ReadingAnswerResponse } from '@/types/reading';
+
+export function getNextReadingPassage(level?: string) {
+  const params = level ? `?level=${level}` : '';
+  return fetchApi<ReadingNextResponse>('GET', `/api/reading/next${params}`);
+}
+
+export function submitReadingAnswer(data: ReadingAnswerRequest) {
+  return fetchApi<ReadingAnswerResponse>('POST', '/api/reading/answer', data);
+}
+
+// Placement Test
+export function placementStart(selfAssessment?: string) {
+  return fetchApi<PlacementStartResponse>('POST', '/api/placement/start', selfAssessment ? { selfAssessment } : {});
+}
+
+export function placementAnswer(meaningId: number, selectedOption: string, answerTimeMs: number) {
+  return fetchApi<PlacementAnswerResponse>('POST', '/api/placement/answer', { meaningId, selectedOption, answerTimeMs });
+}
+
+export function placementComplete() {
+  return fetchApi<PlacementCompleteResponse>('POST', '/api/placement/complete');
+}
+
+export function placementFinalize(mode: 'all' | 'current-only') {
+  return fetchApi<{ success: boolean }>('POST', '/api/placement/finalize', { mode });
+}
+
+export function placementSkip(selectedCefr: string) {
+  return fetchApi<{ success: boolean }>('POST', '/api/placement/skip', { selectedCefr });
 }

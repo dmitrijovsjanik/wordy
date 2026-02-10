@@ -66,6 +66,22 @@ export const telegram = {
     });
   },
 
+  enableClosingConfirmation() {
+    safeCall(() => {
+      if (isAvailable() && window.Telegram.WebApp.enableClosingConfirmation) {
+        window.Telegram.WebApp.enableClosingConfirmation();
+      }
+    });
+  },
+
+  disableClosingConfirmation() {
+    safeCall(() => {
+      if (isAvailable() && window.Telegram.WebApp.disableClosingConfirmation) {
+        window.Telegram.WebApp.disableClosingConfirmation();
+      }
+    });
+  },
+
   hapticImpact(style: HapticStyle) {
     safeCall(() => {
       if (isAvailable()) window.Telegram.WebApp.HapticFeedback.impactOccurred(style);
@@ -101,6 +117,8 @@ declare global {
         expand: () => void;
         requestFullscreen?: () => void;
         disableVerticalSwipes?: () => void;
+        enableClosingConfirmation?: () => void;
+        disableClosingConfirmation?: () => void;
         initData: string;
         initDataUnsafe?: { start_param?: string };
         HapticFeedback: {

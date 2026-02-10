@@ -1,5 +1,8 @@
 import type { FastifyInstance } from 'fastify';
+import { sql, isNotNull } from 'drizzle-orm';
 import { getProfile, getStats, getDailyRewards, updateLanguages, updateSettings, purchaseStreakFreeze, getStreakCalendar } from '../services/user-service.js';
+import { db } from '../db/index.js';
+import { wordMeanings, userWordProgress } from '../db/schema.js';
 
 export default async function userRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
@@ -60,5 +63,43 @@ export default async function userRoutes(app: FastifyInstance) {
       }
       throw error;
     }
+  });
+
+  // ─── CEFR Progress ───────────────────────────────────────────────────────
+
+  app.get('/api/users/me/cefr-progress', async (request) => {
+    const userId = request.user.id;
+
+    const rows = await db
+      .select({
+        cefrLevel: wordMeanings.cefr,
+        totalWords: sql<number>`COUNT(DISTINCT ${wordMeanings.id})`.as('total_words'),
+        learnedWords: sql<number>`COUNT(DISTINCT CASE WHEN ${userWordProgress.srsStage} >= 3 THEN ${wordMeanings.id} END)`.as('learned_words'),
+      })
+      .from(wordMeanings)
+      .leftJoin(
+        userWordProgress,
+        sql`${userWordProgress.meaningId} = ${wordMeanings.id} AND ${userWordProgress.userId} = ${userId}`,
+      )
+      .where(isNotNull(wordMeanings.cefr))
+      .groupBy(wordMeanings.cefr)
+      .orderBy(
+        sql`CASE ${wordMeanings.cefr}
+          WHEN 'a1' THEN 1 WHEN 'a2' THEN 2 WHEN 'b1' THEN 3
+          WHEN 'b2' THEN 4 WHEN 'c1' THEN 5 ELSE 6 END`,
+      );
+
+    const levels = rows.map((row) => {
+      const total = Number(row.totalWords);
+      const learned = Number(row.learnedWords);
+      return {
+        level: row.cefrLevel as string,
+        totalWords: total,
+        learnedWords: learned,
+        percent: total > 0 ? Math.round((learned / total) * 100) : 0,
+      };
+    });
+
+    return { levels };
   });
 }

@@ -1,0 +1,63 @@
+import type { PooledMeaning, FreeRecallQuestion } from '../types.js';
+import { getAllTranslations } from './multiple-choice.js';
+
+// ─── Generation ──────────────────────────────────────────────────────────────
+
+/**
+ * Проверяет, подходит ли meaning для free-recall вопроса.
+ * В идеале требует srsStage >= 2 (частично выученное слово),
+ * но PooledMeaning не содержит srsStage — фильтрация выполняется
+ * в quiz-service при формировании пула.
+ */
+export function canGenerateFreeRecall(_meaning: PooledMeaning): boolean {
+  return true;
+}
+
+/**
+ * Генерирует free-recall вопрос из meaning.
+ * Направление выбирается случайно 50/50:
+ * - en→ru: показываем английское слово, ожидаем русский перевод
+ * - ru→en: показываем русский перевод, ожидаем английское слово
+ */
+export function generateFreeRecallFromMeaning(
+  correct: PooledMeaning,
+): FreeRecallQuestion {
+  const direction = Math.random() < 0.5 ? 'en-ru' : 'ru-en';
+  const englishWord = correct.word.lemma ?? correct.word.text;
+
+  if (direction === 'en-ru') {
+    // Показываем английское слово → пользователь пишет перевод
+    const allTranslations = getAllTranslations(correct);
+    const synonyms = correct.synonyms ?? [];
+    const acceptableAnswers = [...new Set([...allTranslations, ...synonyms])];
+
+    return {
+      type: 'free-recall',
+      meaningId: correct.id,
+      direction: 'en-ru',
+      prompt: englishWord,
+      transcription: correct.word.transcription,
+      audioWord: englishWord,
+      acceptableAnswers,
+    };
+  } else {
+    // Показываем русский перевод → пользователь пишет английское слово
+    const acceptableAnswers = [
+      correct.word.text,
+      ...(correct.word.lemma ? [correct.word.lemma] : []),
+    ].filter(Boolean);
+
+    // Дедупликация (text и lemma могут совпадать)
+    const unique = [...new Set(acceptableAnswers)];
+
+    return {
+      type: 'free-recall',
+      meaningId: correct.id,
+      direction: 'ru-en',
+      prompt: correct.translation,
+      transcription: null,
+      audioWord: englishWord,
+      acceptableAnswers: unique,
+    };
+  }
+}

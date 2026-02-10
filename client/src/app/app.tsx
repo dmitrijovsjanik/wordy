@@ -24,6 +24,10 @@ const Shop = lazyWithRetry(() => import('@/components/shop').then((m) => ({ defa
 const FriendsPage = lazyWithRetry(() => import('@/components/friends').then((m) => ({ default: m.Friends })));
 const Settings = lazyWithRetry(() => import('@/components/settings').then((m) => ({ default: m.Settings })));
 const AllWords = lazyWithRetry(() => import('@/components/all-words').then((m) => ({ default: m.AllWords })));
+const GrammarPage = lazyWithRetry(() => import('@/components/grammar/grammar-page').then((m) => ({ default: m.GrammarPage })));
+const ReadingPage = lazyWithRetry(() => import('@/components/reading/reading-page').then((m) => ({ default: m.ReadingPage })));
+const QuizShowcase = lazyWithRetry(() => import('@/components/quiz-showcase').then((m) => ({ default: m.QuizShowcase })));
+const OnboardingPage = lazyWithRetry(() => import('@/components/onboarding/onboarding-page').then((m) => ({ default: m.OnboardingPage })));
 
 function DeepLinkHandler() {
   const navigate = useNavigate();
@@ -95,6 +99,10 @@ export function App() {
                   <Route path="/friends" element={<FriendsPage />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/words" element={<AllWords />} />
+                  <Route path="/grammar" element={<GrammarPage />} />
+                  <Route path="/reading" element={<ReadingPage />} />
+                  <Route path="/quiz-showcase" element={<QuizShowcase />} />
+                  <Route path="/onboarding" element={<OnboardingPage />} />
                 </Routes>
               </Suspense>
             </ErrorBoundary>

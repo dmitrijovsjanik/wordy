@@ -35,7 +35,7 @@ export function WordDisplay({
   skipInitialAnimation = false,
   showSpeaker = false,
 }: WordDisplayProps) {
-  const { speak, isSpeaking, progress, opacity, isSupported } = useSpeech({ lang: 'en-US', rate: 0.85 });
+  const { speak, isSpeaking, isLoading, progress, opacity } = useSpeech({ lang: 'en-US', rate: 0.85 });
 
   // Показываем karaoke-слой пока идёт воспроизведение или затухание
   const showKaraoke = isSpeaking || opacity > 0;
@@ -45,7 +45,7 @@ export function WordDisplay({
     speak(originalForm ?? word);
   };
 
-  const canSpeak = showSpeaker && isSupported;
+  const canSpeak = showSpeaker;
 
   return (
     <AnimatePresence mode="wait">
@@ -83,7 +83,7 @@ export function WordDisplay({
           {transcription && (
             <span className="mt-1 flex items-center gap-1.5 text-sm text-[var(--gray-10)]">
               {canSpeak && (
-                <span className="relative">
+                <span className={`relative ${isLoading ? 'animate-pulse' : ''}`}>
                   {/* Серая иконка — база */}
                   <HugeiconsIcon
                     icon={VolumeHighIcon}

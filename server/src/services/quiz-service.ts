@@ -24,11 +24,17 @@ import {
   canGenerateSpelling,
 } from './game/generators/spelling.js';
 import { generateMatchPairsFromPool } from './game/generators/match-pairs.js';
-import type { PooledMeaning, LegacyQuestion, LanguagePair, SpellingQuestion, MatchPairsQuestion, GeneratorType } from './game/types.js';
+import { canGenerateCloze, generateClozeFromMeaning } from './game/generators/cloze.js';
+import { generateListeningFromMeaning } from './game/generators/listening.js';
+import { canGenerateDictation, generateDictationFromMeaning } from './game/generators/dictation.js';
+import { generateFreeRecallFromMeaning } from './game/generators/free-recall.js';
+import type { PooledMeaning, LegacyQuestion, LanguagePair, SpellingQuestion, MatchPairsQuestion, GeneratorType, ClozeQuestion, ListeningQuestion, DictationQuestion, FreeRecallQuestion } from './game/types.js';
 import { DEFAULT_LANG_PAIR, pickGenerator } from './game/types.js';
 import { DOUBLE_XP_CHANCE, DOUBLE_XP_TIME_LIMITS, DOUBLE_XP_MULTIPLIER } from '../config/double-xp-config.js';
 import { setDoubleXp, validateAndConsume, makeKey, makeMatchPairsKey } from './double-xp-tracker.js';
 import { getMskTodayStart, toMskDayStart } from '../lib/msk-date.js';
+import { getAdaptiveLevel } from './game/adaptive.js';
+import { checkAndAwardMilestones } from './milestone-service.js';
 
 const QUESTIONS_PER_SESSION = 10;
 
@@ -62,16 +68,20 @@ export async function generateQuestion(
 }
 
 // Генерация вопроса из пула пользователя (infinite quiz)
+type AnyQuestion = LegacyQuestion | SpellingQuestion | MatchPairsQuestion | ClozeQuestion | ListeningQuestion | DictationQuestion | FreeRecallQuestion;
+
 export async function generateQuestionFromPool(
   userId: number,
   excludeMeaningIds: number[] = [],
   langPair: LanguagePair = DEFAULT_LANG_PAIR,
   collectionId?: number | typeof ERRORS_COLLECTION_ID,
   fixedDirection?: LanguagePair,
-  questionType?: 'spelling' | 'match-pairs',
+  questionType?: 'spelling' | 'match-pairs' | 'cloze' | 'listening' | 'dictation' | 'free-recall',
   recentGenerators: GeneratorType[] = [],
-): Promise<LegacyQuestion | SpellingQuestion | MatchPairsQuestion | null> {
-  const question = await generateQuestionFromPoolInternal(userId, excludeMeaningIds, langPair, collectionId, fixedDirection, questionType, recentGenerators);
+  recentCorrect: number = 0,
+  recentTotal: number = 0,
+): Promise<AnyQuestion | null> {
+  const question = await generateQuestionFromPoolInternal(userId, excludeMeaningIds, langPair, collectionId, fixedDirection, questionType, recentGenerators, recentCorrect, recentTotal);
   return maybeApplyDoubleXp(question, userId);
 }
 
@@ -81,9 +91,11 @@ async function generateQuestionFromPoolInternal(
   langPair: LanguagePair = DEFAULT_LANG_PAIR,
   collectionId?: number | typeof ERRORS_COLLECTION_ID,
   fixedDirection?: LanguagePair,
-  questionType?: 'spelling' | 'match-pairs',
+  questionType?: 'spelling' | 'match-pairs' | 'cloze' | 'listening' | 'dictation' | 'free-recall',
   recentGenerators: GeneratorType[] = [],
-): Promise<LegacyQuestion | SpellingQuestion | MatchPairsQuestion | null> {
+  recentCorrect: number = 0,
+  recentTotal: number = 0,
+): Promise<AnyQuestion | null> {
   // Для коллекции ошибок используем специальный пул
   const pool = collectionId === ERRORS_COLLECTION_ID
     ? await getErrorsPool(userId)
@@ -177,6 +189,9 @@ async function generateQuestionFromPoolInternal(
   // чтобы полисемичные слова могли показать другое значение
   const expandedExclude = new Set(excludeMeaningIds);
 
+  // Adaptive difficulty
+  const adaptiveLevel = getAdaptiveLevel(recentCorrect, recentTotal);
+
   // Фильтруем уже показанные
   const availableReview = reviewReady.filter((id) => !expandedExclude.has(id));
   const availableUnseen = unseen.filter((id) => !expandedExclude.has(id));
@@ -218,7 +233,7 @@ async function generateQuestionFromPoolInternal(
   const canMatchPairs = totalAvailable >= 3;
   const applicablePool = getApplicablePoolGenerators(canMatchPairs);
   const poolGenerator = applicablePool.length > 0
-    ? pickGenerator([...getApplicableGenerators('dummy'), ...applicablePool], recentGenerators)
+    ? pickGenerator([...getApplicableGenerators('dummy', undefined, adaptiveLevel), ...applicablePool], recentGenerators)
     : null;
 
   if (poolGenerator === 'match-pairs') {
@@ -230,7 +245,7 @@ async function generateQuestionFromPoolInternal(
   // Сначала выбираем слово, потом определяем подходящие генераторы
   if (useCustom && customWords.length > 0) {
     const correct = customWords[Math.floor(Math.random() * customWords.length)]!;
-    const applicable = getApplicableGenerators(correct.wordText);
+    const applicable = getApplicableGenerators(correct.wordText, undefined, adaptiveLevel);
     const generator = pickGenerator(applicable, recentGenerators);
 
     if (generator === 'spelling') {
@@ -243,7 +258,7 @@ async function generateQuestionFromPoolInternal(
   if (meaningIds.length === 0) {
     if (customWords.length > 0) {
       const correct = customWords[Math.floor(Math.random() * customWords.length)]!;
-      const applicable = getApplicableGenerators(correct.wordText);
+      const applicable = getApplicableGenerators(correct.wordText, undefined, adaptiveLevel);
       const generator = pickGenerator(applicable, recentGenerators);
 
       if (generator === 'spelling') {
@@ -258,6 +273,16 @@ async function generateQuestionFromPoolInternal(
   const candidates = await db.query.wordMeanings.findMany({
     where: inArray(wordMeanings.id, meaningIds),
     with: { word: true },
+    columns: {
+      id: true,
+      wordId: true,
+      translation: true,
+      alternativeTranslations: true,
+      difficulty: true,
+      partOfSpeech: true,
+      synonyms: true,
+      examples: true,
+    },
     limit: 1,
     orderBy: sql`RANDOM()`,
   });
@@ -266,22 +291,42 @@ async function generateQuestionFromPoolInternal(
 
   const correct = candidates[0]! as PooledMeaning;
   const englishWord = correct.word.lemma ?? correct.word.text;
-  const applicable = getApplicableGenerators(englishWord);
+  const applicable = getApplicableGenerators(englishWord, correct, adaptiveLevel);
   const generator = pickGenerator(applicable, recentGenerators);
 
   if (generator === 'spelling') {
     const result = generateSpellingFromMeaning(correct);
     if (result) return result;
-    // Fallback на multiple-choice если spelling не удался
   }
 
+  if (generator === 'cloze') {
+    const result = await generateClozeFromMeaning(correct);
+    if (result) return result;
+  }
+
+  if (generator === 'listening') {
+    const result = await generateListeningFromMeaning(correct);
+    if (result) return result;
+  }
+
+  if (generator === 'dictation') {
+    const result = generateDictationFromMeaning(correct);
+    if (result) return result;
+  }
+
+  if (generator === 'free-recall') {
+    const result = generateFreeRecallFromMeaning(correct);
+    if (result) return result;
+  }
+
+  // Fallback на multiple-choice
   return generateFromMeaning(correct, langPair, generator === 'en-ru' ? 'en-ru' : 'ru-en');
 }
 
 // ─── Double XP Wrapper ──────────────────────────────────────────────────────
 
 function maybeApplyDoubleXp(
-  question: LegacyQuestion | SpellingQuestion | MatchPairsQuestion | null,
+  question: AnyQuestion | null,
   userId: number,
 ): typeof question {
   if (!question) return null;
@@ -305,11 +350,38 @@ function maybeApplyDoubleXp(
 
 // ─── Helper: определяет подходящие генераторы для слова ──────────────────────
 
-function getApplicableGenerators(englishWord: string): GeneratorType[] {
+function getApplicableGenerators(englishWord: string, meaning?: PooledMeaning, adaptiveLevel: 'easy' | 'normal' | 'challenge' = 'normal'): GeneratorType[] {
   const generators: GeneratorType[] = ['en-ru', 'ru-en'];
   if (canGenerateSpelling(englishWord)) {
     generators.push('spelling');
   }
+
+  // В easy-режиме: только базовые генераторы (без cloze, dictation, free-recall)
+  if (adaptiveLevel === 'easy') {
+    generators.push('listening');
+    return generators;
+  }
+
+  if (meaning && canGenerateCloze(meaning)) {
+    generators.push('cloze');
+  }
+  // Listening доступен всегда (TTS работает для любого слова)
+  generators.push('listening');
+  if (canGenerateDictation(englishWord)) {
+    generators.push('dictation');
+  }
+
+  // В challenge-режиме: удваиваем вес сложных генераторов
+  if (adaptiveLevel === 'challenge') {
+    if (meaning && canGenerateCloze(meaning)) {
+      generators.push('cloze');
+    }
+    if (canGenerateDictation(englishWord)) {
+      generators.push('dictation');
+    }
+  }
+
+  // free-recall проверяется отдельно (требует srsStage >= 2)
   return generators;
 }
 
@@ -450,6 +522,7 @@ export async function recordInfiniteAnswer(
 
   let correctTranslation = '';
   let isCorrect = false;
+  let feedbackExamples: { en: string; ru: string }[] | undefined;
 
   if (isCustom) {
     // Кастомное слово — проверяем по selectedMeaningId (тоже отрицательный)
@@ -502,8 +575,21 @@ export async function recordInfiniteAnswer(
   } else {
     const correctMeaning = await db.query.wordMeanings.findFirst({
       where: eq(wordMeanings.id, meaningId),
+      columns: {
+        id: true,
+        translation: true,
+        alternativeTranslations: true,
+        examples: true,
+        wordId: true,
+      },
     });
     correctTranslation = correctMeaning?.translation ?? '';
+
+    // Получаем примеры для feedback
+    const rawExamples = (correctMeaning as { examples?: { text: string; translation: string }[] | null })?.examples;
+    feedbackExamples = rawExamples && rawExamples.length > 0
+      ? rawExamples.slice(0, 2).map(ex => ({ en: ex.text, ru: ex.translation }))
+      : undefined;
 
     if (selectedMeaningId !== null && correctMeaning) {
       if (selectedMeaningId > 0) {
@@ -540,6 +626,7 @@ export async function recordInfiniteAnswer(
           reviewStage: srs.newReviewStage,
           nextReviewAt: srs.nextReviewAt,
           masteredAt: srs.isLearned ? new Date() : existing.masteredAt,
+          fromPlacement: false, // реальный ответ — сбрасываем флаг онбординга
           lastSeenAt: new Date(),
           updatedAt: new Date(),
         })
@@ -653,6 +740,10 @@ export async function recordInfiniteAnswer(
       })
       .where(eq(users.id, userId));
 
+    // Проверяем milestones
+    const newMilestones = await checkAndAwardMilestones(userId);
+    const milestoneGemsFromAchievements = newMilestones.reduce((sum, m) => sum + m.gemsReward, 0);
+
     return {
       isCorrect,
       correctTranslation,
@@ -664,9 +755,19 @@ export async function recordInfiniteAnswer(
       lpEarned: reward.lpEarned,
       lpModifier: reward.lpModifier,
       totalLp: reward.totalLp,
-      gemsEarned: reward.gemsEarned + milestoneGems + streakGemsFromDay,
+      gemsEarned: reward.gemsEarned + milestoneGems + streakGemsFromDay + milestoneGemsFromAchievements,
       dailyCorrectCount: newDailyCorrectCount,
       doubleXpApplied,
+      examples: feedbackExamples,
+      milestones: newMilestones.length > 0 ? newMilestones.map(m => ({
+        id: m.id,
+        type: m.type,
+        threshold: m.threshold,
+        title: m.title,
+        description: m.description,
+        gemsReward: m.gemsReward,
+        icon: m.icon,
+      })) : undefined,
     };
   }
 
@@ -681,6 +782,7 @@ export async function recordInfiniteAnswer(
     totalLp: undefined,
     gemsEarned: 0,
     dailyCorrectCount: undefined,
+    examples: feedbackExamples,
   };
 }
 
@@ -781,6 +883,7 @@ export async function recordMatchPairsAnswer(
             reviewStage: srs.newReviewStage,
             nextReviewAt: srs.nextReviewAt,
             masteredAt: srs.isLearned ? new Date() : existing.masteredAt,
+            fromPlacement: false,
             lastSeenAt: new Date(),
             updatedAt: new Date(),
           })

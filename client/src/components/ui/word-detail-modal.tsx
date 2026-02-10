@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { CollectionWord } from '@/types/api';
 import {
   Dialog,
@@ -11,7 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ProgressRing } from '@/components/ui/progress-ring';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { VolumeHighIcon, Delete02Icon, Tick01Icon } from '@hugeicons/core-free-icons';
+import { VolumeHighIcon, Delete02Icon, Tick01Icon, Loading03Icon } from '@hugeicons/core-free-icons';
+import { speakText, stopAudio } from '@/lib/tts';
 
 const POS_LABELS: Record<string, string> = {
   noun: 'сущ.',
@@ -38,13 +39,24 @@ export function WordDetailModal({
 }: WordDetailModalProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [ttsLoading, setTtsLoading] = useState(false);
+  const [ttsError, setTtsError] = useState<string | null>(null);
+  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSpeak = useCallback(() => {
     if (!word) return;
-    const utterance = new SpeechSynthesisUtterance(word.word);
-    utterance.lang = 'en-US';
-    utterance.rate = 0.9;
-    speechSynthesis.speak(utterance);
+    stopAudio();
+    setTtsLoading(true);
+    setTtsError(null);
+    speakText(word.word, 0.9)
+      .then(() => setTtsLoading(false))
+      .catch((err) => {
+        setTtsLoading(false);
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        setTtsError('Ошибка озвучки');
+        if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+        errorTimerRef.current = setTimeout(() => setTtsError(null), 3000);
+      });
   }, [word]);
 
   const handleDeleteClick = () => {
@@ -102,10 +114,18 @@ export function WordDetailModal({
               size="icon"
               className="ml-auto shrink-0"
               onClick={handleSpeak}
+              disabled={ttsLoading}
             >
-              <HugeiconsIcon icon={VolumeHighIcon} size={20} />
+              <HugeiconsIcon
+                icon={ttsLoading ? Loading03Icon : VolumeHighIcon}
+                size={20}
+                className={ttsLoading ? 'animate-spin' : ''}
+              />
             </Button>
           </div>
+          {ttsError && (
+            <p className="text-xs text-[var(--red-10)]">{ttsError}</p>
+          )}
         </DialogHeader>
 
         <div className="flex flex-col gap-4">

@@ -52,6 +52,8 @@ export type PooledMeaning = {
   alternativeTranslations: string[] | null;
   difficulty: 'easy' | 'medium' | 'hard';
   partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+  synonyms?: string[] | null;
+  examples?: { text: string; translation: string }[] | null;
   word: {
     id: number;
     text: string;
@@ -84,12 +86,59 @@ export function reversePair(pair: LanguagePair): LanguagePair {
 
 // ─── Generator Rotation ────────────────────────────────────────────────────
 
-export type GeneratorType = 'en-ru' | 'ru-en' | 'spelling' | 'match-pairs';
+export type GeneratorType = 'en-ru' | 'ru-en' | 'spelling' | 'match-pairs' | 'cloze' | 'listening' | 'dictation' | 'free-recall';
 
 // Match-pairs question (соединение пар)
 export type MatchPairsQuestion = {
   type: 'match-pairs';
   pairs: Array<{ meaningId: number; word: string; translation: string }>;
+  doubleXpTimeLimitMs?: number;
+};
+
+// Cloze question (заполни пропуск в предложении)
+export type ClozeQuestion = {
+  type: 'cloze';
+  meaningId: number;
+  sentence: string;        // "I need to _____ a decision"
+  sentenceRu: string;      // "Мне нужно принять решение"
+  options: string[];        // ["make", "do", "take", "get"]
+  correctAnswer: string;    // "make"
+  word: string;             // целевое слово (для feedback)
+  transcription: string | null;
+  doubleXpTimeLimitMs?: number;
+};
+
+// Listening question (слушай → выбери перевод)
+export type ListeningQuestion = {
+  type: 'listening';
+  meaningId: number;
+  audioWord: string;           // слово для TTS на клиенте
+  transcription: string | null;
+  options: string[];           // варианты переводов (русские)
+  correctAnswer: string;       // правильный перевод
+  doubleXpTimeLimitMs?: number;
+};
+
+// Dictation question (слушай → напиши)
+export type DictationQuestion = {
+  type: 'dictation';
+  meaningId: number;
+  audioWord: string;           // слово для TTS
+  hint: string;                // перевод (подсказка)
+  correctAnswer: string;       // правильное написание
+  acceptableAnswers: string[]; // допустимые варианты
+  doubleXpTimeLimitMs?: number;
+};
+
+// Free Recall question (напиши перевод без вариантов)
+export type FreeRecallQuestion = {
+  type: 'free-recall';
+  meaningId: number;
+  direction: 'en-ru' | 'ru-en';
+  prompt: string;              // слово/перевод для показа
+  transcription: string | null; // только для en→ru
+  audioWord?: string;          // для TTS (en слово)
+  acceptableAnswers: string[]; // все допустимые ответы
   doubleXpTimeLimitMs?: number;
 };
 

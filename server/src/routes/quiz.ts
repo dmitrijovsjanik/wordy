@@ -12,7 +12,7 @@ import {
 import type { LanguagePair, GeneratorType } from '../services/game/types.js';
 import { ERRORS_COLLECTION_ID } from '../config/errors-config.js';
 
-const VALID_GENERATORS = new Set<string>(['en-ru', 'ru-en', 'spelling', 'match-pairs']);
+const VALID_GENERATORS = new Set<string>(['en-ru', 'ru-en', 'spelling', 'match-pairs', 'cloze', 'listening', 'dictation', 'free-recall']);
 
 export default async function quizRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
@@ -51,7 +51,7 @@ export default async function quizRoutes(app: FastifyInstance) {
 
   // ─── Infinite Quiz ──────────────────────────────────────────────────────
 
-  app.get<{ Querystring: { exclude?: string; lang?: string; collectionId?: string; type?: string; generators?: string } }>('/api/quiz/next', async (request) => {
+  app.get<{ Querystring: { exclude?: string; lang?: string; collectionId?: string; type?: string; generators?: string; recentCorrect?: string; recentTotal?: string } }>('/api/quiz/next', async (request) => {
     const excludeStr = request.query.exclude ?? '';
     const excludeIds = excludeStr
       ? excludeStr.split(',').map(Number).filter((n) => !Number.isNaN(n))
@@ -75,14 +75,20 @@ export default async function quizRoutes(app: FastifyInstance) {
       ? generatorsStr.split(',').filter((g): g is GeneratorType => VALID_GENERATORS.has(g))
       : [];
 
+    // Adaptive difficulty params
+    const recentCorrect = Number(request.query.recentCorrect) || 0;
+    const recentTotal = Number(request.query.recentTotal) || 0;
+
     const question = await generateQuestionFromPool(
       request.user.id,
       excludeIds,
       lang,
       collectionId,
       fixedDirection,
-      questionType as 'spelling' | 'match-pairs' | undefined,
+      questionType as 'spelling' | 'match-pairs' | 'cloze' | 'listening' | 'dictation' | 'free-recall' | undefined,
       recentGenerators,
+      recentCorrect,
+      recentTotal,
     );
     return { question };
   });

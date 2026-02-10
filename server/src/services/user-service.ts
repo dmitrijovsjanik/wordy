@@ -21,6 +21,8 @@ export async function getProfile(userId: number) {
       nativeLanguage: true,
       learningLanguage: true,
       repeatMastered: true,
+      estimatedCefr: true,
+      onboardingCompletedAt: true,
       premiumUntil: true,
       premiumPlan: true,
       autoRenew: true,

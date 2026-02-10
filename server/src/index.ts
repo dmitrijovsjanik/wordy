@@ -12,6 +12,11 @@ import friendRoutes from './routes/friends.js';
 import botRoutes, { setupBot } from './routes/bot.js';
 import adminRoutes from './routes/admin.js';
 import paymentRoutes from './routes/payments.js';
+import grammarRoutes from './routes/grammar.js';
+import readingRoutes from './routes/reading.js';
+import ttsRoutes from './routes/tts.js';
+import placementRoutes from './routes/placement.js';
+
 import { runStartupMigrations } from './db/startup-migrations.js';
 import './cron/league-cron.js';
 import './cron/subscription-cron.js';
@@ -44,6 +49,10 @@ await app.register(friendRoutes);
 await app.register(botRoutes);
 await app.register(adminRoutes);
 await app.register(paymentRoutes);
+await app.register(grammarRoutes);
+await app.register(readingRoutes);
+await app.register(ttsRoutes);
+await app.register(placementRoutes);
 
 const port = Number(process.env.PORT) || 3000;
 

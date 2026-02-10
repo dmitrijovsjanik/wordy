@@ -41,8 +41,8 @@ export function BottomTabs() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
-  // Не показываем на страницах дуэлей
-  if (pathname.startsWith('/duel')) return null;
+  // Не показываем на страницах дуэлей и онбординга
+  if (pathname.startsWith('/duel') || pathname.startsWith('/onboarding')) return null;
 
   return (
     <nav className="relative z-[2] shrink-0">

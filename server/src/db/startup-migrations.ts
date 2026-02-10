@@ -84,6 +84,17 @@ const migrations: Migration[] = [
       await db.execute(sql`UPDATE user_custom_word_progress SET incorrect_count = 0 WHERE incorrect_count > 0`);
     },
   },
+  {
+    key: 'backfill-onboarding-completed',
+    description: 'Помечаем существующих пользователей с подписками как прошедших онбординг',
+    run: async () => {
+      await db.execute(sql`
+        UPDATE users SET onboarding_completed_at = created_at
+        WHERE id IN (SELECT DISTINCT user_id FROM user_collections)
+        AND onboarding_completed_at IS NULL
+      `);
+    },
+  },
 ];
 
 export async function runStartupMigrations(): Promise<void> {

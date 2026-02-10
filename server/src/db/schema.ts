@@ -91,6 +91,9 @@ export const users = pgTable('users', {
   dailyCorrectDate: timestamp('daily_correct_date'), // Дата для сброса счётчика правильных ответов за день
   dailyStreakMilestonesDone: varchar('daily_streak_milestones_done', { length: 255 }).default('').notNull(),
   dailyCorrectMilestonesDone: varchar('daily_correct_milestones_done', { length: 255 }).default('').notNull(),
+  shownMilestones: jsonb('shown_milestones').$type<string[]>().default([]).notNull(),
+  estimatedCefr: cefrLevelEnum('estimated_cefr'),
+  onboardingCompletedAt: timestamp('onboarding_completed_at'),
   premiumUntil: timestamp('premium_until'),
   premiumPlan: varchar('premium_plan', { length: 20 }),
   autoRenew: boolean('auto_renew').default(false).notNull(),
@@ -343,6 +346,7 @@ export const userWordProgress = pgTable(
     reviewStage: integer('review_stage').default(0).notNull(), // index into review intervals after learned
     nextReviewAt: timestamp('next_review_at'),
     masteredAt: timestamp('mastered_at'), // set when srsStage reaches 3 (learned)
+    fromPlacement: boolean('from_placement').default(false).notNull(), // true = слово помечено выученным через онбординг, не через квизы
     lastSeenAt: timestamp('last_seen_at').defaultNow().notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -535,10 +539,11 @@ export const wordMeaningTopicsRelations = relations(wordMeaningTopics, ({ one })
   topic: one(topics, { fields: [wordMeaningTopics.topicId], references: [topics.id] }),
 }));
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ many, one }) => ({
   quizSessions: many(quizSessions),
   streakActivityDays: many(streakActivityDays),
   payments: many(payments),
+  placementResult: one(placementResults),
   challengedDuels: many(duels, { relationName: 'duelChallenger' }),
   opponentDuels: many(duels, { relationName: 'duelOpponent' }),
   sentFriendRequests: many(friendRequests, { relationName: 'sentRequests' }),
@@ -604,6 +609,24 @@ export const userCustomWordProgressRelations = relations(userCustomWordProgress,
   user: one(users, { fields: [userCustomWordProgress.userId], references: [users.id] }),
   customWord: one(userCustomWords, { fields: [userCustomWordProgress.customWordId], references: [userCustomWords.id] }),
 }));
+
+// ─── Placement Results ─────────────────────────────────────────────────────
+
+export const placementResults = pgTable('placement_results', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id')
+    .references(() => users.id, { onDelete: 'cascade' })
+    .unique()
+    .notNull(),
+  selfAssessment: cefrLevelEnum('self_assessment'),
+  resultCefr: cefrLevelEnum('result_cefr').notNull(),
+  totalQuestions: integer('total_questions').notNull(),
+  correctCount: integer('correct_count').notNull(),
+  estimatedVocabulary: integer('estimated_vocabulary').notNull(),
+  answersJson: jsonb('answers_json').$type<{ meaningId: number; cefrLevel: string; isCorrect: boolean; answerTimeMs: number }[]>().notNull(),
+  completedAt: timestamp('completed_at').defaultNow().notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
 
 // ─── League Seasons ─────────────────────────────────────────────────────────
 
@@ -711,6 +734,10 @@ export const leagueNotifications = pgTable(
 );
 
 // ─── League Relations ───────────────────────────────────────────────────────
+
+export const placementResultsRelations = relations(placementResults, ({ one }) => ({
+  user: one(users, { fields: [placementResults.userId], references: [users.id] }),
+}));
 
 export const leagueSeasonsRelations = relations(leagueSeasons, ({ many }) => ({
   userStats: many(userSeasonStats),

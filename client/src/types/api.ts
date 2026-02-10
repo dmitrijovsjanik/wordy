@@ -16,6 +16,8 @@ export type User = {
   autoRenew: boolean;
   lastActivityAt: string | null;
   createdAt: string;
+  estimatedCefr: CefrLevel | null;
+  onboardingCompletedAt: string | null;
 };
 
 export type AuthResponse = {
@@ -48,7 +50,60 @@ export type MatchPairsApiQuestion = {
   doubleXpTimeLimitMs?: number;
 };
 
-export type QuizQuestion = QuizQuestionBase | MatchPairsApiQuestion;
+// Cloze question (заполни пропуск в предложении)
+export type ClozeApiQuestion = {
+  type: 'cloze';
+  meaningId: number;
+  sentence: string;
+  sentenceRu: string;
+  options: string[];
+  correctAnswer: string;
+  word: string;
+  transcription: string | null;
+  doubleXpTimeLimitMs?: number;
+};
+
+// Listening question (слушай → выбери перевод)
+export type ListeningApiQuestion = {
+  type: 'listening';
+  meaningId: number;
+  audioWord: string;
+  transcription: string | null;
+  options: string[];
+  correctAnswer: string;
+  doubleXpTimeLimitMs?: number;
+};
+
+// Dictation question (слушай → напиши)
+export type DictationApiQuestion = {
+  type: 'dictation';
+  meaningId: number;
+  audioWord: string;
+  hint: string;
+  correctAnswer: string;
+  acceptableAnswers: string[];
+  doubleXpTimeLimitMs?: number;
+};
+
+// Free Recall question (напиши перевод без вариантов)
+export type FreeRecallApiQuestion = {
+  type: 'free-recall';
+  meaningId: number;
+  direction: 'en-ru' | 'ru-en';
+  prompt: string;
+  transcription: string | null;
+  audioWord?: string;
+  acceptableAnswers: string[];
+  doubleXpTimeLimitMs?: number;
+};
+
+export type QuizQuestion =
+  | QuizQuestionBase
+  | MatchPairsApiQuestion
+  | ClozeApiQuestion
+  | ListeningApiQuestion
+  | DictationApiQuestion
+  | FreeRecallApiQuestion;
 
 export type QuizStartResponse = {
   sessionId: number;
@@ -262,6 +317,31 @@ export type InfiniteAnswerResponse = {
   gemsEarned?: number; // гемы за стрик ответов / level-up
   dailyCorrectCount?: number; // правильных ответов за день
   doubleXpApplied?: boolean;
+  examples?: { en: string; ru: string }[]; // примеры предложений для глубокой обработки
+  milestones?: MilestoneData[]; // достигнутые milestones
+};
+
+export type MilestoneData = {
+  id: string;
+  type: string;
+  threshold: number;
+  title: string;
+  description: string;
+  gemsReward: number;
+  icon: string;
+};
+
+// ─── CEFR Progress ─────────────────────────────────────────────────────────
+
+export type CefrProgressLevel = {
+  level: CefrLevel;
+  totalWords: number;
+  learnedWords: number;
+  percent: number;
+};
+
+export type CefrProgressResponse = {
+  levels: CefrProgressLevel[];
 };
 
 export type MatchPairsAnswerResponse = {
@@ -400,4 +480,37 @@ export type FriendRequestInfo = {
     level: number;
   };
   createdAt: string;
+};
+
+// ─── Placement Test ─────────────────────────────────────────────────────────
+
+export type PlacementQuestion = {
+  meaningId: number;
+  word: string;
+  originalForm: string | null;
+  transcription: string | null;
+  correctTranslation: string;
+  options: string[];
+  direction: string;
+};
+
+export type PlacementStartResponse = {
+  question: PlacementQuestion;
+  questionNumber: number;
+  totalQuestions: number;
+};
+
+export type PlacementAnswerResponse = {
+  isCorrect: boolean;
+  questionNumber: number;
+  totalQuestions: number;
+  nextQuestion: PlacementQuestion | null;
+  isFinished: boolean;
+};
+
+export type PlacementCompleteResponse = {
+  cefr: CefrLevel;
+  estimatedVocabulary: number;
+  percentile: number;
+  subscribedCollections: string[];
 };

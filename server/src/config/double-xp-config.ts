@@ -13,4 +13,8 @@ export const DOUBLE_XP_TIME_LIMITS: Record<string, number> = {
   'multiple-choice': 4000,
   'spelling': 6000,
   'match-pairs': 8000,
+  'cloze': 6000,
+  'listening': 5000,
+  'dictation': 8000,
+  'free-recall': 8000,
 };

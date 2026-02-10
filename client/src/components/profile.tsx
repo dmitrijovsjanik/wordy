@@ -27,6 +27,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { xpForLevel } from '@/lib/progression-config';
 import Lottie from 'lottie-react';
 import fireStreakData from '@/assets/fire-streak.json';
+import { CefrProgress } from '@/components/profile/cefr-progress';
 
 const MONTHS_RU = [
   'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
@@ -164,6 +165,9 @@ export function Profile() {
           </div>
         </button>
       </Card>
+
+      {/* CEFR Progress */}
+      <CefrProgress className="mt-5" />
 
       {/* Join date */}
       <p className="mt-6 text-center text-xs text-[var(--gray-10)]">

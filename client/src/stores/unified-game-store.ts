@@ -13,6 +13,10 @@ const FEEDBACK_DELAY = 1200;
 function getGeneratorTypeFromQuestion(question: QuizQuestion): string {
   if (question.type === 'match-pairs') return 'match-pairs';
   if (question.type === 'spelling') return 'spelling';
+  if (question.type === 'cloze') return 'cloze';
+  if (question.type === 'listening') return 'listening';
+  if (question.type === 'dictation') return 'dictation';
+  if (question.type === 'free-recall') return 'free-recall';
   return question.direction; // 'en-ru' или 'ru-en'
 }
 
