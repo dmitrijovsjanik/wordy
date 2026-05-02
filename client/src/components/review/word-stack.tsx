@@ -12,10 +12,14 @@ type WordStackProps = {
   onUndo: () => void;
 };
 
-const SWIPE_THRESHOLD_X = 110;
-const SWIPE_THRESHOLD_Y = 130;
+// Пороги по motion value (= позиции карты, не пути пальца). С dragElastic=0.6
+// палец проходит ~1.66× больше, чем motion value, поэтому x=70 ≈ ~117px пальцем.
+const SWIPE_THRESHOLD_X = 70;
+const SWIPE_THRESHOLD_Y = 90;
 const FLY_AWAY_DISTANCE = 800;
 const FLY_AWAY_DURATION = 0.22;
+
+const CARD_SHADOW = 'shadow-[0_10px_30px_-5px_rgba(0,0,0,0.18)]';
 
 /**
  * Стопка значений одного слова. Под верхней карточкой — только meaning'и
@@ -35,7 +39,8 @@ export function WordStack({ word, meaningIndex, onSwipe, onUndo }: WordStackProp
 
   return (
     <div className="relative h-[60vh] w-full">
-      {/* Фантомы — только meaning'и ТОГО ЖЕ слова. */}
+      {/* Фантомы — только meaning'и ТОГО ЖЕ слова. У каждого свой
+          inset-overlay сверху для эффекта объёма (тень от карты выше). */}
       {remainingBehind.map((m, idx) => (
         <div
           key={`ghost-${m.meaningId}`}
@@ -46,8 +51,13 @@ export function WordStack({ word, meaningIndex, onSwipe, onUndo }: WordStackProp
             opacity: 1 - (idx + 1) * 0.3,
           }}
         >
-          <Card className="flex flex-1 flex-col items-center justify-center px-6 py-8 text-center">
+          <Card className={`relative flex flex-1 flex-col items-center justify-center overflow-hidden px-6 py-8 text-center ${CARD_SHADOW}`}>
             <div className="text-2xl font-bold opacity-70">{word.word}</div>
+            {/* Затемняющий overlay сверху — имитация падающей тени от карты выше. */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/20 via-black/5 to-transparent"
+            />
           </Card>
         </div>
       ))}
@@ -188,7 +198,7 @@ function TopCard({
       style={{ x, y, rotate, zIndex: 100 }}
       className="absolute inset-0 flex flex-col"
     >
-      <Card className="relative flex flex-1 flex-col gap-4 overflow-hidden px-6 py-8 text-center">
+      <Card className={`relative flex flex-1 flex-col gap-4 overflow-hidden px-6 py-8 text-center ${CARD_SHADOW}`}>
         {/* Ripple-заливка из точки касания. Цвет/радиус зависят от drag.x. */}
         <motion.div
           aria-hidden

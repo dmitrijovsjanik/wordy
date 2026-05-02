@@ -156,6 +156,7 @@ export const useReviewStore = create<ReviewState>()((set, get) => ({
         meaningIds: [card.meaningId],
       }],
       cardIndex: state.cardIndex + 1,
+      wordTransitionDirection: 'forward',
     });
     prefetchIfNeeded();
     learningSwipe({ meaningId: card.meaningId, action }).catch((e) => console.error('[review] swipe failed:', e));
@@ -178,6 +179,7 @@ export const useReviewStore = create<ReviewState>()((set, get) => ({
       set({
         cardIndex: last.prevCardIndex,
         history: state.history.slice(0, -1),
+        wordTransitionDirection: 'backward',
       });
     }
     // Снимаем серверные записи (паралельно, не ждём).

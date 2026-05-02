@@ -7,8 +7,8 @@ import { useBackButton } from '@/hooks/use-back-button';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BackButton } from '@/components/ui/back-button';
-import { ReviewCard } from './review-card';
 import { WordStack } from './word-stack';
+import type { ReviewFeedCard, ReviewFeedWord } from '@/types/api';
 import { cn } from '@/lib/utils';
 
 // Variants для вертикальной карусели слов. Текущая верхняя карта улетает
@@ -23,6 +23,24 @@ const wordVariants = {
   center: { y: 0, opacity: 1 },
   exit: { opacity: 0, transition: { duration: 0.15 } },
 };
+
+/** Режим B: «плоское» значение → виртуальное слово с одной meaning,
+ *  чтобы переиспользовать WordStack (никаких фантомов, тот же UX свайпа). */
+function cardToVirtualWord(card: ReviewFeedCard): ReviewFeedWord {
+  return {
+    wordId: -card.meaningId, // отрицательный, чтобы не пересекался с реальными wordId
+    word: card.word,
+    transcription: card.transcription,
+    meanings: [{
+      meaningId: card.meaningId,
+      translation: card.translation,
+      partOfSpeech: card.partOfSpeech,
+      cefr: card.cefr,
+      example: card.example,
+      mnemonic: card.mnemonic,
+    }],
+  };
+}
 
 /**
  * Режим обзора. Два режима, переключаются toggle'ом сверху:
@@ -140,11 +158,11 @@ export function ReviewPage() {
       </div>
 
       <div className="relative mx-auto mt-4 flex w-full max-w-sm flex-1 items-center justify-center overflow-hidden">
-        {mode === 'A' ? (
-          <div className="relative h-[60vh] w-full">
-            <AnimatePresence custom={wordTransitionDirection} mode="popLayout" initial={false}>
+        <div className="relative h-[60vh] w-full">
+          <AnimatePresence custom={wordTransitionDirection} mode="popLayout" initial={false}>
+            {mode === 'A' ? (
               <motion.div
-                key={words[wordIndex]!.wordId}
+                key={`a-${words[wordIndex]!.wordId}`}
                 custom={wordTransitionDirection}
                 variants={wordVariants}
                 initial="enter"
@@ -160,21 +178,27 @@ export function ReviewPage() {
                   onUndo={handleUndo}
                 />
               </motion.div>
-            </AnimatePresence>
-          </div>
-        ) : (
-          <div className="relative h-[60vh] w-full">
-            {cards.slice(cardIndex, cardIndex + 3).map((card, idx) => (
-              <ReviewCard
-                key={card.meaningId}
-                card={card}
-                onSwipe={handleSwipe}
-                isTop={idx === 0}
-                offset={idx}
-              />
-            ))}
-          </div>
-        )}
+            ) : (
+              <motion.div
+                key={`b-${cards[cardIndex]!.meaningId}`}
+                custom={wordTransitionDirection}
+                variants={wordVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ type: 'spring', stiffness: 220, damping: 28 }}
+                className="absolute inset-0"
+              >
+                <WordStack
+                  word={cardToVirtualWord(cards[cardIndex]!)}
+                  meaningIndex={0}
+                  onSwipe={handleSwipe}
+                  onUndo={handleUndo}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
       {/* Кнопочный fallback. Skip / undo / known / unknown — для accessibility и при сложностях со свайпами. */}
