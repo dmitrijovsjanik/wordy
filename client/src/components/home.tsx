@@ -13,7 +13,6 @@ import { LEAGUE_ICONS } from '@/components/ui/league-icons';
 // Новые модульные компоненты
 import { WordDisplay } from '@/components/game/word-display';
 import { MultipleChoice } from '@/components/game/question-types/multiple-choice';
-import { Spelling } from '@/components/game/question-types/spelling';
 import { EncounterCard } from '@/components/game/question-types/encounter-card';
 import { RewardFeedback } from '@/components/game/reward-feedback';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -271,19 +270,15 @@ export function Home() {
     hapticImpact('light');
     setSelectedOption(option);
 
-    // Определяем правильный ответ в зависимости от типа вопроса
-    // dictation и free-recall используют текстовый ввод, не попадают сюда
+    // Определяем правильный ответ в зависимости от типа вопроса.
+    // dictation и free-recall используют текстовый ввод, не попадают сюда.
     let correctAnswer: string | undefined;
     switch (currentQuestion.type) {
-      case 'spelling':
-        correctAnswer = currentQuestion.correctSpelling;
-        break;
       case 'listening':
         correctAnswer = currentQuestion.correctAnswer;
         break;
       case 'dictation':
       case 'free-recall':
-        // Текстовый ввод — обрабатываются отдельными компонентами
         return;
       default: {
         // QuizQuestionBase (multiple-choice). После guard'ов выше тип сужен,
@@ -322,17 +317,15 @@ export function Home() {
   // чтобы оно совпадало с текстом опций (сервер может вернуть другое из-за TRANSLATION_DISPLAY).
   const answerFeedback: AnswerFeedback | null = feedback ? {
     isCorrect: feedback.isCorrect,
-    correctAnswer: currentQuestion?.type === 'spelling'
-      ? (currentQuestion?.correctSpelling ?? feedback.correctTranslation)
-      : currentQuestion?.type === 'listening'
+    correctAnswer: currentQuestion?.type === 'listening'
+      ? (currentQuestion?.correctAnswer ?? feedback.correctTranslation)
+      : currentQuestion?.type === 'dictation'
         ? (currentQuestion?.correctAnswer ?? feedback.correctTranslation)
-        : currentQuestion?.type === 'dictation'
-          ? (currentQuestion?.correctAnswer ?? feedback.correctTranslation)
-          : currentQuestion?.type === 'free-recall'
-            ? (currentQuestion?.acceptableAnswers?.[0] ?? feedback.correctTranslation)
-            : (currentQuestion && 'correctTranslation' in currentQuestion && currentQuestion.correctTranslation)
-              ? currentQuestion.correctTranslation
-              : feedback.correctTranslation,
+        : currentQuestion?.type === 'free-recall'
+          ? (currentQuestion?.acceptableAnswers?.[0] ?? feedback.correctTranslation)
+          : (currentQuestion && 'correctTranslation' in currentQuestion && currentQuestion.correctTranslation)
+            ? currentQuestion.correctTranslation
+            : feedback.correctTranslation,
     examples: feedback.examples,
     mnemonic: feedback.mnemonic,
   } : null;
@@ -716,17 +709,6 @@ export function Home() {
                         disabled={isLoading}
                         onComplete={handleMatchPairsComplete}
                         onSkip={handleMatchPairsSkip}
-                        showSkip
-                      />
-                    ) : currentQuestion.type === 'spelling' ? (
-                      <Spelling
-                        options={currentQuestion.options}
-                        questionKey={currentQuestion.meaningId}
-                        selectedAnswer={selectedOption}
-                        feedback={answerFeedback}
-                        disabled={isLoading}
-                        onAnswer={handleAnswer}
-                        onSkip={handleSkip}
                         showSkip
                       />
                     ) : currentQuestion.type === 'listening' ? (

@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Sword01Icon, Tick01Icon, BookOpen02Icon, Book02Icon, ArrowRight01Icon, EyeIcon } from '@hugeicons/core-free-icons';
+import { Sword01Icon, Tick01Icon, BookOpen02Icon, Book02Icon, ArrowRight01Icon, EyeIcon, KeyboardIcon } from '@hugeicons/core-free-icons';
 import { useUnifiedGameStore, type QuestionGeneratorMode } from '@/stores/unified-game-store';
 import { cn } from '@/lib/utils';
 
@@ -8,7 +8,6 @@ const GENERATOR_MODES: { value: QuestionGeneratorMode; title: string; descriptio
   { value: 'auto', title: 'Авто', description: 'Случайная смена формата каждый вопрос' },
   { value: 'en-ru', title: 'EN → RU', description: 'Слово на английском — выбери перевод' },
   { value: 'ru-en', title: 'RU → EN', description: 'Слово на русском — выбери английский' },
-  { value: 'spelling', title: 'Spelling', description: 'Выбери правильное написание слова' },
   { value: 'match-pairs', title: 'Пары', description: 'Соедините слово с переводом' },
 ];
 
@@ -106,6 +105,22 @@ export function Modes() {
           <div className="flex flex-1 flex-col">
             <span className="text-sm font-semibold">Мини-тексты</span>
             <span className="text-xs text-[var(--gray-11)]">Читай и отвечай на вопросы</span>
+          </div>
+          <HugeiconsIcon icon={ArrowRight01Icon} size={16} strokeWidth={2} className="text-[var(--gray-11)]" />
+        </button>
+      </section>
+
+      {/* Спеллинг — отдельный режим, не интегрирован в лестницу. */}
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold text-[var(--gray-11)]">Правописание</h2>
+        <button
+          onClick={() => navigate('/spelling')}
+          className="flex w-full items-center gap-3 rounded-2xl bg-[var(--gray-2)] px-4 py-3 text-left transition-colors active:bg-[var(--gray-3)]"
+        >
+          <HugeiconsIcon strokeWidth={2} icon={KeyboardIcon} size={20} className="text-[var(--brand-9)]" />
+          <div className="flex flex-1 flex-col">
+            <span className="text-sm font-semibold">Спеллинг</span>
+            <span className="text-xs text-[var(--gray-11)]">Выбери правильное написание</span>
           </div>
           <HugeiconsIcon icon={ArrowRight01Icon} size={16} strokeWidth={2} className="text-[var(--gray-11)]" />
         </button>

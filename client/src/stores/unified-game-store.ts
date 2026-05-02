@@ -86,7 +86,6 @@ function getCorrectAnswer(q: QuizQuestion): string {
   if (q.type === 'listening') return q.correctAnswer;
   if (q.type === 'dictation') return q.correctAnswer;
   if (q.type === 'free-recall') return q.acceptableAnswers[0] ?? '';
-  if (q.type === 'spelling') return q.correctSpelling ?? '';
   if (q.type === 'encounter') return q.translation;
   return q.correctTranslation ?? '';
 }
@@ -95,21 +94,15 @@ export type QuestionGeneratorMode =
   | 'auto'          // Случайное направление, multiple-choice
   | 'en-ru'         // EN → RU, multiple-choice
   | 'ru-en'         // RU → EN, multiple-choice
-  | 'spelling'      // Spelling (всегда ru-en)
-  | 'match-pairs'   // Соединение пар
-  | 'cloze'         // Заполни пропуск
-  | 'listening'     // Слушай → выбери перевод
-  | 'dictation'     // Слушай → напиши
-  | 'free-recall';  // Напиши перевод
+  | 'match-pairs';  // Соединение пар
 
 /** Определяет тип генератора из ответа сервера */
 function getGeneratorTypeFromQuestion(question: QuizQuestion): string {
   if (question.type === 'match-pairs') return 'match-pairs';
-  if (question.type === 'spelling') return 'spelling';
   if (question.type === 'listening') return 'listening';
   if (question.type === 'dictation') return 'dictation';
   if (question.type === 'free-recall') return 'free-recall';
-  // QuizQuestionBase / Spelling — единственные с .direction
+  // QuizQuestionBase — единственный с .direction
   return 'direction' in question && typeof question.direction === 'string' ? question.direction : 'en-ru';
 }
 
