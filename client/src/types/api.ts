@@ -192,6 +192,22 @@ export type EncounterCardApiQuestion = {
 
 export type LearningTier = 'encounter' | 'passive' | 'active' | 'production' | 'review';
 
+// Карточка из режима обзора (фаза 4).
+export type ReviewFeedCard = {
+  meaningId: number;
+  word: string;
+  translation: string;
+  transcription: string | null;
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+  cefr: string | null;
+  example: { en: string; ru: string } | null;
+  mnemonic: string | null;
+};
+
+export type ReviewFeedResponse = {
+  cards: ReviewFeedCard[];
+};
+
 export type LearningNextResponse = {
   question: QuizQuestion | null;
   tier: LearningTier | null;

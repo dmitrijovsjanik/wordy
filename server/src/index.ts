@@ -4,6 +4,7 @@ import authPlugin from './middleware/auth.js';
 import authRoutes from './routes/auth.js';
 import quizRoutes from './routes/quiz.js';
 import learningRoutes from './routes/learning.js';
+import reviewFeedRoutes from './routes/review-feed.js';
 import userRoutes from './routes/users.js';
 import duelRoutes from './routes/duels.js';
 import collectionRoutes from './routes/collections.js';
@@ -43,6 +44,7 @@ app.get('/api/health', async () => {
 await app.register(authRoutes);
 await app.register(quizRoutes);
 await app.register(learningRoutes);
+await app.register(reviewFeedRoutes);
 await app.register(userRoutes);
 await app.register(duelRoutes);
 await app.register(collectionRoutes);

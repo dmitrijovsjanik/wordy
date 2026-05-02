@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Sword01Icon, Tick01Icon, BookOpen02Icon, Book02Icon, ArrowRight01Icon } from '@hugeicons/core-free-icons';
+import { Sword01Icon, Tick01Icon, BookOpen02Icon, Book02Icon, ArrowRight01Icon, EyeIcon } from '@hugeicons/core-free-icons';
 import { useUnifiedGameStore, type QuestionGeneratorMode } from '@/stores/unified-game-store';
 import { cn } from '@/lib/utils';
 
@@ -61,6 +61,22 @@ export function Modes() {
             </span>
           </button>
         </div>
+      </section>
+
+      {/* Обзор слов */}
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold text-[var(--gray-11)]">Обзор</h2>
+        <button
+          onClick={() => navigate('/review')}
+          className="flex w-full items-center gap-3 rounded-2xl bg-[var(--gray-2)] px-4 py-3 text-left transition-colors active:bg-[var(--gray-3)]"
+        >
+          <HugeiconsIcon strokeWidth={2} icon={EyeIcon} size={20} className="text-[var(--brand-9)]" />
+          <div className="flex flex-1 flex-col">
+            <span className="text-sm font-semibold">Листай слова</span>
+            <span className="text-xs text-[var(--gray-11)]">Свайп вправо — знаю, влево — учить, вниз — отложить</span>
+          </div>
+          <HugeiconsIcon icon={ArrowRight01Icon} size={16} strokeWidth={2} className="text-[var(--gray-11)]" />
+        </button>
       </section>
 
       {/* Грамматика */}

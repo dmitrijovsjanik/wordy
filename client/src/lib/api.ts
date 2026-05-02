@@ -32,6 +32,7 @@ import type {
   PlacementCompleteResponse,
   LearningNextResponse,
   LearningAnswerResponse,
+  ReviewFeedResponse,
 } from '@/types/api';
 
 const TOKEN_KEY = 'wordy_token';
@@ -140,6 +141,15 @@ export function learningAnswer(input: {
 
 export function learningSwipe(input: { meaningId: number; action: 'known' | 'unknown' | 'snooze'; snoozeDays?: number }) {
   return fetchApi<{ ok: boolean }>('POST', '/api/learning/swipe', input);
+}
+
+// ─── Review Feed (фаза 4) ──────────────────────────────────────────────────
+
+export function reviewFeedNext(opts: { limit?: number } = {}) {
+  const params = new URLSearchParams();
+  if (opts.limit) params.set('limit', String(opts.limit));
+  const qs = params.toString();
+  return fetchApi<ReviewFeedResponse>('GET', `/api/review-feed/next${qs ? '?' + qs : ''}`);
 }
 
 // Duels

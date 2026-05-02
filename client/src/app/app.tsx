@@ -28,6 +28,7 @@ const GrammarPage = lazyWithRetry(() => import('@/components/grammar/grammar-pag
 const ReadingPage = lazyWithRetry(() => import('@/components/reading/reading-page').then((m) => ({ default: m.ReadingPage })));
 const QuizShowcase = lazyWithRetry(() => import('@/components/quiz-showcase').then((m) => ({ default: m.QuizShowcase })));
 const OnboardingPage = lazyWithRetry(() => import('@/components/onboarding/onboarding-page').then((m) => ({ default: m.OnboardingPage })));
+const ReviewPage = lazyWithRetry(() => import('@/components/review/review-page').then((m) => ({ default: m.ReviewPage })));
 
 function DeepLinkHandler() {
   const navigate = useNavigate();
@@ -103,6 +104,7 @@ export function App() {
                   <Route path="/reading" element={<ReadingPage />} />
                   <Route path="/quiz-showcase" element={<QuizShowcase />} />
                   <Route path="/onboarding" element={<OnboardingPage />} />
+                  <Route path="/review" element={<ReviewPage />} />
                 </Routes>
               </Suspense>
             </ErrorBoundary>
