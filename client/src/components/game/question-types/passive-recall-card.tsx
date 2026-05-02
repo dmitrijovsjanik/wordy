@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react';
-import { motion, useMotionValue, useTransform, useSpring, animate, AnimatePresence } from 'framer-motion';
+import {
+  motion,
+  useMotionValue,
+  useTransform,
+  useSpring,
+  AnimatePresence,
+  animate,
+  type PanInfo,
+} from 'framer-motion';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import type { PassiveRecallApiQuestion } from '@/types/api';
 
 type PassiveRecallCardProps = {
@@ -10,6 +19,7 @@ type PassiveRecallCardProps = {
   onAnswer: (knew: boolean) => void;
 };
 
+// Полностью копирует параметры WordStack — тот же UX свайпа.
 const SWIPE_THRESHOLD_X = 70;
 const FLY_AWAY_DISTANCE = 800;
 const FLY_AWAY_DURATION = 0.22;
@@ -18,60 +28,94 @@ const FEEDBACK_MS = 500;
 const CARD_SHADOW = 'shadow-[0_10px_30px_-5px_rgba(0,0,0,0.18)]';
 
 /**
- * Passive recall флешкарта (tier=passive). Лицо: слово + пример (en).
- * Тап → флип → обратная: перевод + пример (ru) + кнопка раскрытия мнемоники.
- * Свайп вправо = «знал», влево = «не знал». После свайпа — короткий ✓/✗
- * 500мс, затем onAnswer().
+ * Passive recall флешкарта (tier=passive). Визуал и поведение свайпа —
+ * 1-в-1 как в WordStack на странице обзора. Отличие: 3D-флип между двумя
+ * сторонами и контент.
  *
- * Свайп активен ТОЛЬКО после переворота. До флипа карточка статичная и
- * реагирует только на тап (переворачивает её).
+ *   Лицо:     слово     + example.en + «N из M»
+ *   Обратная: перевод   + example.ru + «N из M»
+ *
+ * Тап переворачивает карточку в обе стороны, пока решение не принято.
+ * Свайп активен только когда показана обратная сторона. После свайпа —
+ * ✓/✗ overlay 500мс, потом onAnswer(knew).
  */
 export function PassiveRecallCard({ question, disabled = false, onAnswer }: PassiveRecallCardProps) {
   const [flipped, setFlipped] = useState(false);
   const [decision, setDecision] = useState<'known' | 'unknown' | null>(null);
 
-  // После принятия решения — показываем ✓/✗, ждём FEEDBACK_MS, вызываем onAnswer.
   useEffect(() => {
     if (decision === null) return;
     const t = setTimeout(() => onAnswer(decision === 'known'), FEEDBACK_MS);
     return () => clearTimeout(t);
   }, [decision, onAnswer]);
 
-  // Свайп — только когда показана обратная (перевод) и решение ещё не принято.
-  // Тап — переворачивает в обе стороны, пока решение не принято.
   const dragEnabled = flipped && decision === null && !disabled;
   const canFlip = decision === null && !disabled;
 
+  const handleSwipe = (action: 'known' | 'unknown') => {
+    if (decision !== null) return;
+    setDecision(action);
+  };
+
   return (
-    <SwipeableCard
-      flipped={flipped}
-      dragEnabled={dragEnabled}
-      decision={decision}
-      onTap={() => canFlip && setFlipped((f) => !f)}
-      onSwipe={(action) => setDecision(action)}
-      front={<FrontFace question={question} />}
-      back={<BackFace question={question} />}
-    />
+    <div className="mx-auto flex w-full max-w-sm flex-1 flex-col">
+      <div className="relative flex flex-1 items-center justify-center overflow-hidden">
+        <div className="relative h-[60vh] w-full">
+          <FlipCard
+            question={question}
+            flipped={flipped}
+            dragEnabled={dragEnabled}
+            decision={decision}
+            onTap={() => canFlip && setFlipped((f) => !f)}
+            onSwipe={handleSwipe}
+          />
+        </div>
+      </div>
+
+      {/* Кнопочный fallback — точное соответствие review-page. Цвета совпадают
+          с ripple-заливкой при свайпе. Кнопки активны только когда показана
+          обратная сторона (как и свайп) и решение ещё не принято. */}
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <Button
+          variant="destructive"
+          disabled={!dragEnabled}
+          onClick={() => handleSwipe('unknown')}
+          className="text-xs"
+        >
+          Учить
+        </Button>
+        <Button
+          variant="success"
+          disabled={!dragEnabled}
+          onClick={() => handleSwipe('known')}
+          className="text-xs"
+        >
+          Знаю
+        </Button>
+      </div>
+    </div>
   );
 }
 
-// ─── Сама свайп-карта с флипом ──────────────────────────────────────────────
+// ─── FlipCard ────────────────────────────────────────────────────────────────
 
-type SwipeableCardProps = {
+type FlipCardProps = {
+  question: PassiveRecallApiQuestion;
   flipped: boolean;
   dragEnabled: boolean;
   decision: 'known' | 'unknown' | null;
   onTap: () => void;
   onSwipe: (action: 'known' | 'unknown') => void;
-  front: React.ReactNode;
-  back: React.ReactNode;
 };
 
-function SwipeableCard({ flipped, dragEnabled, decision, onTap, onSwipe, front, back }: SwipeableCardProps) {
+function FlipCard({ question, flipped, dragEnabled, decision, onTap, onSwipe }: FlipCardProps) {
   const x = useMotionValue(0);
+  const y = useMotionValue(0);
   const rotate = useTransform(x, [-200, 200], [-12, 12]);
 
-  // Бистабильный флаг «карта в зоне дропа».
+  const originX = useMotionValue(50);
+  const originY = useMotionValue(50);
+
   const inDropZone = useMotionValue(0);
   const dropZoneSpring = useSpring(inDropZone, { stiffness: 380, damping: 32 });
 
@@ -82,11 +126,12 @@ function SwipeableCard({ flipped, dragEnabled, decision, onTap, onSwipe, front, 
     return unsub;
   }, [x, inDropZone]);
 
-  // Заливка-индикатор зелёным/красным при свайпе. Появляется только когда
-  // карточка перевёрнута (на лицевой стороне свайп выключен).
-  const fillBg = useTransform([x, dropZoneSpring], (latest) => {
+  // Ripple-заливка из точки касания. Идентична WordStack.
+  const fillBg = useTransform([x, originX, originY, dropZoneSpring], (latest) => {
     const xv = latest[0] as number;
-    const lock = latest[1] as number;
+    const ox = latest[1] as number;
+    const oy = latest[2] as number;
+    const lock = latest[3] as number;
     if (xv === 0 && lock < 0.01) {
       return 'radial-gradient(circle at 50% 50%, transparent 0%, transparent 100%)';
     }
@@ -97,10 +142,17 @@ function SwipeableCard({ flipped, dragEnabled, decision, onTap, onSwipe, front, 
     const isGreen = xv > 0;
     const colorCenter = isGreen ? 'var(--green-5)' : 'var(--red-5)';
     const colorMid = isGreen ? 'var(--green-4)' : 'var(--red-4)';
-    return `radial-gradient(circle at 50% 50%, ${colorCenter} 0%, ${colorMid} ${radius * 0.5}%, transparent ${radius}%)`;
+    return `radial-gradient(circle at ${ox}% ${oy}%, ${colorCenter} 0%, ${colorMid} ${radius * 0.5}%, transparent ${radius}%)`;
   });
 
-  const handleDragEnd = () => {
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    originX.set(((e.clientX - rect.left) / rect.width) * 100);
+    originY.set(((e.clientY - rect.top) / rect.height) * 100);
+  };
+
+  const handleDragEnd = (_: unknown, _info: PanInfo) => {
     const xv = x.get();
     if (xv > SWIPE_THRESHOLD_X) {
       animate(x, FLY_AWAY_DISTANCE, { duration: FLY_AWAY_DURATION, onComplete: () => onSwipe('known') });
@@ -113,126 +165,126 @@ function SwipeableCard({ flipped, dragEnabled, decision, onTap, onSwipe, front, 
   };
 
   return (
-    <div className="relative h-[60vh] w-full" style={{ perspective: '1200px' }}>
+    <motion.div
+      drag={dragEnabled ? true : false}
+      dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+      dragSnapToOrigin
+      dragElastic={0.6}
+      onPointerDown={handlePointerDown}
+      onDragEnd={handleDragEnd}
+      onClick={onTap}
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.18 }}
+      style={{ x, y, rotate, perspective: 1200, zIndex: 100 }}
+      className="absolute inset-0 flex cursor-pointer flex-col"
+    >
+      {/* Контейнер флипа */}
       <motion.div
-        drag={dragEnabled ? 'x' : false}
-        dragConstraints={{ left: 0, right: 0 }}
-        dragSnapToOrigin
-        dragElastic={0.6}
-        onDragEnd={handleDragEnd}
-        onClick={() => !flipped && onTap()}
-        style={{ x, rotate }}
-        className={`absolute inset-0 ${flipped ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+        animate={{ rotateY: flipped ? 180 : 0 }}
+        transition={{ duration: 0.45, ease: 'easeInOut' }}
+        style={{ transformStyle: 'preserve-3d' }}
+        className="relative h-full w-full"
       >
-        {/* Контейнер флипа: rotateY 0 ↔ 180. transformStyle preserve-3d для
-            корректного отображения двух сторон в 3D-пространстве. */}
-        <motion.div
-          animate={{ rotateY: flipped ? 180 : 0 }}
-          transition={{ duration: 0.45, ease: 'easeInOut' }}
-          style={{ transformStyle: 'preserve-3d' }}
-          className="relative h-full w-full"
-        >
-          {/* Лицо */}
-          <Card
-            className={`absolute inset-0 flex flex-col gap-4 overflow-hidden px-6 py-8 text-center ${CARD_SHADOW}`}
-            style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
-          >
-            {front}
-          </Card>
+        {/* Лицо */}
+        <FaceCard
+          fillBg={fillBg}
+          showFill={dragEnabled}
+          meaningIndex={question.meaningIndex}
+          totalMeanings={question.totalMeanings}
+          mainText={question.word}
+          exampleText={question.example?.en ?? null}
+          backFace={false}
+        />
 
-          {/* Обратная сторона. Своя rotateY(180deg) чтобы при rotateY parent=180
-              текст не был зеркальным. */}
-          <Card
-            className={`absolute inset-0 flex flex-col gap-4 overflow-hidden px-6 py-8 text-center ${CARD_SHADOW}`}
-            style={{
-              backfaceVisibility: 'hidden',
-              WebkitBackfaceVisibility: 'hidden',
-              transform: 'rotateY(180deg)',
-            }}
-          >
-            {/* Заливка-индикатор только на обратной стороне (где доступен свайп). */}
-            <motion.div
-              aria-hidden
-              className="pointer-events-none absolute inset-0"
-              style={{ backgroundImage: fillBg }}
-            />
-            <div className="relative flex flex-1 flex-col">{back}</div>
-          </Card>
-        </motion.div>
-
-        {/* ✓/✗ overlay поверх всей карточки. */}
-        <AnimatePresence>
-          {decision && (
-            <motion.div
-              key="decision-overlay"
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-              className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
-            >
-              <div
-                className={`flex h-28 w-28 items-center justify-center rounded-full text-6xl font-bold text-white ${
-                  decision === 'known' ? 'bg-[var(--green-9)]' : 'bg-[var(--red-9)]'
-                }`}
-              >
-                {decision === 'known' ? '✓' : '✗'}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Обратная */}
+        <FaceCard
+          fillBg={fillBg}
+          showFill={dragEnabled}
+          meaningIndex={question.meaningIndex}
+          totalMeanings={question.totalMeanings}
+          mainText={question.translation}
+          exampleText={question.example?.ru ?? null}
+          backFace
+        />
       </motion.div>
-    </div>
+
+      {/* ✓/✗ overlay поверх обеих сторон. */}
+      <AnimatePresence>
+        {decision && (
+          <motion.div
+            key="decision-overlay"
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+            className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
+          >
+            <div
+              className={`flex h-28 w-28 items-center justify-center rounded-full text-6xl font-bold text-white ${
+                decision === 'known' ? 'bg-[var(--green-9)]' : 'bg-[var(--red-9)]'
+              }`}
+            >
+              {decision === 'known' ? '✓' : '✗'}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 
-// ─── Лицевая сторона ─────────────────────────────────────────────────────────
+// ─── FaceCard — один из двух «листов» карточки ──────────────────────────────
+//
+// Структура совпадает с TopCard из WordStack: строка-метка с meaning-index,
+// крупный текст по центру, разделитель + пример снизу. Контент отличается
+// (на лицевой — слово+example.en, на обратной — перевод+example.ru).
 
-function FrontFace({ question }: { question: PassiveRecallApiQuestion }) {
-  const showMeaningIndex = question.totalMeanings > 1;
+type FaceCardProps = {
+  fillBg: import('framer-motion').MotionValue<string>;
+  /** Показывать ripple-заливку только когда свайп активен (т.е. на обратной). */
+  showFill: boolean;
+  meaningIndex: number;
+  totalMeanings: number;
+  mainText: string;
+  exampleText: string | null;
+  /** true → этот лист повёрнут на 180° относительно лица. */
+  backFace: boolean;
+};
+
+function FaceCard({ fillBg, showFill, meaningIndex, totalMeanings, mainText, exampleText, backFace }: FaceCardProps) {
   return (
-    <>
-      {showMeaningIndex && (
-        <div className="text-xs uppercase tracking-wide text-[var(--gray-11)]">
-          {question.meaningIndex} из {question.totalMeanings}
-        </div>
+    <Card
+      className={`absolute inset-0 flex flex-col gap-4 overflow-hidden px-6 py-8 text-center ${CARD_SHADOW}`}
+      style={{
+        backfaceVisibility: 'hidden',
+        WebkitBackfaceVisibility: 'hidden',
+        ...(backFace ? { transform: 'rotateY(180deg)' } : {}),
+      }}
+    >
+      {/* Ripple-заливка — только на той стороне, где доступен свайп. */}
+      {showFill && (
+        <motion.div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{ backgroundImage: fillBg }}
+        />
       )}
-      <div className="flex flex-1 flex-col items-center justify-center gap-3">
-        <div className="text-4xl font-bold text-[var(--gray-12)]">{question.word}</div>
-        {question.example && (
-          <div className="mt-4 text-base text-[var(--gray-11)]">
-            {question.example.en}
+
+      <div className="relative flex flex-1 flex-col items-center justify-center gap-2">
+        {totalMeanings > 1 && (
+          <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-[var(--gray-11)]">
+            <span>{meaningIndex} / {totalMeanings}</span>
           </div>
         )}
+        <div className="text-3xl font-bold">{mainText}</div>
       </div>
-      <div className="text-xs text-[var(--gray-10)]">Тапните, чтобы увидеть перевод</div>
-    </>
-  );
-}
 
-// ─── Обратная сторона ────────────────────────────────────────────────────────
-
-function BackFace({ question }: { question: PassiveRecallApiQuestion }) {
-  const showMeaningIndex = question.totalMeanings > 1;
-  return (
-    <>
-      {showMeaningIndex && (
-        <div className="text-xs uppercase tracking-wide text-[var(--gray-11)]">
-          {question.meaningIndex} из {question.totalMeanings}
+      {exampleText && (
+        <div className="relative border-t border-[var(--gray-5)] pt-3 text-left">
+          <div className="text-sm">{exampleText}</div>
         </div>
       )}
-      <div className="flex flex-1 flex-col items-center justify-center gap-3">
-        <div className="text-3xl font-bold text-[var(--gray-12)]">{question.translation}</div>
-        {question.example && (
-          <div className="mt-4 text-base text-[var(--gray-11)]">
-            {question.example.ru}
-          </div>
-        )}
-      </div>
-      <div className="flex items-center justify-between gap-3 text-xs text-[var(--gray-10)]">
-        <span>← не знал</span>
-        <span>знал →</span>
-      </div>
-    </>
+    </Card>
   );
 }

@@ -559,16 +559,15 @@ export function Home() {
                   />
                 </div>
               ) : currentQuestion && currentQuestion.type === 'passive-recall' ? (
-                /* Passive recall — флешкарта с флипом и свайпом. По требованию
-                   не показываем tier-бейджи и feedback-панель: вся обратная
-                   связь происходит внутри карточки (✓/✗ overlay 500ms). */
-                <div className="flex min-h-0 flex-1 flex-col justify-center px-2">
-                  <PassiveRecallCard
-                    question={currentQuestion}
-                    disabled={isLoading}
-                    onAnswer={(knew) => submitPassiveRecall(knew)}
-                  />
-                </div>
+                /* Passive recall — флешкарта с флипом и свайпом. Окружение
+                   и визуал — 1-в-1 review-page (карточка max-w-sm h-[60vh],
+                   ripple-заливка, fly-away, кнопочный fallback Учить/Знаю).
+                   Без tier-бейджей и feedback-панели: ✓/✗ overlay внутри. */
+                <PassiveRecallCard
+                  question={currentQuestion}
+                  disabled={isLoading}
+                  onAnswer={(knew) => submitPassiveRecall(knew)}
+                />
               ) : currentQuestion && (
                 <>
                   {/* 3-сигнальный прогресс: passive/active = «В процессе», review = «Знакомое» */}
