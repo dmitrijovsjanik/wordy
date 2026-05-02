@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useReviewStore } from '@/stores/review-store';
 import { useTelegram } from '@/hooks/use-telegram';
 import { useBackButton } from '@/hooks/use-back-button';
@@ -9,6 +10,21 @@ import { BackButton } from '@/components/ui/back-button';
 import { ReviewCard } from './review-card';
 import { WordStack } from './word-stack';
 import { cn } from '@/lib/utils';
+
+// Variants для вертикальной карусели слов.
+// forward: текущее уезжает вверх, новое прилетает снизу.
+// backward (undo): текущее уезжает вниз, новое прилетает сверху.
+const wordVariants = {
+  enter: (direction: 'forward' | 'backward') => ({
+    y: direction === 'forward' ? '60%' : '-60%',
+    opacity: 0,
+  }),
+  center: { y: 0, opacity: 1 },
+  exit: (direction: 'forward' | 'backward') => ({
+    y: direction === 'forward' ? '-60%' : '60%',
+    opacity: 0,
+  }),
+};
 
 /**
  * Режим обзора. Два режима, переключаются toggle'ом сверху:
@@ -34,6 +50,7 @@ export function ReviewPage() {
     cardIndex,
     isLoading,
     error,
+    wordTransitionDirection,
     setMode,
     fetchInitial,
     swipe,
@@ -124,15 +141,29 @@ export function ReviewPage() {
         </div>
       </div>
 
-      <div className="relative mx-auto mt-4 flex w-full max-w-sm flex-1 items-center justify-center">
+      <div className="relative mx-auto mt-4 flex w-full max-w-sm flex-1 items-center justify-center overflow-hidden">
         {mode === 'A' ? (
-          <WordStack
-            word={words[wordIndex]!}
-            meaningIndex={meaningIndex}
-            nextWord={words[wordIndex + 1] ?? null}
-            onSwipe={handleSwipe}
-            onUndo={handleUndo}
-          />
+          <div className="relative h-[60vh] w-full">
+            <AnimatePresence custom={wordTransitionDirection} mode="popLayout" initial={false}>
+              <motion.div
+                key={words[wordIndex]!.wordId}
+                custom={wordTransitionDirection}
+                variants={wordVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ type: 'spring', stiffness: 220, damping: 28 }}
+                className="absolute inset-0"
+              >
+                <WordStack
+                  word={words[wordIndex]!}
+                  meaningIndex={meaningIndex}
+                  onSwipe={handleSwipe}
+                  onUndo={handleUndo}
+                />
+              </motion.div>
+            </AnimatePresence>
+          </div>
         ) : (
           <div className="relative h-[60vh] w-full">
             {cards.slice(cardIndex, cardIndex + 3).map((card, idx) => (

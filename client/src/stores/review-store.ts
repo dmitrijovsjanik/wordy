@@ -29,6 +29,11 @@ type ReviewState = {
   error: string | null;
   history: HistoryEntry[];
 
+  /** Направление последнего перехода между СЛОВАМИ. Используется для
+   *  вертикальной карусели: forward = вверх (новое слово снизу),
+   *  backward = вниз (предыдущее слово сверху). */
+  wordTransitionDirection: 'forward' | 'backward';
+
   setMode: (m: 'A' | 'B') => void;
   fetchInitial: () => Promise<void>;
   swipe: (action: Action) => Promise<void>;
@@ -56,6 +61,7 @@ export const useReviewStore = create<ReviewState>()((set, get) => ({
   isPrefetching: false,
   error: null,
   history: [],
+  wordTransitionDirection: 'forward',
 
   setMode: (m) => {
     saveMode(m);
@@ -109,6 +115,7 @@ export const useReviewStore = create<ReviewState>()((set, get) => ({
           }],
           wordIndex: state.wordIndex + 1,
           meaningIndex: 0,
+          wordTransitionDirection: 'forward',
         });
         // Prefetch если близко к концу.
         prefetchIfNeeded();
@@ -130,6 +137,8 @@ export const useReviewStore = create<ReviewState>()((set, get) => ({
         }],
         wordIndex: isLastMeaning ? state.wordIndex + 1 : state.wordIndex,
         meaningIndex: isLastMeaning ? 0 : nextMeaningIndex,
+        // Направление меняется только при смене слова. Внутри стопки оставляем как было.
+        wordTransitionDirection: isLastMeaning ? 'forward' : state.wordTransitionDirection,
       });
       prefetchIfNeeded();
       learningSwipe({ meaningId: meaning.meaningId, action }).catch((e) => console.error('[review] swipe failed:', e));
@@ -158,10 +167,12 @@ export const useReviewStore = create<ReviewState>()((set, get) => ({
     if (!last) return;
     // Возвращаем индексы сразу — UI отзывчив.
     if (last.mode === 'A') {
+      const isCrossWord = last.prevWordIndex !== state.wordIndex;
       set({
         wordIndex: last.prevWordIndex,
         meaningIndex: last.prevMeaningIndex,
         history: state.history.slice(0, -1),
+        wordTransitionDirection: isCrossWord ? 'backward' : state.wordTransitionDirection,
       });
     } else {
       set({
