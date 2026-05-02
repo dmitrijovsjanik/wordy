@@ -569,7 +569,11 @@ async function markLowerLevelWordsAsLearned(
   const now = new Date();
   const reviewAt = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000); // +3 days
 
-  // Bulk insert in batches of 500
+  // Bulk insert in batches of 500.
+  // Phase 2/5: новая модель — state='known_from_review' + fromPlacement=true.
+  // Старые поля (srsStage/masteredAt/reviewStage) заполняем для обратной
+  // совместимости со временем переходного периода — они игнорируются
+  // learning-service'ом, но используются legacy /api/quiz/* path.
   const BATCH_SIZE = 500;
   for (let i = 0; i < newMeaningIds.length; i += BATCH_SIZE) {
     const batch = newMeaningIds.slice(i, i + BATCH_SIZE);
@@ -577,6 +581,11 @@ async function markLowerLevelWordsAsLearned(
       batch.map(meaningId => ({
         userId,
         meaningId,
+        // Новая модель:
+        state: 'known_from_review' as const,
+        learningTier: 'review' as const,
+        tierCorrectCount: 0,
+        // Legacy поля для совместимости с старым flow:
         srsStage: LEARNED_PROGRESS,
         correctCount: 3,
         masteredAt: now,

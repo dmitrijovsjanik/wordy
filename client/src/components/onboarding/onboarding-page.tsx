@@ -4,6 +4,7 @@ import { SelfAssessmentStep } from './self-assessment-step';
 import { QuizStep } from './quiz-step';
 import { AnalyzingStep } from './analyzing-step';
 import { ResultStep } from './result-step';
+import { CalibrationStep } from './calibration-step';
 
 export function OnboardingPage() {
   const step = useOnboardingStore((s) => s.step);
@@ -15,6 +16,7 @@ export function OnboardingPage() {
       {step === 'quiz' && <QuizStep />}
       {step === 'analyzing' && <AnalyzingStep />}
       {step === 'result' && <ResultStep />}
+      {step === 'calibration' && <CalibrationStep />}
     </div>
   );
 }

@@ -52,11 +52,17 @@ export function ResultStep() {
       await useOnboardingStore.getState().finalize(mode);
       await useUserStore.getState().refreshProfile();
       await useCollectionStore.getState().fetchLibrary();
-      navigate('/', { replace: true });
+      // После плейсмента — свайп-калибровка (~10 слов вокруг определённого CEFR),
+      // чтобы пользователь сразу попробовал основной механизм обзора и
+      // мы получили начальный сигнал «знаю / учить» для подбора ленты обучения.
+      useOnboardingStore.getState().setStep('calibration');
     } catch {
       setIsNavigating(false);
     }
   };
+
+  // Кстати, navigate уже не нужен здесь — переход на главную происходит из calibration-step.
+  void navigate;
 
   return (
     <div className="flex min-h-dvh flex-col px-4 pt-8">

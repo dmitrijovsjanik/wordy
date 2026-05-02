@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { CefrLevel, PlacementQuestion, PlacementCompleteResponse } from '@/types/api';
 import { placementStart, placementAnswer, placementComplete, placementFinalize, placementSkip } from '@/lib/api';
 
-type OnboardingStep = 'welcome' | 'self-assessment' | 'quiz' | 'analyzing' | 'result';
+type OnboardingStep = 'welcome' | 'self-assessment' | 'quiz' | 'analyzing' | 'result' | 'calibration';
 
 type OnboardingState = {
   step: OnboardingStep;
