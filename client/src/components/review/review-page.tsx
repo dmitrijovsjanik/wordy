@@ -159,54 +159,70 @@ export function ReviewPage() {
 
       <div className="relative mx-auto mt-4 flex w-full max-w-sm flex-1 items-center justify-center overflow-hidden">
         <div className="relative h-[60vh] w-full">
-          <AnimatePresence custom={wordTransitionDirection} mode="popLayout" initial={false}>
-            {mode === 'A' ? (
-              <motion.div
-                key={`a-${words[wordIndex]!.wordId}`}
-                custom={wordTransitionDirection}
-                variants={wordVariants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ type: 'spring', stiffness: 220, damping: 28 }}
-                className="absolute inset-0"
-              >
-                <WordStack
-                  word={words[wordIndex]!}
-                  meaningIndex={meaningIndex}
-                  onSwipe={handleSwipe}
-                  onUndo={handleUndo}
-                />
-              </motion.div>
-            ) : (
-              <motion.div
-                key={`b-${cards[cardIndex]!.meaningId}`}
-                custom={wordTransitionDirection}
-                variants={wordVariants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ type: 'spring', stiffness: 220, damping: 28 }}
-                className="absolute inset-0"
-              >
-                <WordStack
-                  word={cardToVirtualWord(cards[cardIndex]!)}
-                  meaningIndex={0}
-                  onSwipe={handleSwipe}
-                  onUndo={handleUndo}
-                />
-              </motion.div>
-            )}
+          {/* Внешний AnimatePresence — плавный fade при смене режима A↔B.
+              mode="wait" гарантирует что старый режим полностью исчезнет
+              перед появлением нового, без glitch'а пустого контейнера. */}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={`mode-${mode}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              className="absolute inset-0"
+            >
+              {/* Внутренний — карусель слов внутри текущего режима. */}
+              <AnimatePresence custom={wordTransitionDirection} mode="popLayout" initial={false}>
+                {mode === 'A' ? (
+                  <motion.div
+                    key={`a-${words[wordIndex]!.wordId}`}
+                    custom={wordTransitionDirection}
+                    variants={wordVariants}
+                    initial="enter"
+                    animate="center"
+                    exit="exit"
+                    transition={{ type: 'spring', stiffness: 220, damping: 28 }}
+                    className="absolute inset-0"
+                  >
+                    <WordStack
+                      word={words[wordIndex]!}
+                      meaningIndex={meaningIndex}
+                      onSwipe={handleSwipe}
+                      onUndo={handleUndo}
+                    />
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key={`b-${cards[cardIndex]!.meaningId}`}
+                    custom={wordTransitionDirection}
+                    variants={wordVariants}
+                    initial="enter"
+                    animate="center"
+                    exit="exit"
+                    transition={{ type: 'spring', stiffness: 220, damping: 28 }}
+                    className="absolute inset-0"
+                  >
+                    <WordStack
+                      word={cardToVirtualWord(cards[cardIndex]!)}
+                      meaningIndex={0}
+                      onSwipe={handleSwipe}
+                      onUndo={handleUndo}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
           </AnimatePresence>
         </div>
       </div>
 
-      {/* Кнопочный fallback. Skip / undo / known / unknown — для accessibility и при сложностях со свайпами. */}
+      {/* Кнопочный fallback. Цветовое кодирование совпадает с ripple-заливкой:
+          знаю — success (зелёный), учить — destructive (красный), нейтральные — secondary/ghost. */}
       <div className="mt-4 grid grid-cols-4 gap-2">
-        <Button variant="secondary" onClick={() => handleSwipe('unknown')} className="text-xs">Учить</Button>
+        <Button variant="destructive" onClick={() => handleSwipe('unknown')} className="text-xs">Учить</Button>
         <Button variant="secondary" onClick={() => handleSwipe('snooze')} className="text-xs">Отложить</Button>
-        <Button variant="secondary" onClick={handleUndo} className="text-xs">Назад</Button>
-        <Button variant="secondary" onClick={() => handleSwipe('known')} className="text-xs">Знаю</Button>
+        <Button variant="ghost" onClick={handleUndo} className="text-xs">Назад</Button>
+        <Button variant="success" onClick={() => handleSwipe('known')} className="text-xs">Знаю</Button>
       </div>
     </div>
   );
