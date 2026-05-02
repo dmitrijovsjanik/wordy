@@ -9,7 +9,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { users } from '../db/schema.js';
-import { MAX_LIVES, LIVES_RECOVERY_MS, LIVES_REFILL_GEM_COST } from '../config/lives-config.js';
+import { LIVES_ENABLED, MAX_LIVES, LIVES_RECOVERY_MS, LIVES_REFILL_GEM_COST } from '../config/lives-config.js';
 import { isPremium } from './premium-service.js';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -61,6 +61,12 @@ async function checkAndRestore(userId: number): Promise<{ lives: number; livesRe
  * Автоматически восстанавливает если таймер истёк.
  */
 export async function getLivesStatus(userId: number): Promise<LivesStatus> {
+  // Глобальное отключение системы жизней (см. LIVES_ENABLED в lives-config).
+  // Возвращаем infinite — никаких чтений/записей.
+  if (!LIVES_ENABLED) {
+    return { lives: MAX_LIVES, livesRestoredAt: null, isInfinite: true };
+  }
+
   const premium = await isPremium(userId);
   if (premium) {
     return { lives: MAX_LIVES, livesRestoredAt: null, isInfinite: true };
@@ -79,6 +85,11 @@ export async function getLivesStatus(userId: number): Promise<LivesStatus> {
  * Premium — пропускает. Если таймер истёк — сначала восстанавливает.
  */
 export async function consumeLife(userId: number): Promise<ConsumeLifeResult> {
+  // Глобальное отключение — no-op, без чтений/записей.
+  if (!LIVES_ENABLED) {
+    return { lives: MAX_LIVES, livesRestoredAt: null, livesExhausted: false };
+  }
+
   const premium = await isPremium(userId);
   if (premium) {
     return { lives: MAX_LIVES, livesRestoredAt: null, livesExhausted: false };

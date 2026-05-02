@@ -8,6 +8,7 @@ import { useBackButton } from '@/hooks/use-back-button';
 import { useResetTimer } from '@/hooks/use-reset-timer';
 import { StreakFreezeDialog, type FreezePack } from '@/components/ui/streak-freeze-dialog';
 import { ShopPurchaseDialog } from '@/components/ui/shop-purchase-dialog';
+import { LIVES_ENABLED } from '@/lib/feature-flags';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { getDailyRewards, getPremiumStatus, cancelAutoRenew, enableAutoRenew, unlinkCard, createPayment, refillLives, purchaseXpBoost, type DailyRewardsResponse } from '@/lib/api';
@@ -411,8 +412,8 @@ export function Shop() {
         </button>
       </div>
 
-      {/* Восстановление жизней */}
-      {user && user.lives < 5 && (
+      {/* Восстановление жизней — карточка скрыта когда система жизней отключена. */}
+      {LIVES_ENABLED && user && user.lives < 5 && (
         <div className="flex flex-col gap-2">
           <span className="text-xs font-semibold uppercase tracking-wide text-[var(--gray-9)]">
             Жизни

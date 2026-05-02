@@ -3,6 +3,7 @@ import { db } from '../db/index.js';
 import { users, quizSessions, duels, streakActivityDays, userLeagueProgress, userSeasonStats, userWordProgress, wordMeanings } from '../db/schema.js';
 import { MAX_STREAK_FREEZES, FREEZE_PACKS } from '../config/gems-config.js';
 import { LEAGUE_TIERS } from '../config/league-config.js';
+import { LIVES_ENABLED, MAX_LIVES } from '../config/lives-config.js';
 import { getMskTodayStart, toMskDayStart } from '../lib/msk-date.js';
 
 export async function getProfile(userId: number) {
@@ -45,6 +46,13 @@ export async function getProfile(userId: number) {
     telegramId: user.telegramId ? String(user.telegramId) : null,
     vkId: user.vkId ? String(user.vkId) : null,
   };
+
+  // Если система жизней отключена — возвращаем infinite. Это нужно чтобы
+  // у юзеров с устаревшими значениями lives/livesRestoredAt в БД фронт
+  // не мерцал старыми данными между обновлениями getLivesStatus.
+  if (!LIVES_ENABLED) {
+    return { ...serialized, lives: MAX_LIVES, livesRestoredAt: null };
+  }
 
   // Auto-restore lives if timer has expired
   const now = new Date();

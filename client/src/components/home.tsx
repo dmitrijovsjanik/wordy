@@ -32,6 +32,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Cancel01Icon, Clock01Icon, CheckListIcon, AlertCircleIcon } from '@hugeicons/core-free-icons';
 import { learningProblemsCount } from '@/lib/api';
+import { LIVES_ENABLED } from '@/lib/feature-flags';
 import { xpForLevel } from '@/lib/progression-config';
 import { AnswerHistoryDrawer } from '@/components/answer-history-drawer';
 import { LivesExhaustedDrawer } from '@/components/game/lives-exhausted-drawer';
@@ -361,27 +362,29 @@ export function Home() {
         </Button>
       </div>
 
-      {/* Lives indicator */}
-      <div className="mb-2 flex items-center justify-center gap-1">
-        {isPremium ? (
-          <div className="flex items-center gap-1 rounded-full bg-[var(--red-3)] px-2.5 py-1">
-            <HugeiconsIcon icon={FavouriteIcon} size={14} className="text-[var(--red-9)] [&_path]:fill-current" strokeWidth={2} />
-            <span className="text-xs font-semibold text-[var(--red-11)]">&infin;</span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-0.5">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <HugeiconsIcon
-                key={i}
-                icon={FavouriteIcon}
-                size={16}
-                className={i < lives ? 'text-[var(--red-9)] [&_path]:fill-current' : 'text-[var(--gray-6)]'}
-                strokeWidth={2}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Lives indicator — скрыт когда система жизней отключена. */}
+      {LIVES_ENABLED && (
+        <div className="mb-2 flex items-center justify-center gap-1">
+          {isPremium ? (
+            <div className="flex items-center gap-1 rounded-full bg-[var(--red-3)] px-2.5 py-1">
+              <HugeiconsIcon icon={FavouriteIcon} size={14} className="text-[var(--red-9)] [&_path]:fill-current" strokeWidth={2} />
+              <span className="text-xs font-semibold text-[var(--red-11)]">&infin;</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-0.5">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <HugeiconsIcon
+                  key={i}
+                  icon={FavouriteIcon}
+                  size={16}
+                  className={i < lives ? 'text-[var(--red-9)] [&_path]:fill-current' : 'text-[var(--gray-6)]'}
+                  strokeWidth={2}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Quiz Card */}
       <div className="mt-2 flex min-h-0 flex-1 flex-col">
@@ -823,16 +826,18 @@ export function Home() {
         )}
       </div>
 
-      {/* Lives exhausted drawer */}
-      <LivesExhaustedDrawer
-        open={livesExhausted}
-        onOpenChange={(open) => { if (!open) onLivesTimerExpired(); }}
-        livesRestoredAt={livesRestoredAt}
-        gems={user.gems}
-        refillCost={250}
-        onRefill={restoreLives}
-        onTimerExpired={onLivesTimerExpired}
-      />
+      {/* Lives exhausted drawer — отключён вместе с системой жизней. */}
+      {LIVES_ENABLED && (
+        <LivesExhaustedDrawer
+          open={livesExhausted}
+          onOpenChange={(open) => { if (!open) onLivesTimerExpired(); }}
+          livesRestoredAt={livesRestoredAt}
+          gems={user.gems}
+          refillCost={250}
+          onRefill={restoreLives}
+          onTimerExpired={onLivesTimerExpired}
+        />
+      )}
 
       <StreakInfoSheet
         open={streakSheetOpen}
