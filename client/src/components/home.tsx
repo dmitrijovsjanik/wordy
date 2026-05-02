@@ -21,9 +21,7 @@ import { QuizContainer } from '@/components/game/quiz-container';
 import { MatchPairs } from '@/components/game/question-types/match-pairs';
 import { Listening } from '@/components/game/question-types/listening';
 import { Dictation } from '@/components/game/question-types/dictation';
-import { Cloze } from '@/components/game/question-types/cloze';
 import { FreeRecall } from '@/components/game/question-types/free-recall';
-import { BlankSentence } from '@/components/game/blank-sentence';
 import { ExampleSentences } from '@/components/game/example-sentences';
 import { MnemonicCard } from '@/components/game/mnemonic-card';
 import { MilestoneModal } from '@/components/milestone-modal';
@@ -35,7 +33,6 @@ import { Avatar } from '@/components/ui/avatar';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Cancel01Icon, Clock01Icon, CheckListIcon } from '@hugeicons/core-free-icons';
 import { ERRORS_COLLECTION_ID } from '@/lib/api';
-import { cn } from '@/lib/utils';
 import { xpForLevel } from '@/lib/progression-config';
 import { AnswerHistoryDrawer } from '@/components/answer-history-drawer';
 import { LivesExhaustedDrawer } from '@/components/game/lives-exhausted-drawer';
@@ -44,7 +41,6 @@ import type { RewardDisplay, AnswerFeedback } from '@/types/game';
 
 function getQuizContainerKey(q: import('@/types/api').QuizQuestion): string | number {
   if (q.type === 'match-pairs') return q.pairs[0]?.meaningId ?? 0;
-  if (typeof q.type === 'string' && q.type.startsWith('grammar-')) return `grammar-${q.type}`;
   return (q as { meaningId: number }).meaningId;
 }
 
@@ -70,7 +66,6 @@ export function Home() {
     livesExhausted,
     fetchNext,
     submitAnswer,
-    submitGrammarAnswer,
     submitMatchPairsResults,
     submitEncounter,
     skip,
@@ -271,9 +266,8 @@ export function Home() {
 
   const handleAnswer = useCallback((option: string) => {
     if (feedback || isLoading || !currentQuestion || currentQuestion.type === 'match-pairs') return;
-    // Encounter и grammar обрабатываются собственными хендлерами.
+    // Encounter обрабатывается собственным хендлером.
     if (currentQuestion.type === 'encounter') return;
-    if (typeof currentQuestion.type === 'string' && currentQuestion.type.startsWith('grammar-')) return;
     hapticImpact('light');
     setSelectedOption(option);
 
@@ -284,7 +278,6 @@ export function Home() {
       case 'spelling':
         correctAnswer = currentQuestion.correctSpelling;
         break;
-      case 'cloze':
       case 'listening':
         correctAnswer = currentQuestion.correctAnswer;
         break;
@@ -305,13 +298,6 @@ export function Home() {
     submitAnswer(isCorrectGuess ? meaningId : null, option);
   }, [feedback, isLoading, currentQuestion, hapticImpact, submitAnswer]);
 
-  const handleGrammarAnswer = useCallback((answer: string) => {
-    if (feedback || isLoading || !currentQuestion) return;
-    hapticImpact('light');
-    setSelectedOption(answer);
-    submitGrammarAnswer(answer);
-  }, [feedback, isLoading, currentQuestion, hapticImpact, submitGrammarAnswer]);
-
   const handleSkip = useCallback(() => {
     if (feedback || isLoading || !currentQuestion) return;
     hapticImpact('light');
@@ -331,44 +317,22 @@ export function Home() {
     submitMatchPairsResults(results);
   }, [isLoading, currentQuestion, hapticImpact, submitMatchPairsResults]);
 
-  const handleTenseMatchComplete = useCallback((results: Array<{ meaningId: number; isCorrect: boolean }>) => {
-    const allCorrect = results.every((r) => r.isCorrect);
-    // Отправляем как grammar ответ (correct/incorrect)
-    submitGrammarAnswer(allCorrect ? 'correct' : 'incorrect');
-  }, [submitGrammarAnswer]);
-
-  const handleTenseMatchSkip = useCallback(() => {
-    if (isLoading || !currentQuestion || currentQuestion.type !== 'grammar-tense-match') return;
-    hapticImpact('light');
-    submitGrammarAnswer('');
-  }, [isLoading, currentQuestion, hapticImpact, submitGrammarAnswer]);
-
-  // Преобразуем feedback в AnswerFeedback для компонента
+  // Преобразуем feedback в AnswerFeedback для компонента.
   // ВАЖНО: для correctAnswer берём значение из вопроса (не из сервера),
-  // чтобы оно совпадало с текстом опций (сервер может вернуть другое из-за TRANSLATION_DISPLAY)
+  // чтобы оно совпадало с текстом опций (сервер может вернуть другое из-за TRANSLATION_DISPLAY).
   const answerFeedback: AnswerFeedback | null = feedback ? {
     isCorrect: feedback.isCorrect,
     correctAnswer: currentQuestion?.type === 'spelling'
       ? (currentQuestion?.correctSpelling ?? feedback.correctTranslation)
-      : currentQuestion?.type === 'cloze'
+      : currentQuestion?.type === 'listening'
         ? (currentQuestion?.correctAnswer ?? feedback.correctTranslation)
-        : currentQuestion?.type === 'listening'
+        : currentQuestion?.type === 'dictation'
           ? (currentQuestion?.correctAnswer ?? feedback.correctTranslation)
-          : currentQuestion?.type === 'dictation'
-            ? (currentQuestion?.correctAnswer ?? feedback.correctTranslation)
-            : currentQuestion?.type === 'free-recall'
-              ? (currentQuestion?.acceptableAnswers?.[0] ?? feedback.correctTranslation)
-              : currentQuestion?.type === 'grammar-article'
-                ? (currentQuestion?.exercise.blanks[0]?.correctAnswer ?? feedback.correctTranslation)
-                : currentQuestion?.type === 'grammar-tense'
-                  ? (currentQuestion?.exercise.correctAnswer ?? feedback.correctTranslation)
-                  : currentQuestion?.type === 'grammar-collocation'
-                    ? (currentQuestion?.collocation.correctAnswer ?? feedback.correctTranslation)
-                    : currentQuestion?.type === 'grammar-false-friend'
-                      ? (currentQuestion?.correctAnswer ?? feedback.correctTranslation)
-                      : (currentQuestion && 'correctTranslation' in currentQuestion && currentQuestion.correctTranslation)
-                        ? currentQuestion.correctTranslation
-                        : feedback.correctTranslation,
+          : currentQuestion?.type === 'free-recall'
+            ? (currentQuestion?.acceptableAnswers?.[0] ?? feedback.correctTranslation)
+            : (currentQuestion && 'correctTranslation' in currentQuestion && currentQuestion.correctTranslation)
+              ? currentQuestion.correctTranslation
+              : feedback.correctTranslation,
     examples: feedback.examples,
     mnemonic: feedback.mnemonic,
   } : null;
@@ -596,35 +560,6 @@ export function Home() {
                       </div>
                       <p className="text-sm text-[var(--gray-11)]">Нажмите на слово, затем на его перевод</p>
                     </div>
-                  ) : currentQuestion.type === 'cloze' ? (
-                    <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center pb-8 px-4">
-                      {/* Cloze: предложение с пропуском */}
-                      <div className="relative text-center">
-                        <AnimatePresence>
-                          {showDoubleXpTimer && (
-                            <motion.span
-                              key="double-xp-label-cloze"
-                              initial={{ opacity: 0, scale: 0.5 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              exit={{ opacity: 0, scale: 0.5 }}
-                              transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-                              className="absolute -top-8 left-1/2 -translate-x-1/2 select-none font-[Unbounded] text-2xl font-black text-[var(--green-9)]"
-                            >
-                              x2
-                            </motion.span>
-                          )}
-                        </AnimatePresence>
-                        <p className="text-2xl font-[Unbounded] font-bold leading-tight">
-                          <BlankSentence text={currentQuestion.sentence} />
-                        </p>
-                        <p className="mt-2 text-sm text-[var(--gray-11)]">{currentQuestion.sentenceRu}</p>
-                      </div>
-                      {rewardDisplay && (
-                        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
-                          <RewardFeedback reward={rewardDisplay} />
-                        </div>
-                      )}
-                    </div>
                   ) : currentQuestion.type === 'listening' ? (
                     <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center pb-8">
                       <div className="relative flex flex-col items-center">
@@ -735,103 +670,6 @@ export function Home() {
                         </div>
                       )}
                     </div>
-                  ) : currentQuestion.type === 'grammar-article' ? (
-                    <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center pb-8 px-4">
-                      <div className="flex items-center justify-center mb-4">
-                        <span className="rounded-full bg-[var(--gray-3)] px-3 py-1 text-xs text-[var(--gray-11)]">
-                          {currentQuestion.exercise.rule}
-                        </span>
-                      </div>
-                      <div className="relative text-center">
-                        <p className="text-2xl font-[Unbounded] font-bold leading-tight">
-                          <BlankSentence
-                            text={currentQuestion.exercise.sentence}
-                            filledValues={answerFeedback ? [answerFeedback.correctAnswer === '—' ? '\u2014' : answerFeedback.correctAnswer] : undefined}
-                            blankState={answerFeedback ? (answerFeedback.isCorrect ? 'correct' : 'wrong') : 'empty'}
-                          />
-                        </p>
-                      </div>
-                      {rewardDisplay && (
-                        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
-                          <RewardFeedback reward={rewardDisplay} />
-                        </div>
-                      )}
-                    </div>
-                  ) : currentQuestion.type === 'grammar-tense' ? (
-                    <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center pb-8 px-4">
-                      <div className="relative text-center">
-                        <h5 className="max-w-full break-words text-2xl font-[Unbounded] font-bold leading-tight text-[var(--gray-12)]">
-                          {currentQuestion.exercise.sentence.split(/(___)/g).map((part, idx) =>
-                            part === '___' ? (
-                              answerFeedback ? (
-                                <span key={idx} className="mx-0.5 inline-block border-b-2 px-1 text-center font-bold border-[var(--green-9)] text-[var(--green-11)]">
-                                  {answerFeedback.correctAnswer}
-                                </span>
-                              ) : (
-                                <span key={idx} className="mx-0.5 inline-block min-w-[3rem] border-b-2 px-1 text-center border-[var(--brand-9)] text-[var(--brand-9)]">
-                                  {'\u00A0'}
-                                </span>
-                              )
-                            ) : (
-                              <span key={idx}>{part}</span>
-                            )
-                          )}
-                        </h5>
-                        <p className="mt-2 text-center text-sm text-[var(--gray-10)]">
-                          {currentQuestion.exercise.sentenceRu}
-                        </p>
-                      </div>
-                      {rewardDisplay && (
-                        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
-                          <RewardFeedback reward={rewardDisplay} />
-                        </div>
-                      )}
-                    </div>
-                  ) : currentQuestion.type === 'grammar-collocation' ? (
-                    <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center pb-8 px-4">
-                      <div className="flex items-center justify-center mb-4">
-                        <span className="text-xs text-[var(--gray-11)]">
-                          {currentQuestion.collocation.type === 'verb_noun' ? 'глагол + существительное'
-                            : currentQuestion.collocation.type === 'adj_noun' ? 'прилагательное + существительное'
-                            : currentQuestion.collocation.type === 'adv_adj' ? 'наречие + прилагательное'
-                            : currentQuestion.collocation.type}
-                        </span>
-                      </div>
-                      <div className="relative text-center text-2xl font-[Unbounded] font-bold leading-tight">
-                        <BlankSentence
-                          text={currentQuestion.collocation.blank}
-                          filledValues={answerFeedback ? [answerFeedback.correctAnswer] : undefined}
-                          blankState={answerFeedback ? (answerFeedback.isCorrect ? 'correct' : 'wrong') : 'empty'}
-                        />
-                      </div>
-                      {answerFeedback && (
-                        <p className="mt-2 text-center text-sm text-[var(--gray-11)]">
-                          {currentQuestion.collocation.translation}
-                        </p>
-                      )}
-                      {rewardDisplay && (
-                        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
-                          <RewardFeedback reward={rewardDisplay} />
-                        </div>
-                      )}
-                    </div>
-                  ) : currentQuestion.type === 'grammar-false-friend' ? (
-                    <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center pb-8">
-                      <p className="font-[Unbounded] font-bold text-[var(--gray-12)]" style={{ fontSize: 'clamp(1.75rem, 10vw, 2.25rem)' }}>
-                        {currentQuestion.word}
-                      </p>
-                      <p className="mt-1 text-sm text-[var(--gray-11)]">Выберите правильный перевод</p>
-                      {rewardDisplay && (
-                        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
-                          <RewardFeedback reward={rewardDisplay} />
-                        </div>
-                      )}
-                    </div>
-                  ) : currentQuestion.type === 'grammar-tense-match' ? (
-                    <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center pb-8">
-                      <h2 className="mb-1 text-2xl font-[Unbounded] font-bold text-[var(--gray-12)]">Соедините времена</h2>
-                      <p className="text-sm text-[var(--gray-11)]">Нажмите на время, затем на его формулу</p>
-                    </div>
                   ) : (
                     <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center pb-8">
                       {/* Word display (multiple-choice / spelling) */}
@@ -891,17 +729,6 @@ export function Home() {
                         onSkip={handleSkip}
                         showSkip
                       />
-                    ) : currentQuestion.type === 'cloze' ? (
-                      <Cloze
-                        options={currentQuestion.options}
-                        questionKey={currentQuestion.meaningId}
-                        selectedAnswer={selectedOption}
-                        feedback={answerFeedback}
-                        disabled={isLoading}
-                        onAnswer={handleAnswer}
-                        onSkip={handleSkip}
-                        showSkip
-                      />
                     ) : currentQuestion.type === 'listening' ? (
                       <Listening
                         options={currentQuestion.options}
@@ -944,179 +771,6 @@ export function Home() {
                         onAnswer={submitAnswer}
                         onTextSubmit={setLastUserAnswer}
                         onSkip={handleSkip}
-                        showSkip
-                      />
-                    ) : currentQuestion.type === 'grammar-article' ? (
-                      <>
-                        <div className="grid grid-cols-4 gap-3">
-                          {(['a', 'an', 'the', '—'] as const).map((option) => {
-                            const isSelected = selectedOption === option;
-                            const isCorrectOption = answerFeedback?.correctAnswer === option;
-                            const isWrongSelected = isSelected && !isCorrectOption && answerFeedback !== null;
-                            const showResult = answerFeedback !== null;
-
-                            return (
-                              <Button
-                                key={option}
-                                variant={
-                                  !showResult ? 'secondary' :
-                                  isCorrectOption ? 'success' :
-                                  isWrongSelected ? 'destructive' :
-                                  'secondary'
-                                }
-                                disabled={showResult && !isSelected && !isCorrectOption}
-                                onClick={() => handleGrammarAnswer(option)}
-                                className={cn(
-                                  'h-14 text-base font-semibold',
-                                  showResult && 'pointer-events-none',
-                                  showResult && isCorrectOption && !answerFeedback?.isCorrect && 'bg-[var(--green-3)] text-[var(--green-12)]',
-                                )}
-                              >
-                                {option === '—' ? '\u2014' : option}
-                              </Button>
-                            );
-                          })}
-                        </div>
-                        <Button
-                          variant="link"
-                          size="sm"
-                          disabled={!!answerFeedback || isLoading}
-                          onClick={handleSkip}
-                          className={cn('mt-4 w-full', (!!answerFeedback || isLoading) && 'opacity-40')}
-                        >
-                          Не знаю
-                        </Button>
-                      </>
-                    ) : currentQuestion.type === 'grammar-tense' ? (
-                      <>
-                        <div className="grid grid-cols-2 gap-3">
-                          {currentQuestion.exercise.options.map((option, idx) => {
-                            const isSelected = selectedOption === option;
-                            const isCorrectOption = answerFeedback ? option === answerFeedback.correctAnswer : false;
-                            const isWrongSelected = isSelected && answerFeedback && !answerFeedback.isCorrect;
-                            const showResult = answerFeedback !== null;
-
-                            return (
-                              <Button
-                                key={`tense-${idx}`}
-                                variant={
-                                  !showResult ? 'secondary' :
-                                  isCorrectOption ? 'success' :
-                                  isWrongSelected ? 'destructive' :
-                                  'secondary'
-                                }
-                                disabled={showResult && !isSelected && !isCorrectOption}
-                                onClick={() => handleGrammarAnswer(option)}
-                                className={cn(
-                                  'h-auto min-h-14 whitespace-normal px-4 py-2 text-center text-sm leading-tight',
-                                  showResult && 'pointer-events-none',
-                                  showResult && isCorrectOption && !answerFeedback?.isCorrect && 'bg-[var(--green-3)] text-[var(--green-12)]',
-                                )}
-                              >
-                                {option}
-                              </Button>
-                            );
-                          })}
-                        </div>
-                        <Button
-                          variant="link"
-                          size="sm"
-                          disabled={!!answerFeedback || isLoading}
-                          onClick={handleSkip}
-                          className={cn('mt-4 w-full', (!!answerFeedback || isLoading) && 'opacity-40')}
-                        >
-                          Не знаю
-                        </Button>
-                      </>
-                    ) : currentQuestion.type === 'grammar-collocation' ? (
-                      <>
-                        <div className="grid grid-cols-2 gap-3">
-                          {currentQuestion.collocation.options.map((option, idx) => {
-                            const isSelected = selectedOption === option;
-                            const isCorrectOption = option === answerFeedback?.correctAnswer;
-                            const isWrongSelected = isSelected && !isCorrectOption;
-                            const showResult = answerFeedback !== null;
-
-                            return (
-                              <Button
-                                key={`coll-${idx}`}
-                                variant={
-                                  !showResult ? 'secondary' :
-                                  isCorrectOption ? 'success' :
-                                  isWrongSelected ? 'destructive' :
-                                  'secondary'
-                                }
-                                disabled={showResult && !isSelected && !isCorrectOption}
-                                onClick={() => handleGrammarAnswer(option)}
-                                className={cn(
-                                  'h-auto min-h-14 whitespace-normal px-4 py-2 text-center text-sm leading-tight',
-                                  showResult && 'pointer-events-none',
-                                  showResult && isCorrectOption && !answerFeedback?.isCorrect && 'bg-[var(--green-3)] text-[var(--green-12)]',
-                                )}
-                              >
-                                {option}
-                              </Button>
-                            );
-                          })}
-                        </div>
-                        <Button
-                          variant="link"
-                          size="sm"
-                          disabled={!!answerFeedback || isLoading}
-                          onClick={handleSkip}
-                          className={cn('mt-4 w-full', (!!answerFeedback || isLoading) && 'opacity-40')}
-                        >
-                          Не знаю
-                        </Button>
-                      </>
-                    ) : currentQuestion.type === 'grammar-false-friend' ? (
-                      <>
-                        <div className="grid grid-cols-2 gap-3">
-                          {currentQuestion.options.map((option, idx) => {
-                            const isSelected = selectedOption === option;
-                            const isCorrectOption = answerFeedback ? option === answerFeedback.correctAnswer : false;
-                            const isWrongSelected = isSelected && !isCorrectOption;
-                            const showResult = answerFeedback !== null;
-
-                            return (
-                              <Button
-                                key={`ff-${idx}`}
-                                variant={
-                                  !showResult ? 'secondary' :
-                                  isCorrectOption ? 'success' :
-                                  isWrongSelected ? 'destructive' :
-                                  'secondary'
-                                }
-                                disabled={(showResult && !isSelected && !isCorrectOption) || isLoading}
-                                onClick={() => handleGrammarAnswer(option)}
-                                className={cn(
-                                  'h-auto min-h-14 whitespace-normal px-4 py-2 text-center text-sm leading-tight',
-                                  showResult && 'pointer-events-none',
-                                  showResult && isCorrectOption && !answerFeedback?.isCorrect && 'bg-[var(--green-3)] text-[var(--green-12)]',
-                                )}
-                              >
-                                {option}
-                              </Button>
-                            );
-                          })}
-                        </div>
-                        <Button
-                          variant="link"
-                          size="sm"
-                          disabled={!!answerFeedback || isLoading}
-                          onClick={handleSkip}
-                          className={cn('mt-4 w-full', (!!answerFeedback || isLoading) && 'opacity-40')}
-                        >
-                          Не знаю
-                        </Button>
-                      </>
-                    ) : currentQuestion.type === 'grammar-tense-match' ? (
-                      <MatchPairs
-                        pairs={currentQuestion.pairs}
-                        questionKey={`tense-match-${currentQuestion.pairs.map(p => p.meaningId).join('-')}`}
-                        disabled={isLoading}
-                        onComplete={handleTenseMatchComplete}
-                        onSkip={handleTenseMatchSkip}
                         showSkip
                       />
                     ) : (

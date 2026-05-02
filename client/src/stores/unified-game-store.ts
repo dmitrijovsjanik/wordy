@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import type { QuizQuestion, GrammarApiQuestion, InfiniteAnswerResponse, LearningTier, LearningAnswerResponse } from '@/types/api';
+import type { QuizQuestion, InfiniteAnswerResponse, LearningTier, LearningAnswerResponse } from '@/types/api';
 import type { AnswerHistoryEntry } from '@/types/game';
-import { quizNext, quizAnswerInfinite, quizAnswerMatchPairs, quizAnswerGrammar, refillLives, learningNext, learningAnswer, ERRORS_COLLECTION_ID } from '@/lib/api';
+import { quizNext, quizAnswerInfinite, quizAnswerMatchPairs, refillLives, learningNext, learningAnswer, ERRORS_COLLECTION_ID } from '@/lib/api';
 import { useLeagueStore } from './league-store';
 import { useCollectionStore } from './collection-store';
 
@@ -72,38 +72,22 @@ function saveHistory(entries: AnswerHistoryEntry[]) {
   localStorage.setItem(HISTORY_DATE_KEY, getMskDay());
 }
 
-/** Type predicate: сужает QuizQuestion до GrammarApiQuestion */
-function isGrammarQuestion(q: QuizQuestion): q is GrammarApiQuestion {
-  return typeof q.type === 'string' && q.type.startsWith('grammar-');
-}
-
 /** Извлекает текст вопроса из QuizQuestion */
 function getQuestionText(q: QuizQuestion): string {
   if (q.type === 'match-pairs') return 'Соедини пары';
-  if (q.type === 'cloze') return q.sentence;
   if (q.type === 'listening' || q.type === 'dictation') return q.audioWord;
   if (q.type === 'free-recall') return q.prompt;
-  if (q.type === 'grammar-article') return q.exercise.sentence;
-  if (q.type === 'grammar-tense') return q.exercise.sentence;
-  if (q.type === 'grammar-collocation') return q.collocation.blank;
-  if (q.type === 'grammar-false-friend') return q.word;
-  if (q.type === 'grammar-tense-match') return 'Соедини времена';
   return q.word;
 }
 
 /** Извлекает правильный ответ из QuizQuestion */
 function getCorrectAnswer(q: QuizQuestion): string {
   if (q.type === 'match-pairs') return '';
-  if (q.type === 'grammar-tense-match') return '';
-  if (q.type === 'cloze' || q.type === 'listening') return q.correctAnswer;
+  if (q.type === 'listening') return q.correctAnswer;
   if (q.type === 'dictation') return q.correctAnswer;
   if (q.type === 'free-recall') return q.acceptableAnswers[0] ?? '';
   if (q.type === 'spelling') return q.correctSpelling ?? '';
   if (q.type === 'encounter') return q.translation;
-  if (q.type === 'grammar-article') return q.exercise.blanks[0]?.correctAnswer ?? '';
-  if (q.type === 'grammar-tense') return q.exercise.correctAnswer;
-  if (q.type === 'grammar-collocation') return q.collocation.correctAnswer;
-  if (q.type === 'grammar-false-friend') return q.correctAnswer;
   return q.correctTranslation ?? '';
 }
 
@@ -122,12 +106,9 @@ export type QuestionGeneratorMode =
 function getGeneratorTypeFromQuestion(question: QuizQuestion): string {
   if (question.type === 'match-pairs') return 'match-pairs';
   if (question.type === 'spelling') return 'spelling';
-  if (question.type === 'cloze') return 'cloze';
   if (question.type === 'listening') return 'listening';
   if (question.type === 'dictation') return 'dictation';
   if (question.type === 'free-recall') return 'free-recall';
-  // Grammar types
-  if (typeof question.type === 'string' && question.type.startsWith('grammar-')) return question.type;
   // QuizQuestionBase / Spelling — единственные с .direction
   return 'direction' in question && typeof question.direction === 'string' ? question.direction : 'en-ru';
 }
@@ -165,7 +146,6 @@ type UnifiedGameState = {
   fetchNext: () => Promise<void>;
   submitAnswer: (selectedMeaningId: number | null, userAnswer?: string, skip?: boolean) => Promise<void>;
   submitEncounter: () => Promise<void>;
-  submitGrammarAnswer: (answer: string, skip?: boolean) => Promise<void>;
   submitMatchPairsResults: (results: Array<{ meaningId: number; isCorrect: boolean }>) => Promise<void>;
   skip: () => Promise<void>;
   reset: () => void;
@@ -314,10 +294,10 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
 
   submitAnswer: async (selectedMeaningId, userAnswer?, isSkip?) => {
     const { currentQuestion, currentQuestionSource, recentMeaningIds, lastUserAnswer } = get();
-    if (!currentQuestion || currentQuestion.type === 'match-pairs' || isGrammarQuestion(currentQuestion)) return;
+    if (!currentQuestion || currentQuestion.type === 'match-pairs') return;
 
     // После guard'а тип сужен до вопросов с meaningId
-    const meaningId = (currentQuestion as Exclude<QuizQuestion, { type: 'match-pairs' } | GrammarApiQuestion>).meaningId;
+    const meaningId = (currentQuestion as Exclude<QuizQuestion, { type: 'match-pairs' }>).meaningId;
     // Encounter: пользователь нажал «Понятно» → всегда isCorrect=true.
     const isEncounter = currentQuestion.type === 'encounter';
     const computedIsCorrect = isEncounter || selectedMeaningId === meaningId;
@@ -426,89 +406,6 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
     }
   },
 
-  submitGrammarAnswer: async (answer, isSkip?) => {
-    const { currentQuestion } = get();
-    if (!currentQuestion || !isGrammarQuestion(currentQuestion)) return;
-
-    set({ isLoading: true });
-    try {
-      const grammarType = currentQuestion.type;
-
-      // Определяем params для проверки
-      let grammarParams: { exerciseIndex?: number; blankIndex?: number; collocationIndex?: number; questionIndex?: number } = {};
-      if (currentQuestion.type === 'grammar-article') {
-        grammarParams = { exerciseIndex: currentQuestion.exerciseIndex };
-      } else if (currentQuestion.type === 'grammar-tense') {
-        grammarParams = { exerciseIndex: currentQuestion.exerciseIndex };
-      } else if (currentQuestion.type === 'grammar-collocation') {
-        grammarParams = { collocationIndex: currentQuestion.collocationIndex };
-      } else if (currentQuestion.type === 'grammar-false-friend') {
-        grammarParams = { questionIndex: currentQuestion.questionIndex };
-      }
-
-      const res = await quizAnswerGrammar(grammarType, answer, get().streak, grammarParams, isSkip);
-      const newStreak = res.isCorrect ? get().streak + 1 : 0;
-      saveStreak(newStreak);
-
-      if (res.totalLp !== undefined) {
-        useLeagueStore.getState().updateLp(res.totalLp);
-      }
-
-      // Записываем в историю ответов
-      const correctAnswerText = res.correctAnswer || getCorrectAnswer(currentQuestion) || '';
-      const entry: AnswerHistoryEntry = {
-        question: getQuestionText(currentQuestion),
-        userAnswer: answer,
-        correctAnswer: correctAnswerText,
-        isCorrect: res.isCorrect,
-        type: currentQuestion.type,
-        timestamp: Date.now(),
-      };
-      const updatedHistory = [entry, ...get().answerHistory].slice(0, 200);
-      saveHistory(updatedHistory);
-
-      // Update lives from grammar response
-      const grammarLivesUpdate: Partial<UnifiedGameState> = {};
-      if (res.lives !== undefined) grammarLivesUpdate.lives = res.lives;
-      if (res.livesRestoredAt !== undefined) grammarLivesUpdate.livesRestoredAt = res.livesRestoredAt ?? null;
-      if (res.livesExhausted) grammarLivesUpdate.livesExhausted = true;
-
-      // Формируем feedback в формате InfiniteAnswerResponse
-      set({
-        feedback: {
-          isCorrect: res.isCorrect,
-          correctTranslation: correctAnswerText,
-          xpEarned: res.xpEarned,
-          xpModifier: res.xpModifier,
-          totalXp: res.totalXp,
-          totalLp: res.totalLp,
-          level: res.level,
-          levelUp: res.levelUp,
-          lpEarned: res.lpEarned,
-          lpModifier: res.lpModifier,
-          gemsEarned: res.gemsEarned,
-          dailyCorrectCount: res.dailyCorrectCount,
-          meaningId: 0, // grammar questions have no meaningId
-        },
-        isLoading: false,
-        streak: newStreak,
-        questionIndex: get().questionIndex + 1,
-        answerHistory: updatedHistory,
-        lastUserAnswer: null,
-        ...grammarLivesUpdate,
-      });
-
-      if (!res.livesExhausted) {
-        setTimeout(() => {
-          set({ feedback: null });
-          get().fetchNext();
-        }, 1200);
-      }
-    } catch {
-      set({ isLoading: false, error: 'Ошибка при отправке ответа' });
-    }
-  },
-
   submitMatchPairsResults: async (results) => {
     const { currentQuestion, recentMeaningIds } = get();
     if (!currentQuestion || currentQuestion.type !== 'match-pairs') return;
@@ -594,11 +491,6 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
   skip: async () => {
     const { currentQuestion } = get();
     if (!currentQuestion) return;
-    if (isGrammarQuestion(currentQuestion)) {
-      // Пропуск грамматики = пустой ответ (неправильно), без траты жизни
-      await get().submitGrammarAnswer('', true);
-      return;
-    }
     // Encounter не пропускается — он уже sub-action «Понятно»; просто игнорируем.
     if (currentQuestion.type === 'encounter') return;
     // Пропуск = ответ null (неправильно), без траты жизни

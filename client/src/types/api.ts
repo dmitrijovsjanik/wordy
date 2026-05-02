@@ -258,15 +258,17 @@ export type LearningAnswerResponse = {
   livesExhausted: boolean;
 };
 
+// QuizQuestion — типы вопросов, которые могут прийти на главную и в дуэли.
+// Cloze (только production-tier, off) и Grammar (отдельная страница /grammar
+// со своими endpoint'ами) сюда не входят. ClozeApiQuestion/GrammarApiQuestion
+// сохраняются в файле для совместимости со старым quiz-service на сервере.
 export type QuizQuestion =
   | QuizQuestionBase
   | MatchPairsApiQuestion
-  | ClozeApiQuestion
   | ListeningApiQuestion
   | DictationApiQuestion
   | FreeRecallApiQuestion
-  | EncounterCardApiQuestion
-  | GrammarApiQuestion;
+  | EncounterCardApiQuestion;
 
 export type QuizStartResponse = {
   sessionId: number;
