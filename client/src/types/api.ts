@@ -88,6 +88,7 @@ export type DictationApiQuestion = {
   hint: string;
   correctAnswer: string;
   acceptableAnswers: string[];
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
   doubleXpTimeLimitMs?: number;
 };
 
@@ -100,6 +101,7 @@ export type FreeRecallApiQuestion = {
   transcription: string | null;
   audioWord?: string;
   acceptableAnswers: string[];
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
   doubleXpTimeLimitMs?: number;
 };
 

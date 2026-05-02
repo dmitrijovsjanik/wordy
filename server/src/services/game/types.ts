@@ -142,6 +142,7 @@ export type DictationQuestion = {
   hint: string;                // перевод (подсказка)
   correctAnswer: string;       // правильное написание
   acceptableAnswers: string[]; // допустимые варианты
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
   doubleXpTimeLimitMs?: number;
 };
 
@@ -154,6 +155,7 @@ export type FreeRecallQuestion = {
   transcription: string | null; // только для en→ru
   audioWord?: string;          // для TTS (en слово)
   acceptableAnswers: string[]; // все допустимые ответы
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
   doubleXpTimeLimitMs?: number;
 };
 

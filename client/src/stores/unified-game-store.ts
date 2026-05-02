@@ -331,6 +331,10 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
 
       if (currentQuestionSource === 'learning') {
         // Новый flow: /api/learning/answer.
+        // Для свободного ввода (dictation/free-recall) — прокидываем
+        // acceptableAnswers и partOfSpeech, чтобы сервер сам перевалидировал
+        // через text-normalizer и не доверял слепо клиентскому isCorrect.
+        const isFreeInput = currentQuestion.type === 'dictation' || currentQuestion.type === 'free-recall';
         const learnRes = await learningAnswer({
           meaningId,
           isCorrect: computedIsCorrect,
@@ -338,6 +342,10 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
           streak: get().streak,
           skip: isSkip,
           userAnswer,
+          ...(isFreeInput ? {
+            acceptableAnswers: currentQuestion.acceptableAnswers,
+            partOfSpeech: currentQuestion.partOfSpeech,
+          } : {}),
         });
         // Адаптер → совместимый InfiniteAnswerResponse для feedback panel.
         const correctTranslation = currentQuestion.type === 'encounter'

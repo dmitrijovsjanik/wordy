@@ -39,6 +39,7 @@ export function generateFreeRecallFromMeaning(
       transcription: correct.word.transcription,
       audioWord: englishWord,
       acceptableAnswers,
+      partOfSpeech: correct.partOfSpeech,
     };
   } else {
     // Показываем русский перевод → пользователь пишет английское слово
@@ -58,6 +59,7 @@ export function generateFreeRecallFromMeaning(
       transcription: null,
       audioWord: englishWord,
       acceptableAnswers: unique,
+      partOfSpeech: correct.partOfSpeech,
     };
   }
 }

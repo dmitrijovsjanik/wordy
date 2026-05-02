@@ -40,5 +40,6 @@ export function generateDictationFromMeaning(
     hint: correct.translation,
     correctAnswer: word,
     acceptableAnswers: [...acceptableSet],
+    partOfSpeech: correct.partOfSpeech,
   };
 }
