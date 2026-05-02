@@ -454,13 +454,22 @@ export async function applySwipe(input: ApplySwipeInput): Promise<void> {
 
   if (action === 'unknown') {
     if (existing) {
-      // Если уже учили — оставляем текущий прогресс. Свайп «не знаю» в обзоре
-      // на уже изучаемом слове = шумный сигнал, не перезаписываем.
-      // Только меняем state→learning и снимаем snooze, если был.
+      // Юзер сказал «не знаю» в обзоре — сбрасываем tier на encounter,
+      // даже если слово было на passive/active/review. Без этого, например,
+      // слово после плейсмент-калибровки (где markLowerLevelWordsAsLearned
+      // ставит tier=review) могло бы получить сразу active recall, что
+      // противоречит сигналу «не знаю».
+      // Counter'ы correct/incorrect сохраняем — это историческая статистика.
       await db
         .update(userWordProgress)
         .set({
           state: 'learning',
+          learningTier: 'encounter',
+          tierCorrectCount: 0,
+          reviewStage: 0,
+          hasPenalty: false,
+          nextReviewAt: now, // сразу готов к показу
+          fromPlacement: false,
           snoozedUntil: null,
           lastSeenAt: now,
           updatedAt: now,
