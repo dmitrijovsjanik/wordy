@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import crypto from 'node:crypto';
 import { isAdmin } from '../config/admin-config.js';
 import * as adminService from '../services/admin-service.js';
+import { getLearningAnalyticsSummary } from '../services/analytics-service.js';
 
 /**
  * Проверка hash от Telegram Login Widget.
@@ -102,6 +103,11 @@ export default async function adminRoutes(app: FastifyInstance) {
     // Dashboard: SRS
     protectedApp.get('/api/admin/stats/srs', async () => {
       return adminService.getSrsStats();
+    });
+
+    // Dashboard: Learning Analytics (retention/funnel/question-type-distribution из learning_events)
+    protectedApp.get('/api/admin/stats/learning-analytics', async () => {
+      return getLearningAnalyticsSummary();
     });
 
     // Users List

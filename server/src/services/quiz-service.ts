@@ -38,6 +38,7 @@ import { getAdaptiveLevel } from './game/adaptive.js';
 import { checkAndAwardMilestones } from './milestone-service.js';
 import { generateGrammarQuestion, checkGrammarAnswer, GRAMMAR_EVERY_N, type GrammarQuestion, type GrammarType } from './game/generators/grammar.js';
 import { consumeLife, getLivesStatus } from './lives-service.js';
+import { recordEvent } from './analytics-service.js';
 
 const QUESTIONS_PER_SESSION = 10;
 
@@ -48,6 +49,11 @@ export async function createSession(userId: number) {
     .insert(quizSessions)
     .values({ userId, type: 'solo' })
     .returning();
+  await recordEvent({
+    userId,
+    eventType: 'session_started',
+    payload: { sessionType: 'solo', sessionId: session!.id },
+  });
   return session!;
 }
 
@@ -666,6 +672,15 @@ export async function recordInfiniteAnswer(
     }
   }
 
+  // Аналитика: пишем событие до начислений, чтобы оно осело даже если дальше упадёт
+  await recordEvent({
+    userId,
+    eventType: skip ? 'question_skipped' : 'question_answered',
+    meaningId: isCustom ? null : meaningId,
+    isCorrect: skip ? null : isCorrect,
+    payload: { isCustom, streak, doubleXpClaimed },
+  });
+
   // Начисляем XP и LP с модификаторами streak через progression-service
   if (isCorrect) {
     // Double XP: проверяем серверный трекер
@@ -957,6 +972,16 @@ export async function recordMatchPairsAnswer(
         });
       }
     }
+
+    // Аналитика: каждая пара = одно событие question_answered с типом match-pairs
+    await recordEvent({
+      userId,
+      eventType: 'question_answered',
+      meaningId: isCustom ? null : meaningId,
+      questionType: 'match-pairs',
+      isCorrect,
+      payload: { isCustom, batchSize: results.length },
+    });
 
     // Награды за правильный ответ
     if (isCorrect) {
@@ -1267,6 +1292,18 @@ export async function finishSession(sessionId: number, userId: number) {
     .update(quizSessions)
     .set({ xpEarned: result.xpEarned, finishedAt: new Date() })
     .where(eq(quizSessions.id, sessionId));
+
+  await recordEvent({
+    userId,
+    eventType: 'session_finished',
+    payload: {
+      sessionId,
+      sessionType: session.type,
+      correctCount: session.correctCount,
+      totalCount: session.totalCount,
+      xpEarned: result.xpEarned,
+    },
+  });
 
   return {
     correctCount: session.correctCount,

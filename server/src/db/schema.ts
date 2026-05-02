@@ -74,6 +74,49 @@ export const leagueNotificationTypeEnum = pgEnum('league_notification_type', [
   'maintained',
 ]);
 
+// Уровень освоения слова на лестнице (используется в learning_events и в user_word_progress (фаза 2)).
+// encounter — первое знакомство; passive — узнавание; active — активное припоминание;
+// production — слово в предложении (отложено в MVP); review — после освоения, интервальные повторения.
+export const learningTierEnum = pgEnum('learning_tier', [
+  'encounter',
+  'passive',
+  'active',
+  'production',
+  'review',
+]);
+
+// Состояние записи user_word_progress.
+// `learning` — слово в очереди обучения, идёт по лестнице.
+// `known_from_review` — отмечено «знаю» в обзоре или через bulk-mark из плейсмента; не учим.
+// `snoozed` — отложено в обзоре, вернётся после snoozed_until.
+export const learningStateEnum = pgEnum('learning_state', [
+  'learning',
+  'known_from_review',
+  'snoozed',
+]);
+
+// Append-only лог обучающих событий. Источник правды для retention/funnel-аналитики.
+export const learningEventTypeEnum = pgEnum('learning_event_type', [
+  // Сессии (текущие — solo/duel; в будущем — learning-session из learning-service)
+  'session_started',
+  'session_finished',
+  // Жизненный цикл вопроса
+  'question_shown',
+  'question_answered',
+  'question_skipped',
+  // Лестница (заработают после фазы 2)
+  'tier_advanced',
+  'tier_reset',
+  'meaning_learned',
+  'meaning_relearn',
+  // Свайпы в обзоре (заработают после фазы 4)
+  'review_swiped_known',
+  'review_swiped_unknown',
+  'review_swiped_snooze',
+  // Онбординг (плейсмент-тест)
+  'onboarding_step',
+]);
+
 // ─── Users ───────────────────────────────────────────────────────────────────
 
 export const users = pgTable('users', {
@@ -356,13 +399,18 @@ export const userWordProgress = pgTable(
       .notNull(),
     correctCount: integer('correct_count').default(0).notNull(),
     incorrectCount: integer('incorrect_count').default(0).notNull(),
-    srsStage: integer('srs_stage').default(0).notNull(), // 0-3 learning progress (3 = learned)
+    srsStage: integer('srs_stage').default(0).notNull(), // 0-3 learning progress (3 = learned). LEGACY (заменяется на learning_tier).
     hasPenalty: boolean('has_penalty').default(false).notNull(),
     reviewStage: integer('review_stage').default(0).notNull(), // index into review intervals after learned
     nextReviewAt: timestamp('next_review_at'),
-    masteredAt: timestamp('mastered_at'), // set when srsStage reaches 3 (learned)
-    fromPlacement: boolean('from_placement').default(false).notNull(), // true = слово помечено выученным через онбординг, не через квизы
+    masteredAt: timestamp('mastered_at'), // set when learning_tier reaches 'review'
+    fromPlacement: boolean('from_placement').default(false).notNull(), // true = слово помечено через онбординг
     lastSeenAt: timestamp('last_seen_at').defaultNow().notNull(),
+    // Phase 2: новые поля под лестницу освоения.
+    learningTier: learningTierEnum('learning_tier').default('encounter').notNull(),
+    tierCorrectCount: integer('tier_correct_count').default(0).notNull(),
+    state: learningStateEnum('state').default('learning').notNull(),
+    snoozedUntil: timestamp('snoozed_until'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -370,6 +418,8 @@ export const userWordProgress = pgTable(
     uniqueIndex('user_word_progress_uniq').on(table.userId, table.meaningId),
     index('user_word_progress_user_idx').on(table.userId),
     index('user_word_progress_review_idx').on(table.userId, table.nextReviewAt),
+    index('user_word_progress_state_idx').on(table.userId, table.state),
+    index('user_word_progress_snoozed_idx').on(table.userId, table.snoozedUntil),
   ],
 );
 
@@ -553,6 +603,35 @@ export const wordAiContent = pgTable(
   (table) => [
     uniqueIndex('word_ai_content_meaning_type_uniq').on(table.meaningId, table.contentType),
     index('word_ai_content_meaning_idx').on(table.meaningId),
+  ],
+);
+
+// ─── Learning Events ────────────────────────────────────────────────────────
+
+// Append-only event log для аналитики обучающего потока.
+// Никогда не редактируется. Один источник правды для D1/D7 retention,
+// funnel первой сессии и распределения типов вопросов.
+export const learningEvents = pgTable(
+  'learning_events',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    eventType: learningEventTypeEnum('event_type').notNull(),
+    meaningId: integer('meaning_id').references(() => wordMeanings.id, { onDelete: 'set null' }),
+    tierBefore: learningTierEnum('tier_before'),
+    tierAfter: learningTierEnum('tier_after'),
+    questionType: varchar('question_type', { length: 32 }),
+    isCorrect: boolean('is_correct'),
+    answerTimeMs: integer('answer_time_ms'),
+    payload: jsonb('payload').$type<Record<string, unknown>>(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('learning_events_user_created_idx').on(table.userId, table.createdAt),
+    index('learning_events_type_created_idx').on(table.eventType, table.createdAt),
+    index('learning_events_meaning_idx').on(table.meaningId),
   ],
 );
 

@@ -10,6 +10,7 @@ import {
   PERCENTILE_BY_LEVEL, SESSION_TTL_MS,
   type PlacementCefrLevel,
 } from '../config/placement-config.js';
+import { recordEvent } from './analytics-service.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -251,6 +252,12 @@ export async function startPlacement(
   const question = await generateQuestion(pick.meaningId);
   if (!question) return null;
 
+  await recordEvent({
+    userId,
+    eventType: 'onboarding_step',
+    payload: { step: 'placement_started', selfAssessment: selfAssessment ?? null, startLevel },
+  });
+
   return {
     question,
     questionNumber: 1,
@@ -293,6 +300,20 @@ export async function answerPlacement(
     cefrLevel: session.currentLevel,
     isCorrect,
     answerTimeMs,
+  });
+
+  await recordEvent({
+    userId,
+    eventType: 'onboarding_step',
+    meaningId,
+    questionType: 'multiple-choice',
+    isCorrect,
+    answerTimeMs,
+    payload: {
+      step: 'placement_answered',
+      level: session.currentLevel,
+      questionNumber: session.answers.length,
+    },
   });
 
   // Adapt difficulty
@@ -421,6 +442,18 @@ export async function completePlacement(userId: number): Promise<{
   // Cleanup session
   sessions.delete(userId);
 
+  await recordEvent({
+    userId,
+    eventType: 'onboarding_step',
+    payload: {
+      step: 'placement_completed',
+      resultCefr,
+      correctCount,
+      totalQuestions,
+      estimatedVocabulary,
+    },
+  });
+
   return {
     resultCefr,
     estimatedVocabulary,
@@ -470,6 +503,12 @@ export async function finalizePlacement(
     .update(users)
     .set({ onboardingCompletedAt: new Date(), updatedAt: new Date() })
     .where(eq(users.id, userId));
+
+  await recordEvent({
+    userId,
+    eventType: 'onboarding_step',
+    payload: { step: 'placement_finalized', mode, resultCefr },
+  });
 }
 
 /**
@@ -579,6 +618,12 @@ export async function skipPlacement(
       updatedAt: new Date(),
     })
     .where(eq(users.id, userId));
+
+  await recordEvent({
+    userId,
+    eventType: 'onboarding_step',
+    payload: { step: 'placement_skipped', selectedCefr, resultCefr },
+  });
 
   return { resultCefr };
 }

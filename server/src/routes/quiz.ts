@@ -14,6 +14,7 @@ import type { LanguagePair, GeneratorType } from '../services/game/types.js';
 import type { GrammarType } from '../services/game/generators/grammar.js';
 import { ERRORS_COLLECTION_ID } from '../config/errors-config.js';
 import { getAiHints } from '../services/ai-content-service.js';
+import { recordEvent } from '../services/analytics-service.js';
 
 const VALID_GENERATORS = new Set<string>(['en-ru', 'ru-en', 'spelling', 'match-pairs', 'cloze', 'listening', 'dictation', 'free-recall', 'grammar-article', 'grammar-tense', 'grammar-collocation', 'grammar-false-friend', 'grammar-tense-match']);
 
@@ -95,6 +96,26 @@ export default async function quizRoutes(app: FastifyInstance) {
       recentTotal,
       questionIndex,
     );
+
+    // Аналитика: фиксируем тип реально показанного вопроса. Для match-pairs/grammar
+    // meaningId недоступен на уровне вопроса (он на уровне пары/grammar-exercise),
+    // поэтому пишем без meaning_id для них.
+    if (question) {
+      type QuestionWithMeaning = { meaningId?: number; type?: string; direction?: string };
+      const q = question as QuestionWithMeaning;
+      const qType = q.type ?? q.direction ?? 'multiple-choice';
+      await recordEvent({
+        userId: request.user.id,
+        eventType: 'question_shown',
+        meaningId: typeof q.meaningId === 'number' ? q.meaningId : null,
+        questionType: qType,
+        payload: {
+          collectionId: rawCollectionId ?? null,
+          questionIndex,
+        },
+      });
+    }
+
     return { question };
   });
 
