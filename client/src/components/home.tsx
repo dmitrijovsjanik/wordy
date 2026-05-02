@@ -14,6 +14,7 @@ import { LEAGUE_ICONS } from '@/components/ui/league-icons';
 import { WordDisplay } from '@/components/game/word-display';
 import { MultipleChoice } from '@/components/game/question-types/multiple-choice';
 import { Spelling } from '@/components/game/question-types/spelling';
+import { EncounterCard } from '@/components/game/question-types/encounter-card';
 import { RewardFeedback } from '@/components/game/reward-feedback';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QuizContainer } from '@/components/game/quiz-container';
@@ -71,7 +72,9 @@ export function Home() {
     submitAnswer,
     submitGrammarAnswer,
     submitMatchPairsResults,
+    submitEncounter,
     skip,
+    currentTier,
     expireDoubleXp,
     setLastUserAnswer,
     clearHistory,
@@ -206,9 +209,14 @@ export function Home() {
 
   // Запоминаем ID первого вопроса
   if (currentQuestion && firstMeaningIdRef.current === null) {
-    firstMeaningIdRef.current = currentQuestion.type === 'match-pairs'
-      ? currentQuestion.pairs[0]?.meaningId ?? null
-      : currentQuestion.meaningId;
+    if (currentQuestion.type === 'match-pairs') {
+      firstMeaningIdRef.current = currentQuestion.pairs[0]?.meaningId ?? null;
+    } else if (typeof currentQuestion.type === 'string' && currentQuestion.type.startsWith('grammar-')) {
+      // grammar-вопросы не имеют meaningId
+      firstMeaningIdRef.current = null;
+    } else {
+      firstMeaningIdRef.current = (currentQuestion as { meaningId: number }).meaningId;
+    }
   }
 
   // Хаптик при фидбеке
@@ -263,6 +271,9 @@ export function Home() {
 
   const handleAnswer = useCallback((option: string) => {
     if (feedback || isLoading || !currentQuestion || currentQuestion.type === 'match-pairs') return;
+    // Encounter и grammar обрабатываются собственными хендлерами.
+    if (currentQuestion.type === 'encounter') return;
+    if (typeof currentQuestion.type === 'string' && currentQuestion.type.startsWith('grammar-')) return;
     hapticImpact('light');
     setSelectedOption(option);
 
@@ -281,12 +292,17 @@ export function Home() {
       case 'free-recall':
         // Текстовый ввод — обрабатываются отдельными компонентами
         return;
-      default:
-        correctAnswer = currentQuestion.correctTranslation;
+      default: {
+        // QuizQuestionBase (multiple-choice). После guard'ов выше тип сужен,
+        // но TS не выводит это полностью — используем явный cast.
+        const q = currentQuestion as { correctTranslation?: string; meaningId: number };
+        correctAnswer = q.correctTranslation;
+      }
     }
 
+    const meaningId = (currentQuestion as { meaningId: number }).meaningId;
     const isCorrectGuess = option === correctAnswer;
-    submitAnswer(isCorrectGuess ? currentQuestion.meaningId : null, option);
+    submitAnswer(isCorrectGuess ? meaningId : null, option);
   }, [feedback, isLoading, currentQuestion, hapticImpact, submitAnswer]);
 
   const handleGrammarAnswer = useCallback((answer: string) => {
@@ -534,8 +550,30 @@ export function Home() {
                     Все ошибки пройдены!
                   </h2>
                 </div>
+              ) : currentQuestion && currentQuestion.type === 'encounter' ? (
+                <div className="flex min-h-0 flex-1 flex-col justify-center px-2">
+                  {/* 3-сигнальный прогресс: encounter = «Новое» */}
+                  {currentTier === 'encounter' && (
+                    <div className="mb-3 flex justify-center">
+                      <Badge variant="secondary">Новое слово</Badge>
+                    </div>
+                  )}
+                  <EncounterCard
+                    question={currentQuestion}
+                    disabled={isLoading || feedback !== null}
+                    onAnswer={() => submitEncounter()}
+                  />
+                </div>
               ) : currentQuestion && (
                 <>
+                  {/* 3-сигнальный прогресс: passive/active = «В процессе», review = «Знакомое» */}
+                  {currentTier && currentTier !== 'encounter' && (
+                    <div className="mb-2 flex justify-center">
+                      <Badge variant="secondary">
+                        {currentTier === 'review' || currentTier === 'production' ? 'Знакомое' : 'В процессе'}
+                      </Badge>
+                    </div>
+                  )}
                   {/* Word / Title area */}
                   {currentQuestion.type === 'match-pairs' ? (
                     <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center pb-8">

@@ -30,6 +30,8 @@ import type {
   PlacementStartResponse,
   PlacementAnswerResponse,
   PlacementCompleteResponse,
+  LearningNextResponse,
+  LearningAnswerResponse,
 } from '@/types/api';
 
 const TOKEN_KEY = 'wordy_token';
@@ -110,6 +112,34 @@ export function quizAnswer(data: QuizAnswerRequest) {
 
 export function quizFinish(sessionId: number) {
   return fetchApi<QuizResultResponse>('POST', '/api/quiz/finish', { sessionId });
+}
+
+// ─── Learning API (новая лестница, фаза 3) ─────────────────────────────────
+
+export function learningNext(opts: { collectionId?: number | string; recentGenerators?: string[] } = {}) {
+  const params = new URLSearchParams();
+  if (opts.recentGenerators?.length) params.set('generators', opts.recentGenerators.join(','));
+  if (opts.collectionId !== undefined) params.set('collectionId', String(opts.collectionId));
+  const qs = params.toString();
+  return fetchApi<LearningNextResponse>('GET', `/api/learning/next${qs ? '?' + qs : ''}`);
+}
+
+export function learningAnswer(input: {
+  meaningId: number;
+  isCorrect: boolean;
+  questionType?: string;
+  answerTimeMs?: number;
+  streak?: number;
+  skip?: boolean;
+  userAnswer?: string;
+  acceptableAnswers?: string[];
+  partOfSpeech?: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+}) {
+  return fetchApi<LearningAnswerResponse>('POST', '/api/learning/answer', input);
+}
+
+export function learningSwipe(input: { meaningId: number; action: 'known' | 'unknown' | 'snooze'; snoozeDays?: number }) {
+  return fetchApi<{ ok: boolean }>('POST', '/api/learning/swipe', input);
 }
 
 // Duels

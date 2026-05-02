@@ -17,9 +17,9 @@
  *   - Лестницу пользователь не видит явно — это внутренняя логика отбора.
  */
 
-import { eq, and, sql, isNull, or, lte, ne } from 'drizzle-orm';
+import { eq, and, sql, isNull, or, lte, ne, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { userWordProgress } from '../db/schema.js';
+import { userWordProgress, collectionWords } from '../db/schema.js';
 import { learningConfig, type ExerciseType } from '../config/learning-config.js';
 import { recordEvent, type LearningTier } from './analytics-service.js';
 
@@ -527,10 +527,21 @@ export async function applySwipe(input: ApplySwipeInput): Promise<void> {
  */
 export async function pickNextItem(
   userId: number,
-  opts: { excludeMeaningIds?: number[] } = {},
+  opts: { excludeMeaningIds?: number[]; collectionId?: number } = {},
 ): Promise<{ meaningId: number; tier: LearningTier } | null> {
   const exclude = opts.excludeMeaningIds ?? [];
   const now = new Date();
+
+  // Если задан collectionId — ограничиваем пул meanings из этой коллекции.
+  let collectionFilter: ReturnType<typeof inArray> | null = null;
+  if (typeof opts.collectionId === 'number') {
+    const meaningIds = await db
+      .select({ meaningId: collectionWords.meaningId })
+      .from(collectionWords)
+      .where(eq(collectionWords.collectionId, opts.collectionId));
+    if (meaningIds.length === 0) return null;
+    collectionFilter = inArray(userWordProgress.meaningId, meaningIds.map(r => r.meaningId));
+  }
 
   // Берём 1 строку: подходящие записи, отсортированные по tier-приоритету и nextReviewAt.
   // tier_priority: review=0, active=1, production=2, passive=3, encounter=4.
@@ -553,6 +564,7 @@ export async function pickNextItem(
       )!,
       // production отключён — пропускаем.
       ne(userWordProgress.learningTier, 'production'),
+      ...(collectionFilter ? [collectionFilter] : []),
       ...(exclude.length > 0
         ? [sql`${userWordProgress.meaningId} NOT IN (${sql.join(exclude.map(id => sql`${id}`), sql`, `)})`]
         : []),

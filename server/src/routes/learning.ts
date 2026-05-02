@@ -26,16 +26,21 @@ import { normalizeAndCompare } from '../services/text-normalizer.js';
  * Найти неизученное слово в активных коллекциях пользователя и создать
  * для него encounter-запись. Возвращает meaning_id или null.
  */
-async function introduceUnseenMeaning(userId: number): Promise<number | null> {
+async function introduceUnseenMeaning(userId: number, collectionId?: number): Promise<number | null> {
+  // Если задан collectionId — берём слова только из этой коллекции; иначе — из всех активных подписок.
+  const collectionFilter = typeof collectionId === 'number'
+    ? sql`wm.id IN (SELECT cw.meaning_id FROM collection_words cw WHERE cw.collection_id = ${collectionId})`
+    : sql`wm.id IN (
+        SELECT cw.meaning_id FROM collection_words cw
+        JOIN user_collections uc ON uc.collection_id = cw.collection_id
+        WHERE uc.user_id = ${userId} AND uc.is_active = true
+      )`;
+
   const result = await db.execute(sql`
     SELECT wm.id AS meaning_id
     FROM word_meanings wm
     JOIN words w ON w.id = wm.word_id
-    WHERE wm.id IN (
-      SELECT cw.meaning_id FROM collection_words cw
-      JOIN user_collections uc ON uc.collection_id = cw.collection_id
-      WHERE uc.user_id = ${userId} AND uc.is_active = true
-    )
+    WHERE ${collectionFilter}
       AND wm.id NOT IN (
         SELECT meaning_id FROM user_word_progress WHERE user_id = ${userId}
       )
@@ -92,17 +97,19 @@ export default async function learningRoutes(app: FastifyInstance) {
   // ─── GET /api/learning/next ────────────────────────────────────────────
   // Возвращает следующее упражнение по приоритету tier'ов.
 
-  app.get<{ Querystring: { generators?: string } }>('/api/learning/next', async (request) => {
+  app.get<{ Querystring: { generators?: string; collectionId?: string } }>('/api/learning/next', async (request) => {
     const userId = request.user.id;
     const generatorsStr = request.query.generators ?? '';
     const recentGenerators = generatorsStr ? generatorsStr.split(',').filter(Boolean) : [];
+    const collectionId = request.query.collectionId ? Number(request.query.collectionId) : undefined;
+    const validCollectionId = typeof collectionId === 'number' && !Number.isNaN(collectionId) ? collectionId : undefined;
 
     // 1) Пробуем выбрать из текущего прогресса.
-    let pick = await pickNextItem(userId);
+    let pick = await pickNextItem(userId, { collectionId: validCollectionId });
 
     // 2) Если ничего не готово — вводим новое неизученное слово.
     if (!pick) {
-      const newMeaningId = await introduceUnseenMeaning(userId);
+      const newMeaningId = await introduceUnseenMeaning(userId, validCollectionId);
       if (newMeaningId !== null) {
         pick = { meaningId: newMeaningId, tier: 'encounter' };
       }

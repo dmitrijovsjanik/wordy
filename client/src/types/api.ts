@@ -173,6 +173,52 @@ export type GrammarApiQuestion =
   | GrammarFalseFriendApiQuestion
   | GrammarTenseMatchApiQuestion;
 
+// Encounter card — пассивный показ слова на первом уровне лестницы.
+// Без проверки. Клиент рендерит карточку и одну кнопку «Понятно»,
+// которая → answer({isCorrect: true}).
+export type EncounterCardApiQuestion = {
+  type: 'encounter';
+  meaningId: number;
+  word: string;
+  originalForm: string | null;
+  translation: string;
+  transcription: string | null;
+  mnemonic: string | null;
+  example: { en: string; ru: string } | null;
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+  direction: 'en-ru';
+  doubleXpTimeLimitMs?: number;
+};
+
+export type LearningTier = 'encounter' | 'passive' | 'active' | 'production' | 'review';
+
+export type LearningNextResponse = {
+  question: QuizQuestion | null;
+  tier: LearningTier | null;
+};
+
+export type LearningAnswerResponse = {
+  isCorrect: boolean;
+  normalizedVia: 'exact' | 'lemma' | 'typo' | 'none' | null;
+  tierBefore: LearningTier;
+  tierAfter: LearningTier;
+  becameLearned: boolean;
+  wasReset: boolean;
+  nextReviewAt: string | Date;
+  xpEarned: number;
+  xpModifier?: number;
+  totalXp?: number;
+  level?: number;
+  levelUp?: number;
+  lpEarned: number;
+  lpModifier?: number;
+  totalLp?: number;
+  gemsEarned: number;
+  lives: number;
+  livesRestoredAt: string | null;
+  livesExhausted: boolean;
+};
+
 export type QuizQuestion =
   | QuizQuestionBase
   | MatchPairsApiQuestion
@@ -180,6 +226,7 @@ export type QuizQuestion =
   | ListeningApiQuestion
   | DictationApiQuestion
   | FreeRecallApiQuestion
+  | EncounterCardApiQuestion
   | GrammarApiQuestion;
 
 export type QuizStartResponse = {

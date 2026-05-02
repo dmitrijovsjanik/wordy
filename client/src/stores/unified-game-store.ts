@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import type { QuizQuestion, GrammarApiQuestion, InfiniteAnswerResponse } from '@/types/api';
+import type { QuizQuestion, GrammarApiQuestion, InfiniteAnswerResponse, LearningTier, LearningAnswerResponse } from '@/types/api';
 import type { AnswerHistoryEntry } from '@/types/game';
-import { quizNext, quizAnswerInfinite, quizAnswerMatchPairs, quizAnswerGrammar, refillLives, ERRORS_COLLECTION_ID } from '@/lib/api';
+import { quizNext, quizAnswerInfinite, quizAnswerMatchPairs, quizAnswerGrammar, refillLives, learningNext, learningAnswer, ERRORS_COLLECTION_ID } from '@/lib/api';
 import { useLeagueStore } from './league-store';
 import { useCollectionStore } from './collection-store';
 
@@ -99,6 +99,7 @@ function getCorrectAnswer(q: QuizQuestion): string {
   if (q.type === 'dictation') return q.correctAnswer;
   if (q.type === 'free-recall') return q.acceptableAnswers[0] ?? '';
   if (q.type === 'spelling') return q.correctSpelling ?? '';
+  if (q.type === 'encounter') return q.translation;
   if (q.type === 'grammar-article') return q.exercise.blanks[0]?.correctAnswer ?? '';
   if (q.type === 'grammar-tense') return q.exercise.correctAnswer;
   if (q.type === 'grammar-collocation') return q.collocation.correctAnswer;
@@ -133,6 +134,10 @@ function getGeneratorTypeFromQuestion(question: QuizQuestion): string {
 
 type UnifiedGameState = {
   currentQuestion: QuizQuestion | null;
+  /** Источник текущего вопроса: 'learning' = новая лестница, 'quiz' = старый /api/quiz, null = не загружен. */
+  currentQuestionSource: 'learning' | 'quiz' | null;
+  /** Текущий tier из learning-API, если источник = 'learning'. Используется для 3-сигнального индикатора прогресса. */
+  currentTier: LearningTier | null;
   recentMeaningIds: number[];
   recentGenerators: string[];
   feedback: (InfiniteAnswerResponse & { meaningId: number }) | null;
@@ -159,6 +164,7 @@ type UnifiedGameState = {
   setGeneratorMode: (mode: QuestionGeneratorMode) => void;
   fetchNext: () => Promise<void>;
   submitAnswer: (selectedMeaningId: number | null, userAnswer?: string, skip?: boolean) => Promise<void>;
+  submitEncounter: () => Promise<void>;
   submitGrammarAnswer: (answer: string, skip?: boolean) => Promise<void>;
   submitMatchPairsResults: (results: Array<{ meaningId: number; isCorrect: boolean }>) => Promise<void>;
   skip: () => Promise<void>;
@@ -171,8 +177,47 @@ type UnifiedGameState = {
   updateLives: (lives: number, livesRestoredAt: string | null) => void;
 };
 
+/**
+ * Адаптер: ответ от /api/learning/answer → формат InfiniteAnswerResponse,
+ * который ожидает home.tsx (feedback panel). Сохраняем существующий UX.
+ */
+function adaptLearningResponse(
+  res: LearningAnswerResponse,
+  meaningId: number,
+  correctTranslation: string,
+): InfiniteAnswerResponse & { meaningId: number } {
+  return {
+    isCorrect: res.isCorrect,
+    correctTranslation,
+    xpEarned: res.xpEarned,
+    xpModifier: res.xpModifier,
+    totalXp: res.totalXp,
+    level: res.level,
+    levelUp: res.levelUp,
+    lpEarned: res.lpEarned,
+    lpModifier: res.lpModifier,
+    totalLp: res.totalLp,
+    gemsEarned: res.gemsEarned,
+    lives: res.lives,
+    livesRestoredAt: res.livesRestoredAt,
+    livesExhausted: res.livesExhausted,
+    meaningId,
+  };
+}
+
+/** Использовать learning-API только для auto-режима (не grammar/spelling/match-pairs/etc — они на старом /api/quiz). */
+function shouldUseLearningApi(generatorMode: QuestionGeneratorMode, collectionId: number | typeof ERRORS_COLLECTION_ID | undefined): boolean {
+  if (generatorMode !== 'auto') return false;
+  // ERRORS_COLLECTION_ID = строка 'errors', /api/learning/* пока не поддерживает её
+  // (там обычные слова, не отдельные ошибки). Старый путь даёт правильный feed.
+  if (collectionId === ERRORS_COLLECTION_ID) return false;
+  return true;
+}
+
 export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
   currentQuestion: loadQuestion(),
+  currentQuestionSource: null,
+  currentTier: null,
   recentMeaningIds: [],
   recentGenerators: [],
   feedback: null,
@@ -214,11 +259,34 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
     try {
       const { recentMeaningIds, collectionId, generatorMode, recentGenerators, questionIndex } = get();
       const { recentCorrectCount, recentTotalCount } = get();
+
+      // Разветвление: для auto-режима без коллекции ошибок используем новую лестницу.
+      if (shouldUseLearningApi(generatorMode, collectionId)) {
+        const numCollectionId = typeof collectionId === 'number' ? collectionId : undefined;
+        const res = await learningNext({ collectionId: numCollectionId, recentGenerators });
+        const updatedGenerators = res.question
+          ? [...recentGenerators, getGeneratorTypeFromQuestion(res.question)].slice(-MAX_RECENT_GENERATORS)
+          : recentGenerators;
+        saveQuestion(res.question);
+        set({
+          currentQuestion: res.question,
+          currentQuestionSource: 'learning',
+          currentTier: res.tier,
+          recentGenerators: updatedGenerators,
+          isLoading: false,
+          errorsCleared: false,
+          doubleXpTimeLimitMs: null,
+          doubleXpExpired: false,
+        });
+        return;
+      }
+
+      // Старый путь для grammar/spelling/match-pairs/cloze/listening/dictation/free-recall и errors-collection.
       const res = await quizNext(recentMeaningIds, collectionId, generatorMode, recentGenerators, recentCorrectCount, recentTotalCount, questionIndex);
 
       // Если ошибки закончились — показываем сообщение, переход на обычный режим через паузу
       if (!res.question && collectionId === ERRORS_COLLECTION_ID) {
-        set({ collectionId: undefined, currentQuestion: null, recentMeaningIds: [], recentGenerators: [], errorsCleared: true, isLoading: false });
+        set({ collectionId: undefined, currentQuestion: null, currentQuestionSource: null, currentTier: null, recentMeaningIds: [], recentGenerators: [], errorsCleared: true, isLoading: false });
         return;
       }
 
@@ -229,24 +297,59 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
 
       saveQuestion(res.question);
       const doubleXpTimeLimitMs = (res.question && 'doubleXpTimeLimitMs' in res.question) ? res.question.doubleXpTimeLimitMs ?? null : null;
-      set({ currentQuestion: res.question, recentGenerators: updatedGenerators, isLoading: false, errorsCleared: false, doubleXpTimeLimitMs, doubleXpExpired: false });
+      set({
+        currentQuestion: res.question,
+        currentQuestionSource: 'quiz',
+        currentTier: null,
+        recentGenerators: updatedGenerators,
+        isLoading: false,
+        errorsCleared: false,
+        doubleXpTimeLimitMs,
+        doubleXpExpired: false,
+      });
     } catch {
       set({ isLoading: false, error: 'Не удалось загрузить вопрос', errorsCleared: false });
     }
   },
 
   submitAnswer: async (selectedMeaningId, userAnswer?, isSkip?) => {
-    const { currentQuestion, recentMeaningIds, lastUserAnswer } = get();
+    const { currentQuestion, currentQuestionSource, recentMeaningIds, lastUserAnswer } = get();
     if (!currentQuestion || currentQuestion.type === 'match-pairs' || isGrammarQuestion(currentQuestion)) return;
 
     // После guard'а тип сужен до вопросов с meaningId
     const meaningId = (currentQuestion as Exclude<QuizQuestion, { type: 'match-pairs' } | GrammarApiQuestion>).meaningId;
+    // Encounter: пользователь нажал «Понятно» → всегда isCorrect=true.
+    const isEncounter = currentQuestion.type === 'encounter';
+    const computedIsCorrect = isEncounter || selectedMeaningId === meaningId;
 
     set({ isLoading: true });
     try {
       const { doubleXpTimeLimitMs, doubleXpExpired } = get();
       const doubleXpClaimed = !!doubleXpTimeLimitMs && !doubleXpExpired;
-      const res = await quizAnswerInfinite(meaningId, selectedMeaningId, get().streak, doubleXpClaimed, isSkip);
+
+      let res: InfiniteAnswerResponse & { meaningId?: number };
+
+      if (currentQuestionSource === 'learning') {
+        // Новый flow: /api/learning/answer.
+        const learnRes = await learningAnswer({
+          meaningId,
+          isCorrect: computedIsCorrect,
+          questionType: currentQuestion.type ?? 'multiple-choice',
+          streak: get().streak,
+          skip: isSkip,
+          userAnswer,
+        });
+        // Адаптер → совместимый InfiniteAnswerResponse для feedback panel.
+        const correctTranslation = currentQuestion.type === 'encounter'
+          ? currentQuestion.translation
+          : ((currentQuestion as { correctTranslation?: string }).correctTranslation
+            ?? (currentQuestion as { correctAnswer?: string }).correctAnswer
+            ?? '');
+        res = adaptLearningResponse(learnRes, meaningId, correctTranslation);
+      } else {
+        // Старый flow: /api/quiz/answer-infinite.
+        res = await quizAnswerInfinite(meaningId, selectedMeaningId, get().streak, doubleXpClaimed, isSkip);
+      }
 
       const updatedRecent = [...recentMeaningIds, meaningId].slice(-MAX_RECENT);
       const newStreak = res.isCorrect ? get().streak + 1 : 0;
@@ -289,6 +392,8 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
 
       set({
         feedback: { ...res, meaningId },
+        currentQuestionSource: null, // сбросим до следующего fetchNext
+        currentTier: null,
         recentMeaningIds: updatedRecent,
         isLoading: false,
         streak: newStreak,
@@ -486,8 +591,18 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
       await get().submitGrammarAnswer('', true);
       return;
     }
+    // Encounter не пропускается — он уже sub-action «Понятно»; просто игнорируем.
+    if (currentQuestion.type === 'encounter') return;
     // Пропуск = ответ null (неправильно), без траты жизни
     await get().submitAnswer(null, undefined, true);
+  },
+
+  submitEncounter: async () => {
+    const { currentQuestion } = get();
+    if (!currentQuestion || currentQuestion.type !== 'encounter') return;
+    // Encounter всегда «правильно» — это просто показ карточки.
+    // submitAnswer определит isCorrect=true по question.type и пройдёт через learning-API.
+    await get().submitAnswer(currentQuestion.meaningId, undefined, false);
   },
 
   expireDoubleXp: () => set({ doubleXpExpired: true }),
