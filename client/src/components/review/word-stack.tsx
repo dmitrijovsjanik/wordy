@@ -147,22 +147,27 @@ function TopCard({
     originY.set(((e.clientY - rect.top) / rect.height) * 100);
   };
 
-  const handleDragEnd = (_: unknown, info: PanInfo) => {
-    const { offset } = info;
-    if (offset.x > SWIPE_THRESHOLD_X) {
-      // Карта улетает вправо независимо от появления нового слова снизу.
+  const handleDragEnd = (_: unknown, _info: PanInfo) => {
+    // Важно: смотрим именно на motion value `x`/`y` (= реальная позиция карты),
+    // а не на info.offset (= путь пальца). С `dragElastic` карта движется
+    // медленнее пальца, и offset/motion-value расходятся. Цветовая заливка
+    // тоже считается по motion value, поэтому критерии триггера и заливки
+    // должны смотреть на одно и то же — иначе карта улетает с partial-цветом.
+    const xv = x.get();
+    const yv = y.get();
+    if (xv > SWIPE_THRESHOLD_X) {
       animate(x, FLY_AWAY_DISTANCE, { duration: FLY_AWAY_DURATION, onComplete: () => onSwipe('known') });
       return;
     }
-    if (offset.x < -SWIPE_THRESHOLD_X) {
+    if (xv < -SWIPE_THRESHOLD_X) {
       animate(x, -FLY_AWAY_DISTANCE, { duration: FLY_AWAY_DURATION, onComplete: () => onSwipe('unknown') });
       return;
     }
-    if (offset.y < -SWIPE_THRESHOLD_Y) {
+    if (yv < -SWIPE_THRESHOLD_Y) {
       animate(y, -FLY_AWAY_DISTANCE, { duration: FLY_AWAY_DURATION, onComplete: () => onSwipe('snooze') });
       return;
     }
-    if (offset.y > SWIPE_THRESHOLD_Y) {
+    if (yv > SWIPE_THRESHOLD_Y) {
       animate(y, FLY_AWAY_DISTANCE, { duration: FLY_AWAY_DURATION, onComplete: () => onUndo() });
       return;
     }
