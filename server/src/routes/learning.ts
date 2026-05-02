@@ -3,6 +3,11 @@ import { eq, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { wordMeanings, userWordProgress } from '../db/schema.js';
 import { pickNextItem, recordAnswer, applySwipe, undoSwipe } from '../services/learning-service.js';
+import {
+  getProblemMeanings,
+  getProblemMeaningsCount,
+  pickNextProblemMeaning,
+} from '../services/problem-meanings-service.js';
 import { generateForTier } from '../services/game/generators/index.js';
 import type { PooledMeaning } from '../services/game/types.js';
 import { recordEvent } from '../services/analytics-service.js';
@@ -272,6 +277,73 @@ export default async function learningRoutes(app: FastifyInstance) {
     }
     return { ok: true };
   });
+
+  // ─── GET /api/learning/problems ────────────────────────────────────────
+  // Список «проблемных» meaning'ов (≥3 ошибок за 60 дней) + общий count.
+
+  app.get('/api/learning/problems', async (request) => {
+    const userId = request.user.id;
+    const meanings = await getProblemMeanings(userId);
+    return {
+      count: meanings.length,
+      meanings,
+    };
+  });
+
+  // ─── GET /api/learning/problems/count ──────────────────────────────────
+  // Только число — для бейджа на главной без загрузки списка.
+
+  app.get('/api/learning/problems/count', async (request) => {
+    const userId = request.user.id;
+    const count = await getProblemMeaningsCount(userId);
+    return { count };
+  });
+
+  // ─── GET /api/learning/problems/next ───────────────────────────────────
+  // Следующее проблемное слово для повторения. Генерирует упражнение через
+  // тот же generateForTier, что и обычный поток — слово показывается на
+  // своём текущем tier'е лестницы.
+
+  app.get<{ Querystring: { generators?: string; exclude?: string } }>(
+    '/api/learning/problems/next',
+    async (request) => {
+      const userId = request.user.id;
+      const generatorsStr = request.query.generators ?? '';
+      const recentGenerators = generatorsStr ? generatorsStr.split(',').filter(Boolean) : [];
+      const excludeStr = request.query.exclude ?? '';
+      const excludeIds = excludeStr
+        ? excludeStr.split(',').map(Number).filter((n) => !Number.isNaN(n))
+        : [];
+
+      const pick = await pickNextProblemMeaning(userId, excludeIds);
+      if (!pick) {
+        return { question: null, tier: null };
+      }
+
+      const meaning = await loadPooledMeaning(pick.meaningId);
+      if (!meaning) {
+        return { question: null, tier: null };
+      }
+
+      const generated = await generateForTier(meaning, pick.tier, { recentGenerators });
+      if (!generated) {
+        return { question: null, tier: null };
+      }
+
+      // Аналитика: question_shown в режиме проблемных слов.
+      await recordEvent({
+        userId,
+        eventType: 'question_shown',
+        meaningId: pick.meaningId,
+        tierBefore: pick.tier,
+        tierAfter: pick.tier,
+        questionType: generated.generatorType,
+        payload: { source: 'problems' },
+      });
+
+      return { question: generated.question, tier: pick.tier };
+    },
+  );
 
   // POST /api/learning/undo-swipe — откат последнего свайпа (жест «вниз» в обзоре).
   app.post<{

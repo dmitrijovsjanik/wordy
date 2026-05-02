@@ -97,6 +97,13 @@ export const learningConfig = {
     /** Сколько слов брать в feed обзора за один запрос. */
     feedQueueSize: 30,
   },
+
+  errors: {
+    /** Слово попадает в «проблемные», если за окно было ≥N ошибок. */
+    thresholdCount: 3,
+    /** Окно агрегации в днях. Покрывает типичные перерывы в обучении (≤2 мес). */
+    windowDays: 60,
+  },
 } as const;
 
 export type LearningConfig = typeof learningConfig;
