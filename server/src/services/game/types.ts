@@ -86,7 +86,22 @@ export function reversePair(pair: LanguagePair): LanguagePair {
 
 // ─── Generator Rotation ────────────────────────────────────────────────────
 
-export type GeneratorType = 'en-ru' | 'ru-en' | 'spelling' | 'match-pairs' | 'cloze' | 'listening' | 'dictation' | 'free-recall';
+export type GeneratorType = 'en-ru' | 'ru-en' | 'spelling' | 'match-pairs' | 'cloze' | 'listening' | 'dictation' | 'free-recall' | 'encounter';
+
+// Encounter card — пассивный показ слова на первом уровне лестницы.
+// Без проверки: пользователь нажимает «Понятно» → recordAnswer({isCorrect: true}) → tier=passive.
+export type EncounterCardQuestion = {
+  type: 'encounter';
+  meaningId: number;
+  word: string;                                // англ. слово
+  originalForm: string | null;
+  translation: string;                          // рус. перевод
+  transcription: string | null;
+  mnemonic: string | null;                      // AI-mnemonic, если есть
+  example: { en: string; ru: string } | null;   // AI-example или Yandex-example
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+  direction: 'en-ru';
+};
 
 // Match-pairs question (соединение пар)
 export type MatchPairsQuestion = {

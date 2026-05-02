@@ -6,6 +6,8 @@ export * from './cloze.js';
 export * from './listening.js';
 export * from './dictation.js';
 export * from './free-recall.js';
+export * from './encounter.js';
+export * from './generate-for-tier.js';
 
 // Typo generators (universal library)
 export {

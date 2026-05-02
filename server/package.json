@@ -21,7 +21,8 @@
     "db:cleanup-latin": "tsx --env-file=.env src/db/seed/cleanup-latin-translations.ts",
     "db:seed-full": "npm run db:import-ngsl && npm run db:enrich && npm run db:seed-topics && npm run db:generate-collections",
     "ai:seed": "tsx --env-file=.env src/scripts/seed-ai-content.ts",
-    "ai:generate": "tsx --env-file=.env src/scripts/generate-ai-content.ts"
+    "ai:generate": "tsx --env-file=.env src/scripts/generate-ai-content.ts",
+    "db:fill-lemmas": "tsx --env-file=.env src/scripts/fill-lemmas.ts"
   },
   "devDependencies": {
     "@types/node": "^25.2.0",
