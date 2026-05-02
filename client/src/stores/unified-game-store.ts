@@ -1,31 +1,16 @@
 import { create } from 'zustand';
-import type { QuizQuestion, QuizQuestionBase, QuizResultResponse } from '@/types/api';
-import type { GameMode, AnswerFeedback, RewardDisplay } from '@/types/game';
-import { quizStart, quizAnswer, quizFinish, quizNext, quizAnswerInfinite, quizAnswerGrammar } from '@/lib/api';
+import type { QuizQuestion, GrammarApiQuestion, InfiniteAnswerResponse } from '@/types/api';
+import type { AnswerHistoryEntry } from '@/types/game';
+import { quizNext, quizAnswerInfinite, quizAnswerMatchPairs, quizAnswerGrammar, refillLives, ERRORS_COLLECTION_ID } from '@/lib/api';
 import { useLeagueStore } from './league-store';
+import { useCollectionStore } from './collection-store';
 
 const MAX_RECENT = 20;
 const MAX_RECENT_GENERATORS = 10;
 const STREAK_KEY = 'wordy:streak';
-const FEEDBACK_DELAY = 1200;
-
-/** Определяет тип генератора из ответа сервера */
-function getGeneratorTypeFromQuestion(question: QuizQuestion): string {
-  if (question.type === 'match-pairs') return 'match-pairs';
-  if (question.type === 'spelling') return 'spelling';
-  if (question.type === 'cloze') return 'cloze';
-  if (question.type === 'listening') return 'listening';
-  if (question.type === 'dictation') return 'dictation';
-  if (question.type === 'free-recall') return 'free-recall';
-  // Grammar types
-  if (question.type?.startsWith('grammar-')) return question.type;
-  return (question as { direction?: string }).direction ?? 'en-ru';
-}
-
-/** Проверяет, является ли вопрос грамматическим */
-function isGrammarQuestion(question: QuizQuestion): boolean {
-  return typeof question.type === 'string' && question.type.startsWith('grammar-');
-}
+const QUESTION_KEY = 'wordy:currentQuestion';
+const HISTORY_KEY = 'wordy:answerHistory';
+const HISTORY_DATE_KEY = 'wordy:answerHistoryDate';
 
 function loadStreak(): number {
   const raw = localStorage.getItem(STREAK_KEY);
@@ -36,277 +21,457 @@ function saveStreak(value: number) {
   localStorage.setItem(STREAK_KEY, String(value));
 }
 
-type AnswerRecord = {
-  meaningId: number;
-  selectedMeaningId: number | null;
-  isCorrect: boolean;
-};
+function loadQuestion(): QuizQuestion | null {
+  try {
+    const raw = sessionStorage.getItem(QUESTION_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as QuizQuestion;
+  } catch {
+    return null;
+  }
+}
+
+function saveQuestion(question: QuizQuestion | null) {
+  if (question) {
+    sessionStorage.setItem(QUESTION_KEY, JSON.stringify(question));
+  } else {
+    sessionStorage.removeItem(QUESTION_KEY);
+  }
+}
+
+/** Текущий "день" по МСК (граница 04:00 UTC+3 = 01:00 UTC) */
+function getMskDay(): string {
+  const now = new Date();
+  // МСК = UTC+3, граница дня = 04:00 МСК = 01:00 UTC
+  const mskMs = now.getTime() + 3 * 60 * 60 * 1000;
+  const mskDate = new Date(mskMs);
+  // Вычитаем 4 часа — «день» начинается в 04:00
+  const adjusted = new Date(mskDate.getTime() - 4 * 60 * 60 * 1000);
+  return `${adjusted.getUTCFullYear()}-${String(adjusted.getUTCMonth() + 1).padStart(2, '0')}-${String(adjusted.getUTCDate()).padStart(2, '0')}`;
+}
+
+function loadHistory(): AnswerHistoryEntry[] {
+  try {
+    const savedDate = localStorage.getItem(HISTORY_DATE_KEY);
+    const currentDay = getMskDay();
+    if (savedDate !== currentDay) {
+      localStorage.removeItem(HISTORY_KEY);
+      localStorage.setItem(HISTORY_DATE_KEY, currentDay);
+      return [];
+    }
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as AnswerHistoryEntry[];
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(entries: AnswerHistoryEntry[]) {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(entries));
+  localStorage.setItem(HISTORY_DATE_KEY, getMskDay());
+}
+
+/** Type predicate: сужает QuizQuestion до GrammarApiQuestion */
+function isGrammarQuestion(q: QuizQuestion): q is GrammarApiQuestion {
+  return typeof q.type === 'string' && q.type.startsWith('grammar-');
+}
+
+/** Извлекает текст вопроса из QuizQuestion */
+function getQuestionText(q: QuizQuestion): string {
+  if (q.type === 'match-pairs') return 'Соедини пары';
+  if (q.type === 'cloze') return q.sentence;
+  if (q.type === 'listening' || q.type === 'dictation') return q.audioWord;
+  if (q.type === 'free-recall') return q.prompt;
+  if (q.type === 'grammar-article') return q.exercise.sentence;
+  if (q.type === 'grammar-tense') return q.exercise.sentence;
+  if (q.type === 'grammar-collocation') return q.collocation.blank;
+  if (q.type === 'grammar-false-friend') return q.word;
+  if (q.type === 'grammar-tense-match') return 'Соедини времена';
+  return q.word;
+}
+
+/** Извлекает правильный ответ из QuizQuestion */
+function getCorrectAnswer(q: QuizQuestion): string {
+  if (q.type === 'match-pairs') return '';
+  if (q.type === 'grammar-tense-match') return '';
+  if (q.type === 'cloze' || q.type === 'listening') return q.correctAnswer;
+  if (q.type === 'dictation') return q.correctAnswer;
+  if (q.type === 'free-recall') return q.acceptableAnswers[0] ?? '';
+  if (q.type === 'spelling') return q.correctSpelling ?? '';
+  if (q.type === 'grammar-article') return q.exercise.blanks[0]?.correctAnswer ?? '';
+  if (q.type === 'grammar-tense') return q.exercise.correctAnswer;
+  if (q.type === 'grammar-collocation') return q.collocation.correctAnswer;
+  if (q.type === 'grammar-false-friend') return q.correctAnswer;
+  return q.correctTranslation ?? '';
+}
+
+export type QuestionGeneratorMode =
+  | 'auto'          // Случайное направление, multiple-choice
+  | 'en-ru'         // EN → RU, multiple-choice
+  | 'ru-en'         // RU → EN, multiple-choice
+  | 'spelling'      // Spelling (всегда ru-en)
+  | 'match-pairs'   // Соединение пар
+  | 'cloze'         // Заполни пропуск
+  | 'listening'     // Слушай → выбери перевод
+  | 'dictation'     // Слушай → напиши
+  | 'free-recall';  // Напиши перевод
+
+/** Определяет тип генератора из ответа сервера */
+function getGeneratorTypeFromQuestion(question: QuizQuestion): string {
+  if (question.type === 'match-pairs') return 'match-pairs';
+  if (question.type === 'spelling') return 'spelling';
+  if (question.type === 'cloze') return 'cloze';
+  if (question.type === 'listening') return 'listening';
+  if (question.type === 'dictation') return 'dictation';
+  if (question.type === 'free-recall') return 'free-recall';
+  // Grammar types
+  if (typeof question.type === 'string' && question.type.startsWith('grammar-')) return question.type;
+  // QuizQuestionBase / Spelling — единственные с .direction
+  return 'direction' in question && typeof question.direction === 'string' ? question.direction : 'en-ru';
+}
 
 type UnifiedGameState = {
-  // Режим игры
-  mode: GameMode;
-
-  // Общее состояние
   currentQuestion: QuizQuestion | null;
-  isLoading: boolean;
-  error: string | null;
-  selectedAnswer: string | null;
-
-  // Feedback после ответа
-  feedback: AnswerFeedback | null;
-
-  // Streak (для infinite mode, сохраняется в localStorage)
-  streak: number;
-
-  // Session mode
-  sessionId: number | null;
-  questionIndex: number;
-  answers: AnswerRecord[];
-  result: QuizResultResponse | null;
-  maxQuestions: number;
-
-  // Infinite mode
   recentMeaningIds: number[];
   recentGenerators: string[];
-  collectionId: number | undefined;
+  feedback: (InfiniteAnswerResponse & { meaningId: number }) | null;
+  isLoading: boolean;
+  error: string | null;
+  streak: number;
+  collectionId: number | typeof ERRORS_COLLECTION_ID | undefined;
+  generatorMode: QuestionGeneratorMode;
+  errorsCleared: boolean;
+  doubleXpTimeLimitMs: number | null;
+  doubleXpExpired: boolean;
+  questionIndex: number;
+  recentCorrectCount: number;
+  recentTotalCount: number;
+  answerHistory: AnswerHistoryEntry[];
+  lastUserAnswer: string | null;
 
-  // Actions
-  startGame: (mode: GameMode, options?: { collectionId?: number; maxQuestions?: number }) => Promise<void>;
-  submitAnswer: (answer: string) => Promise<void>;
+  // Lives
+  lives: number;
+  livesRestoredAt: string | null;
+  livesExhausted: boolean;
+
+  setCollectionId: (id: number | typeof ERRORS_COLLECTION_ID | undefined) => void;
+  setGeneratorMode: (mode: QuestionGeneratorMode) => void;
+  fetchNext: () => Promise<void>;
+  submitAnswer: (selectedMeaningId: number | null, userAnswer?: string, skip?: boolean) => Promise<void>;
+  submitGrammarAnswer: (answer: string, skip?: boolean) => Promise<void>;
+  submitMatchPairsResults: (results: Array<{ meaningId: number; isCorrect: boolean }>) => Promise<void>;
   skip: () => Promise<void>;
   reset: () => void;
-  setCollectionId: (id: number | undefined) => void;
+  expireDoubleXp: () => void;
+  setLastUserAnswer: (answer: string | null) => void;
+  clearHistory: () => void;
+  restoreLives: () => Promise<void>;
+  onLivesTimerExpired: () => void;
+  updateLives: (lives: number, livesRestoredAt: string | null) => void;
 };
 
 export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
-  // Defaults
-  mode: 'infinite',
-  currentQuestion: null,
-  isLoading: false,
-  error: null,
-  selectedAnswer: null,
-  feedback: null,
-  streak: loadStreak(),
-
-  // Session
-  sessionId: null,
-  questionIndex: 0,
-  answers: [],
-  result: null,
-  maxQuestions: 10,
-
-  // Infinite
+  currentQuestion: loadQuestion(),
   recentMeaningIds: [],
   recentGenerators: [],
+  feedback: null,
+  isLoading: false,
+  error: null,
+  streak: loadStreak(),
   collectionId: undefined,
+  generatorMode: 'auto',
+  errorsCleared: false,
+  doubleXpTimeLimitMs: null,
+  doubleXpExpired: false,
+  questionIndex: 0,
+  recentCorrectCount: 0,
+  recentTotalCount: 0,
+  answerHistory: loadHistory(),
+  lastUserAnswer: null,
 
-  startGame: async (mode, options = {}) => {
-    set({
-      mode,
-      isLoading: true,
-      error: null,
-      currentQuestion: null,
-      feedback: null,
-      selectedAnswer: null,
-      answers: [],
-      result: null,
-      questionIndex: 0,
-      recentMeaningIds: [],
-      recentGenerators: [],
-      collectionId: options.collectionId,
-      maxQuestions: options.maxQuestions ?? 10,
-    });
+  // Lives
+  lives: 5,
+  livesRestoredAt: null,
+  livesExhausted: false,
 
+  setLastUserAnswer: (answer) => set({ lastUserAnswer: answer }),
+  clearHistory: () => {
+    saveHistory([]);
+    set({ answerHistory: [] });
+  },
+
+  setCollectionId: (id) => {
+    saveQuestion(null);
+    set({ collectionId: id, recentMeaningIds: [], recentGenerators: [], currentQuestion: null, feedback: null });
+  },
+  setGeneratorMode: (mode) => set({ generatorMode: mode }),
+
+  fetchNext: async () => {
+    // Предотвращаем параллельные запросы (важно для React StrictMode)
+    if (get().isLoading) return;
+    set({ isLoading: true, error: null });
     try {
-      if (mode === 'session') {
-        const res = await quizStart();
-        set({ sessionId: res.sessionId, currentQuestion: res.question, isLoading: false });
-      } else if (mode === 'infinite') {
-        const res = await quizNext([], options.collectionId);
-        const generators = res.question ? [getGeneratorTypeFromQuestion(res.question)] : [];
-        set({ currentQuestion: res.question, recentGenerators: generators, isLoading: false });
+      const { recentMeaningIds, collectionId, generatorMode, recentGenerators, questionIndex } = get();
+      const { recentCorrectCount, recentTotalCount } = get();
+      const res = await quizNext(recentMeaningIds, collectionId, generatorMode, recentGenerators, recentCorrectCount, recentTotalCount, questionIndex);
+
+      // Если ошибки закончились — показываем сообщение, переход на обычный режим через паузу
+      if (!res.question && collectionId === ERRORS_COLLECTION_ID) {
+        set({ collectionId: undefined, currentQuestion: null, recentMeaningIds: [], recentGenerators: [], errorsCleared: true, isLoading: false });
+        return;
       }
+
+      // Трекаем тип генератора для авто-ротации
+      const updatedGenerators = res.question
+        ? [...recentGenerators, getGeneratorTypeFromQuestion(res.question)].slice(-MAX_RECENT_GENERATORS)
+        : recentGenerators;
+
+      saveQuestion(res.question);
+      const doubleXpTimeLimitMs = (res.question && 'doubleXpTimeLimitMs' in res.question) ? res.question.doubleXpTimeLimitMs ?? null : null;
+      set({ currentQuestion: res.question, recentGenerators: updatedGenerators, isLoading: false, errorsCleared: false, doubleXpTimeLimitMs, doubleXpExpired: false });
     } catch {
-      set({ isLoading: false, error: 'Не удалось начать игру' });
+      set({ isLoading: false, error: 'Не удалось загрузить вопрос', errorsCleared: false });
     }
   },
 
-  submitAnswer: async (answer) => {
-    const { mode, currentQuestion, sessionId, answers, questionIndex, recentMeaningIds } = get();
-    if (!currentQuestion) return;
+  submitAnswer: async (selectedMeaningId, userAnswer?, isSkip?) => {
+    const { currentQuestion, recentMeaningIds, lastUserAnswer } = get();
+    if (!currentQuestion || currentQuestion.type === 'match-pairs' || isGrammarQuestion(currentQuestion)) return;
 
-    set({ isLoading: true, selectedAnswer: answer });
+    // После guard'а тип сужен до вопросов с meaningId
+    const meaningId = (currentQuestion as Exclude<QuizQuestion, { type: 'match-pairs' } | GrammarApiQuestion>).meaningId;
 
-    // Определяем selectedMeaningId по выбранному ответу
-    const q = currentQuestion as QuizQuestionBase;
-    const isCorrectGuess = answer === q.correctTranslation;
-    const selectedMeaningId = isCorrectGuess ? q.meaningId : null;
-
+    set({ isLoading: true });
     try {
-      if (mode === 'session') {
-        if (!sessionId) return;
+      const { doubleXpTimeLimitMs, doubleXpExpired } = get();
+      const doubleXpClaimed = !!doubleXpTimeLimitMs && !doubleXpExpired;
+      const res = await quizAnswerInfinite(meaningId, selectedMeaningId, get().streak, doubleXpClaimed, isSkip);
 
-        const answerTimeMs = 0; // TODO: трекать время
-        const res = await quizAnswer({
-          sessionId,
-          meaningId: q.meaningId,
-          selectedMeaningId,
-          answerTimeMs,
-        });
+      const updatedRecent = [...recentMeaningIds, meaningId].slice(-MAX_RECENT);
+      const newStreak = res.isCorrect ? get().streak + 1 : 0;
+      saveStreak(newStreak);
 
-        const newAnswer: AnswerRecord = {
-          meaningId: q.meaningId,
-          selectedMeaningId,
+      // Обновляем LP в реальном времени
+      if (res.totalLp !== undefined) {
+        useLeagueStore.getState().updateLp(res.totalLp);
+      }
+
+      // Инвалидируем кеш коллекции ошибок (incorrectCount мог измениться)
+      useCollectionStore.setState({ errorsFetchedAt: null });
+
+      // Track adaptive difficulty stats (last 10 answers)
+      const prevCorrect = get().recentCorrectCount;
+      const prevTotal = get().recentTotalCount;
+      const newCorrect = res.isCorrect ? prevCorrect + 1 : prevCorrect;
+      const newTotal = prevTotal + 1;
+      // Reset after 10 answers to keep the window fresh
+      const resetWindow = newTotal >= 10;
+
+      // Записываем в историю ответов
+      const answerText = userAnswer ?? lastUserAnswer ?? (res.isCorrect ? getCorrectAnswer(currentQuestion) : '—');
+      const entry: AnswerHistoryEntry = {
+        question: getQuestionText(currentQuestion),
+        userAnswer: answerText,
+        correctAnswer: res.correctTranslation || getCorrectAnswer(currentQuestion),
+        isCorrect: res.isCorrect,
+        type: currentQuestion.type ?? 'multiple-choice',
+        timestamp: Date.now(),
+      };
+      const updatedHistory = [entry, ...get().answerHistory].slice(0, 200);
+      saveHistory(updatedHistory);
+
+      // Update lives from server response
+      const livesUpdate: Partial<UnifiedGameState> = {};
+      if (res.lives !== undefined) livesUpdate.lives = res.lives;
+      if (res.livesRestoredAt !== undefined) livesUpdate.livesRestoredAt = res.livesRestoredAt ?? null;
+      if (res.livesExhausted) livesUpdate.livesExhausted = true;
+
+      set({
+        feedback: { ...res, meaningId },
+        recentMeaningIds: updatedRecent,
+        isLoading: false,
+        streak: newStreak,
+        questionIndex: get().questionIndex + 1,
+        recentCorrectCount: resetWindow ? (res.isCorrect ? 1 : 0) : newCorrect,
+        recentTotalCount: resetWindow ? 1 : newTotal,
+        answerHistory: updatedHistory,
+        lastUserAnswer: null,
+        doubleXpTimeLimitMs: null,
+        ...livesUpdate,
+      });
+
+      // Автопереход к следующему вопросу (НЕ если жизни кончились)
+      if (!res.livesExhausted) {
+        setTimeout(() => {
+          set({ feedback: null });
+          get().fetchNext();
+        }, 1200);
+      }
+    } catch {
+      set({ isLoading: false, error: 'Ошибка при отправке ответа' });
+    }
+  },
+
+  submitGrammarAnswer: async (answer, isSkip?) => {
+    const { currentQuestion } = get();
+    if (!currentQuestion || !isGrammarQuestion(currentQuestion)) return;
+
+    set({ isLoading: true });
+    try {
+      const grammarType = currentQuestion.type;
+
+      // Определяем params для проверки
+      let grammarParams: { exerciseIndex?: number; blankIndex?: number; collocationIndex?: number; questionIndex?: number } = {};
+      if (currentQuestion.type === 'grammar-article') {
+        grammarParams = { exerciseIndex: currentQuestion.exerciseIndex };
+      } else if (currentQuestion.type === 'grammar-tense') {
+        grammarParams = { exerciseIndex: currentQuestion.exerciseIndex };
+      } else if (currentQuestion.type === 'grammar-collocation') {
+        grammarParams = { collocationIndex: currentQuestion.collocationIndex };
+      } else if (currentQuestion.type === 'grammar-false-friend') {
+        grammarParams = { questionIndex: currentQuestion.questionIndex };
+      }
+
+      const res = await quizAnswerGrammar(grammarType, answer, get().streak, grammarParams, isSkip);
+      const newStreak = res.isCorrect ? get().streak + 1 : 0;
+      saveStreak(newStreak);
+
+      if (res.totalLp !== undefined) {
+        useLeagueStore.getState().updateLp(res.totalLp);
+      }
+
+      // Записываем в историю ответов
+      const correctAnswerText = res.correctAnswer || getCorrectAnswer(currentQuestion) || '';
+      const entry: AnswerHistoryEntry = {
+        question: getQuestionText(currentQuestion),
+        userAnswer: answer,
+        correctAnswer: correctAnswerText,
+        isCorrect: res.isCorrect,
+        type: currentQuestion.type,
+        timestamp: Date.now(),
+      };
+      const updatedHistory = [entry, ...get().answerHistory].slice(0, 200);
+      saveHistory(updatedHistory);
+
+      // Update lives from grammar response
+      const grammarLivesUpdate: Partial<UnifiedGameState> = {};
+      if (res.lives !== undefined) grammarLivesUpdate.lives = res.lives;
+      if (res.livesRestoredAt !== undefined) grammarLivesUpdate.livesRestoredAt = res.livesRestoredAt ?? null;
+      if (res.livesExhausted) grammarLivesUpdate.livesExhausted = true;
+
+      // Формируем feedback в формате InfiniteAnswerResponse
+      set({
+        feedback: {
           isCorrect: res.isCorrect,
+          correctTranslation: correctAnswerText,
+          xpEarned: res.xpEarned,
+          xpModifier: res.xpModifier,
+          totalXp: res.totalXp,
+          totalLp: res.totalLp,
+          level: res.level,
+          levelUp: res.levelUp,
+          lpEarned: res.lpEarned,
+          lpModifier: res.lpModifier,
+          gemsEarned: res.gemsEarned,
+          dailyCorrectCount: res.dailyCorrectCount,
+          meaningId: 0, // grammar questions have no meaningId
+        },
+        isLoading: false,
+        streak: newStreak,
+        questionIndex: get().questionIndex + 1,
+        answerHistory: updatedHistory,
+        lastUserAnswer: null,
+        ...grammarLivesUpdate,
+      });
+
+      if (!res.livesExhausted) {
+        setTimeout(() => {
+          set({ feedback: null });
+          get().fetchNext();
+        }, 1200);
+      }
+    } catch {
+      set({ isLoading: false, error: 'Ошибка при отправке ответа' });
+    }
+  },
+
+  submitMatchPairsResults: async (results) => {
+    const { currentQuestion, recentMeaningIds } = get();
+    if (!currentQuestion || currentQuestion.type !== 'match-pairs') return;
+
+    set({ isLoading: true });
+    try {
+      const { doubleXpTimeLimitMs: mpDoubleXp, doubleXpExpired: mpExpired } = get();
+      const doubleXpClaimed = !!mpDoubleXp && !mpExpired;
+      const res = await quizAnswerMatchPairs(results, get().streak, doubleXpClaimed);
+
+      const newMeaningIds = currentQuestion.pairs.map((p) => p.meaningId);
+      const updatedRecent = [...recentMeaningIds, ...newMeaningIds].slice(-MAX_RECENT);
+
+      const allCorrect = results.every((r) => r.isCorrect);
+      const correctCount = results.filter((r) => r.isCorrect).length;
+      const newStreak = allCorrect ? get().streak + correctCount : 0;
+      saveStreak(newStreak);
+
+      if (res.totalLp !== undefined) {
+        useLeagueStore.getState().updateLp(res.totalLp);
+      }
+
+      // Инвалидируем кеш коллекции ошибок (incorrectCount мог измениться)
+      useCollectionStore.setState({ errorsFetchedAt: null });
+
+      // Записываем историю ответов для каждой пары
+      const pairEntries: AnswerHistoryEntry[] = currentQuestion.pairs.map((pair) => {
+        const pairResult = results.find((r) => r.meaningId === pair.meaningId);
+        return {
+          question: pair.word,
+          userAnswer: pair.translation,
+          correctAnswer: pair.translation,
+          isCorrect: pairResult?.isCorrect ?? false,
+          type: 'match-pairs',
+          timestamp: Date.now(),
         };
+      });
+      const updatedHistory = [...pairEntries, ...get().answerHistory].slice(0, 200);
+      saveHistory(updatedHistory);
 
-        set({
-          answers: [...answers, newAnswer],
-          feedback: {
-            isCorrect: res.isCorrect,
-            correctAnswer: q.correctTranslation ?? '',
-          },
-          isLoading: false,
-        });
+      // Update lives from match-pairs response
+      const mpLivesUpdate: Partial<UnifiedGameState> = {};
+      if (res.lives !== undefined) mpLivesUpdate.lives = res.lives;
+      if (res.livesRestoredAt !== undefined) mpLivesUpdate.livesRestoredAt = res.livesRestoredAt ?? null;
+      if (res.livesExhausted) mpLivesUpdate.livesExhausted = true;
 
-        if (res.isFinished) {
-          const result = await quizFinish(sessionId);
-          set({ result, currentQuestion: null });
-        } else {
-          setTimeout(() => {
-            set({
-              currentQuestion: res.nextQuestion,
-              questionIndex: questionIndex + 1,
-              feedback: null,
-              selectedAnswer: null,
-            });
-          }, FEEDBACK_DELAY);
-        }
-      } else if (mode === 'infinite') {
-        // ─── Grammar question path ────────────────────────────────────
-        if (isGrammarQuestion(currentQuestion)) {
-          const grammarQ = currentQuestion as { type: string; exerciseIndex?: number; collocationIndex?: number; questionIndex?: number; exercise?: { correctAnswer?: string }; collocation?: { correctAnswer?: string }; correctAnswer?: string };
-          const grammarType = grammarQ.type;
+      set({
+        feedback: {
+          isCorrect: allCorrect,
+          correctTranslation: '',
+          xpEarned: res.totalXpEarned,
+          xpModifier: res.xpModifier,
+          lpEarned: res.totalLpEarned,
+          lpModifier: res.lpModifier,
+          totalXp: res.totalXp,
+          totalLp: res.totalLp,
+          level: res.level,
+          levelUp: res.levelUp,
+          gemsEarned: res.gemsEarned,
+          doubleXpApplied: res.doubleXpApplied,
+          meaningId: currentQuestion.pairs[0]?.meaningId ?? 0,
+        },
+        recentMeaningIds: updatedRecent,
+        isLoading: false,
+        streak: newStreak,
+        questionIndex: get().questionIndex + 1,
+        answerHistory: updatedHistory,
+        doubleXpTimeLimitMs: null,
+        ...mpLivesUpdate,
+      });
 
-          // Определяем correctAnswer и params для проверки
-          let grammarParams: { exerciseIndex?: number; blankIndex?: number; collocationIndex?: number; questionIndex?: number } = {};
-          let correctAnswer = '';
-
-          if (grammarType === 'grammar-article') {
-            grammarParams = { exerciseIndex: grammarQ.exerciseIndex };
-            // Для артиклей correctAnswer берётся из blanks[0]
-            const ex = (currentQuestion as { exercise: { blanks: Array<{ correctAnswer: string }> } }).exercise;
-            correctAnswer = ex.blanks[0]?.correctAnswer ?? '';
-          } else if (grammarType === 'grammar-tense') {
-            grammarParams = { exerciseIndex: grammarQ.exerciseIndex };
-            correctAnswer = (currentQuestion as { exercise: { correctAnswer: string } }).exercise.correctAnswer;
-          } else if (grammarType === 'grammar-collocation') {
-            grammarParams = { collocationIndex: grammarQ.collocationIndex };
-            correctAnswer = (currentQuestion as { collocation: { correctAnswer: string } }).collocation.correctAnswer;
-          } else if (grammarType === 'grammar-false-friend') {
-            grammarParams = { questionIndex: grammarQ.questionIndex };
-            correctAnswer = (currentQuestion as { correctAnswer: string }).correctAnswer;
-          }
-
-          const res = await quizAnswerGrammar(grammarType, answer, get().streak, grammarParams);
-          const newStreak = res.isCorrect ? get().streak + 1 : 0;
-          saveStreak(newStreak);
-
-          if (res.totalLp !== undefined) {
-            useLeagueStore.getState().updateLp(res.totalLp);
-          }
-
-          set({
-            feedback: {
-              isCorrect: res.isCorrect,
-              correctAnswer: correctAnswer,
-              xpEarned: res.xpEarned,
-              xpModifier: res.xpModifier,
-              lpEarned: res.lpEarned,
-              lpModifier: res.lpModifier,
-              totalXp: res.totalXp,
-              totalLp: res.totalLp,
-              level: res.level,
-              levelUp: res.levelUp,
-            },
-            isLoading: false,
-            streak: newStreak,
-            questionIndex: questionIndex + 1,
-          });
-
-          // Автопереход к следующему вопросу
-          setTimeout(async () => {
-            set({ feedback: null, selectedAnswer: null });
-            const state = get();
-            const nextRes = await quizNext(
-              state.recentMeaningIds,
-              state.collectionId,
-              undefined,
-              state.recentGenerators,
-              undefined,
-              undefined,
-              state.questionIndex,
-            );
-            const updatedGenerators = nextRes.question
-              ? [...state.recentGenerators, getGeneratorTypeFromQuestion(nextRes.question)].slice(-MAX_RECENT_GENERATORS)
-              : state.recentGenerators;
-            set({ currentQuestion: nextRes.question, recentGenerators: updatedGenerators });
-          }, FEEDBACK_DELAY);
-
-          return;
-        }
-
-        // ─── Vocabulary question path ─────────────────────────────────
-        const res = await quizAnswerInfinite(q.meaningId, selectedMeaningId, get().streak);
-
-        const updatedRecent = [...recentMeaningIds, q.meaningId].slice(-MAX_RECENT);
-        const newStreak = res.isCorrect ? get().streak + 1 : 0;
-        saveStreak(newStreak);
-
-        // Обновляем LP в реальном времени
-        if (res.totalLp !== undefined) {
-          useLeagueStore.getState().updateLp(res.totalLp);
-        }
-
-        set({
-          feedback: {
-            isCorrect: res.isCorrect,
-            correctAnswer: q.correctTranslation ?? '',
-            xpEarned: res.xpEarned,
-            xpModifier: res.xpModifier,
-            lpEarned: res.lpEarned,
-            lpModifier: res.lpModifier,
-            totalXp: res.totalXp,
-            totalLp: res.totalLp,
-            level: res.level,
-            levelUp: res.levelUp,
-            examples: res.examples,
-            mnemonic: res.mnemonic,
-          },
-          recentMeaningIds: updatedRecent,
-          isLoading: false,
-          streak: newStreak,
-          questionIndex: questionIndex + 1,
-        });
-
-        // Автопереход к следующему вопросу
-        setTimeout(async () => {
-          set({ feedback: null, selectedAnswer: null });
-          const state = get();
-          const nextRes = await quizNext(
-            state.recentMeaningIds,
-            state.collectionId,
-            undefined,
-            state.recentGenerators,
-            undefined,
-            undefined,
-            state.questionIndex,
-          );
-          const updatedGenerators = nextRes.question
-            ? [...state.recentGenerators, getGeneratorTypeFromQuestion(nextRes.question)].slice(-MAX_RECENT_GENERATORS)
-            : state.recentGenerators;
-          set({ currentQuestion: nextRes.question, recentGenerators: updatedGenerators });
-        }, FEEDBACK_DELAY);
+      if (!res.livesExhausted) {
+        setTimeout(() => {
+          set({ feedback: null });
+          get().fetchNext();
+        }, 1200);
       }
     } catch {
       set({ isLoading: false, error: 'Ошибка при отправке ответа' });
@@ -316,86 +481,54 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
   skip: async () => {
     const { currentQuestion } = get();
     if (!currentQuestion) return;
-    // Пропуск = неправильный ответ с пустым selectedAnswer
-    // Передаём пустую строку чтобы отличить от выбора варианта
-    await get().submitAnswer('');
+    if (isGrammarQuestion(currentQuestion)) {
+      // Пропуск грамматики = пустой ответ (неправильно), без траты жизни
+      await get().submitGrammarAnswer('', true);
+      return;
+    }
+    // Пропуск = ответ null (неправильно), без траты жизни
+    await get().submitAnswer(null, undefined, true);
   },
+
+  expireDoubleXp: () => set({ doubleXpExpired: true }),
 
   reset: () => {
+    saveQuestion(null);
     set({
       currentQuestion: null,
+      recentMeaningIds: [],
+      recentGenerators: [],
+      feedback: null,
       isLoading: false,
       error: null,
-      selectedAnswer: null,
-      feedback: null,
-      sessionId: null,
-      questionIndex: 0,
-      answers: [],
-      result: null,
-      recentMeaningIds: [],
-      recentGenerators: [],
       collectionId: undefined,
+      doubleXpTimeLimitMs: null,
+      doubleXpExpired: false,
+      questionIndex: 0,
+      recentCorrectCount: 0,
+      recentTotalCount: 0,
+      lastUserAnswer: null,
+      livesExhausted: false,
     });
   },
 
-  setCollectionId: (id) => {
-    set({
-      collectionId: id,
-      recentMeaningIds: [],
-      recentGenerators: [],
-      currentQuestion: null,
-      feedback: null,
-      selectedAnswer: null,
-    });
+  restoreLives: async () => {
+    try {
+      const res = await refillLives();
+      set({ lives: res.lives, livesRestoredAt: null, livesExhausted: false });
+      // Continue quiz
+      get().fetchNext();
+    } catch {
+      // Will be handled by UI (insufficient gems etc.)
+    }
+  },
+
+  onLivesTimerExpired: () => {
+    set({ lives: 5, livesRestoredAt: null, livesExhausted: false });
+    get().fetchNext();
+  },
+
+  updateLives: (lives, livesRestoredAt) => {
+    set({ lives, livesRestoredAt });
   },
 }));
-
-// ─── Selectors ──────────────────────────────────────────────────────────────
-
-export function useGameQuestion() {
-  return useUnifiedGameStore((s) => s.currentQuestion);
-}
-
-export function useGameFeedback() {
-  return useUnifiedGameStore((s) => s.feedback);
-}
-
-export function useGameStreak() {
-  return useUnifiedGameStore((s) => s.streak);
-}
-
-export function useGameLoading() {
-  return useUnifiedGameStore((s) => s.isLoading);
-}
-
-export function useGameError() {
-  return useUnifiedGameStore((s) => s.error);
-}
-
-export function useSessionResult() {
-  return useUnifiedGameStore((s) => s.result);
-}
-
-export function useSessionProgress() {
-  return useUnifiedGameStore((s) => ({
-    index: s.questionIndex,
-    total: s.maxQuestions,
-  }));
-}
-
-// Хелпер для создания RewardDisplay из feedback
-export function createRewardDisplay(
-  feedback: AnswerFeedback,
-  key: number,
-): RewardDisplay | null {
-  if (!feedback.isCorrect || feedback.xpEarned === undefined) return null;
-
-  return {
-    xp: feedback.xpEarned,
-    xpMultiplier: (feedback.xpModifier ?? 100) / 100,
-    lp: feedback.lpEarned ?? 0,
-    lpMultiplier: (feedback.lpModifier ?? 100) / 100,
-    levelUp: feedback.levelUp,
-    key,
-  };
-}

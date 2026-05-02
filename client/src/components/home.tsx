@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUserStore } from '@/stores/user-store';
-import { useHomeStore } from '@/stores/home-store';
+import { useUnifiedGameStore } from '@/stores/unified-game-store';
 import { useLeagueStore } from '@/stores/league-store';
 import { useCollectionStore } from '@/stores/collection-store';
 import { useTelegram } from '@/hooks/use-telegram';
@@ -77,7 +77,7 @@ export function Home() {
     clearHistory,
     restoreLives,
     onLivesTimerExpired,
-  } = useHomeStore();
+  } = useUnifiedGameStore();
 
   const { progress, stats, season, isLoading: isLeagueLoading, fetchStatus } = useLeagueStore();
   const [timeLeft, setTimeLeft] = useState('');
@@ -161,7 +161,7 @@ export function Home() {
   const handleExitFocus = useCallback(() => {
     // Сбрасываем collectionId без очистки currentQuestion, чтобы QuizContainer
     // анимировал переход плавно (fade out → fade in) вместо мигания скелетона
-    useHomeStore.setState({ collectionId: undefined, recentMeaningIds: [], recentGenerators: [] });
+    useUnifiedGameStore.setState({ collectionId: undefined, recentMeaningIds: [], recentGenerators: [] });
     fetchNext();
   }, [fetchNext]);
 
@@ -185,7 +185,7 @@ export function Home() {
   // Sync lives from user profile
   useEffect(() => {
     if (user) {
-      useHomeStore.getState().updateLives(user.lives, user.livesRestoredAt);
+      useUnifiedGameStore.getState().updateLives(user.lives, user.livesRestoredAt);
     }
   }, [user?.lives, user?.livesRestoredAt]);
 

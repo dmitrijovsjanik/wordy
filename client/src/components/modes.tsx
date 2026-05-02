@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Sword01Icon, Tick01Icon, BookOpen02Icon, Book02Icon, ArrowRight01Icon } from '@hugeicons/core-free-icons';
-import { useHomeStore, type QuestionGeneratorMode } from '@/stores/home-store';
+import { useUnifiedGameStore, type QuestionGeneratorMode } from '@/stores/unified-game-store';
 import { cn } from '@/lib/utils';
 
 const GENERATOR_MODES: { value: QuestionGeneratorMode; title: string; description: string }[] = [
@@ -14,8 +14,8 @@ const GENERATOR_MODES: { value: QuestionGeneratorMode; title: string; descriptio
 
 export function Modes() {
   const navigate = useNavigate();
-  const generatorMode = useHomeStore((s) => s.generatorMode);
-  const setGeneratorMode = useHomeStore((s) => s.setGeneratorMode);
+  const generatorMode = useUnifiedGameStore((s) => s.generatorMode);
+  const setGeneratorMode = useUnifiedGameStore((s) => s.setGeneratorMode);
 
   return (
     <div className="flex flex-col gap-5 px-4 pt-6 pb-4">

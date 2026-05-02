@@ -10,14 +10,14 @@ import { WordSortSelect } from '@/components/ui/word-sort-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BackButton } from '@/components/ui/back-button';
 import { ERRORS_COLLECTION_ID } from '@/lib/api';
-import { useHomeStore } from '@/stores/home-store';
+import { useUnifiedGameStore } from '@/stores/unified-game-store';
 
 export function ErrorsCollection() {
   const navigate = useNavigate();
   const errorsCollection = useCollectionStore((s) => s.errorsCollection);
   const isLoadingErrors = useCollectionStore((s) => s.isLoadingErrors);
   const fetchErrorsCollection = useCollectionStore((s) => s.fetchErrorsCollection);
-  const setCollectionId = useHomeStore((s) => s.setCollectionId);
+  const setCollectionId = useUnifiedGameStore((s) => s.setCollectionId);
 
   useBackButton(() => navigate('/collections'));
 

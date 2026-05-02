@@ -35,7 +35,7 @@ import {
   Cancel01Icon,
 } from '@hugeicons/core-free-icons';
 import { dictionaryLookup, addCollectionWords, removeCollectionWord } from '@/lib/api';
-import { useHomeStore } from '@/stores/home-store';
+import { useUnifiedGameStore } from '@/stores/unified-game-store';
 import { PremiumDrawer } from '@/components/ui/premium-drawer';
 import type { DictionaryLookupResult } from '@/types/api';
 
@@ -51,7 +51,7 @@ export function CollectionDetail() {
   const unsubscribe = useCollectionStore((s) => s.unsubscribe);
   const update = useCollectionStore((s) => s.update);
   const remove = useCollectionStore((s) => s.remove);
-  const setCollectionId = useHomeStore((s) => s.setCollectionId);
+  const setCollectionId = useUnifiedGameStore((s) => s.setCollectionId);
 
   useBackButton(() => navigate('/collections'));
 
