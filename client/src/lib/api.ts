@@ -149,8 +149,11 @@ export function learningSwipe(input: {
   return fetchApi<{ ok: boolean }>('POST', '/api/learning/swipe', input);
 }
 
-export function learningUndoSwipe(meaningId: number) {
-  return fetchApi<{ ok: boolean }>('POST', '/api/learning/undo-swipe', { meaningId });
+export function learningUndoSwipe(
+  meaningId: number,
+  originalAction?: 'known' | 'unknown' | 'snooze',
+) {
+  return fetchApi<{ ok: boolean }>('POST', '/api/learning/undo-swipe', { meaningId, originalAction });
 }
 
 // ─── Review Feed (фаза 4) ──────────────────────────────────────────────────

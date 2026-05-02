@@ -273,10 +273,15 @@ export default async function learningRoutes(app: FastifyInstance) {
   });
 
   // POST /api/learning/undo-swipe — откат последнего свайпа (жест «вниз» в обзоре).
-  app.post<{ Body: { meaningId: number } }>('/api/learning/undo-swipe', async (request) => {
+  app.post<{
+    Body: {
+      meaningId: number;
+      originalAction?: 'known' | 'unknown' | 'snooze';
+    };
+  }>('/api/learning/undo-swipe', async (request) => {
     const userId = request.user.id;
-    const { meaningId } = request.body;
-    await undoSwipe(userId, meaningId);
+    const { meaningId, originalAction } = request.body;
+    await undoSwipe(userId, meaningId, originalAction);
     return { ok: true };
   });
 }

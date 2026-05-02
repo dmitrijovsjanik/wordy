@@ -113,6 +113,9 @@ export const learningEventTypeEnum = pgEnum('learning_event_type', [
   'review_swiped_known',
   'review_swiped_unknown',
   'review_swiped_snooze',
+  // Откат свайпа в обзоре (жест «вниз»). payload.original_action хранит
+  // что именно откатили: 'known' | 'unknown' | 'snooze'.
+  'review_undo',
   // Онбординг (плейсмент-тест)
   'onboarding_step',
 ]);

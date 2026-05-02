@@ -184,8 +184,9 @@ export const useReviewStore = create<ReviewState>()((set, get) => ({
       });
     }
     // Снимаем серверные записи (паралельно, не ждём).
+    // Прокидываем original_action — нужен для аналитики (event review_undo).
     for (const id of last.meaningIds) {
-      learningUndoSwipe(id).catch((e) => console.error('[review] undo failed:', e));
+      learningUndoSwipe(id, last.action).catch((e) => console.error('[review] undo failed:', e));
     }
   },
 

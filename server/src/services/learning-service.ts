@@ -521,17 +521,25 @@ export async function applySwipe(input: ApplySwipeInput): Promise<void> {
  * чтобы слово снова появилось в feed обзора. Используется жестом «вниз» в режиме A.
  *
  * Если записи не было — no-op (не падаем).
+ *
+ * `originalAction` — что именно откатывают (для аналитики). Клиент знает по
+ * своей history, поэтому передаёт; сервер сам не определяет (последнее
+ * событие в learning_events может быть question_shown между свайпами).
  */
-export async function undoSwipe(userId: number, meaningId: number): Promise<void> {
+export async function undoSwipe(
+  userId: number,
+  meaningId: number,
+  originalAction?: 'known' | 'unknown' | 'snooze',
+): Promise<void> {
   await db
     .delete(userWordProgress)
     .where(and(eq(userWordProgress.userId, userId), eq(userWordProgress.meaningId, meaningId)));
 
   await recordEvent({
     userId,
-    eventType: 'review_swiped_unknown', // переиспользуем event_type, помечая через payload
+    eventType: 'review_undo',
     meaningId,
-    payload: { undo: true },
+    payload: originalAction ? { originalAction } : null,
   });
 }
 

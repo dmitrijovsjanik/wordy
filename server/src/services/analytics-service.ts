@@ -17,6 +17,7 @@ export type LearningEventType =
   | 'review_swiped_known'
   | 'review_swiped_unknown'
   | 'review_swiped_snooze'
+  | 'review_undo'
   | 'onboarding_step';
 
 export type LearningTier = 'encounter' | 'passive' | 'active' | 'production' | 'review';
