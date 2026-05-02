@@ -99,40 +99,9 @@ export function ReviewPage() {
     ? !words[wordIndex]
     : !cards[cardIndex];
 
-  if (isLoading && isEmpty) {
-    return (
-      <div className="flex min-h-full flex-col items-center px-4 pt-6 pb-8">
-        <div className="w-full"><BackButton onClick={() => navigate('/')} /></div>
-        <h1 className="mt-4 text-lg font-semibold">Обзор</h1>
-        <Skeleton className="mt-8 h-[60vh] w-full max-w-sm rounded-2xl" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex min-h-full flex-col items-center px-4 pt-6 pb-8">
-        <div className="w-full"><BackButton onClick={() => navigate('/')} /></div>
-        <div className="mt-auto mb-auto flex flex-col items-center gap-4">
-          <h2 className="text-lg font-semibold">Не удалось загрузить</h2>
-          <Button onClick={() => fetchInitial()}>Попробовать снова</Button>
-        </div>
-      </div>
-    );
-  }
-
-  if (isEmpty) {
-    return (
-      <div className="flex min-h-full flex-col items-center px-4 pt-6 pb-8">
-        <div className="w-full"><BackButton onClick={() => navigate('/')} /></div>
-        <div className="mt-auto mb-auto flex flex-col items-center gap-4">
-          <p className="text-center text-sm text-[var(--gray-11)]">
-            Пока всё. Возвращайся позже.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  // Header и кнопочный блок снизу всегда статичны — никаких ранних return,
+  // которые бы пересоздавали всю структуру при isLoading/isEmpty/error.
+  // Содержимое карусели меняется внутри (skeleton / empty / error / карта).
 
   return (
     <div className="flex min-h-full flex-col px-4 pt-4 pb-8">
@@ -159,9 +128,8 @@ export function ReviewPage() {
 
       <div className="relative mx-auto mt-4 flex w-full max-w-sm flex-1 items-center justify-center overflow-hidden">
         <div className="relative h-[60vh] w-full">
-          {/* Внешний AnimatePresence — плавный fade при смене режима A↔B.
-              mode="wait" гарантирует что старый режим полностью исчезнет
-              перед появлением нового, без glitch'а пустого контейнера. */}
+          {/* Плавный fade при смене режима. mode="wait" — exit старого
+              ПОЛНОСТЬЮ завершается до enter нового. */}
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={`mode-${mode}`}
@@ -171,46 +139,61 @@ export function ReviewPage() {
               transition={{ duration: 0.18 }}
               className="absolute inset-0"
             >
-              {/* Внутренний — карусель слов внутри текущего режима. */}
-              <AnimatePresence custom={wordTransitionDirection} mode="popLayout" initial={false}>
-                {mode === 'A' ? (
-                  <motion.div
-                    key={`a-${words[wordIndex]!.wordId}`}
-                    custom={wordTransitionDirection}
-                    variants={wordVariants}
-                    initial="enter"
-                    animate="center"
-                    exit="exit"
-                    transition={{ type: 'spring', stiffness: 220, damping: 28 }}
-                    className="absolute inset-0"
-                  >
-                    <WordStack
-                      word={words[wordIndex]!}
-                      meaningIndex={meaningIndex}
-                      onSwipe={handleSwipe}
-                      onUndo={handleUndo}
-                    />
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key={`b-${cards[cardIndex]!.meaningId}`}
-                    custom={wordTransitionDirection}
-                    variants={wordVariants}
-                    initial="enter"
-                    animate="center"
-                    exit="exit"
-                    transition={{ type: 'spring', stiffness: 220, damping: 28 }}
-                    className="absolute inset-0"
-                  >
-                    <WordStack
-                      word={cardToVirtualWord(cards[cardIndex]!)}
-                      meaningIndex={0}
-                      onSwipe={handleSwipe}
-                      onUndo={handleUndo}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              {error ? (
+                <div className="flex h-full flex-col items-center justify-center gap-4">
+                  <p className="text-sm text-[var(--gray-11)]">Не удалось загрузить</p>
+                  <Button onClick={() => fetchInitial()}>Попробовать снова</Button>
+                </div>
+              ) : isLoading && isEmpty ? (
+                <Skeleton className="h-full w-full rounded-2xl" />
+              ) : isEmpty ? (
+                <div className="flex h-full flex-col items-center justify-center">
+                  <p className="text-center text-sm text-[var(--gray-11)]">
+                    Пока всё. Возвращайся позже.
+                  </p>
+                </div>
+              ) : (
+                /* Внутренняя карусель слов в активном режиме. */
+                <AnimatePresence custom={wordTransitionDirection} mode="popLayout" initial={false}>
+                  {mode === 'A' ? (
+                    <motion.div
+                      key={`a-${words[wordIndex]!.wordId}`}
+                      custom={wordTransitionDirection}
+                      variants={wordVariants}
+                      initial="enter"
+                      animate="center"
+                      exit="exit"
+                      transition={{ type: 'spring', stiffness: 220, damping: 28 }}
+                      className="absolute inset-0"
+                    >
+                      <WordStack
+                        word={words[wordIndex]!}
+                        meaningIndex={meaningIndex}
+                        onSwipe={handleSwipe}
+                        onUndo={handleUndo}
+                      />
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key={`b-${cards[cardIndex]!.meaningId}`}
+                      custom={wordTransitionDirection}
+                      variants={wordVariants}
+                      initial="enter"
+                      animate="center"
+                      exit="exit"
+                      transition={{ type: 'spring', stiffness: 220, damping: 28 }}
+                      className="absolute inset-0"
+                    >
+                      <WordStack
+                        word={cardToVirtualWord(cards[cardIndex]!)}
+                        meaningIndex={0}
+                        onSwipe={handleSwipe}
+                        onUndo={handleUndo}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              )}
             </motion.div>
           </AnimatePresence>
         </div>

@@ -65,21 +65,22 @@ export const useReviewStore = create<ReviewState>()((set, get) => ({
 
   setMode: (m) => {
     saveMode(m);
-    set({
-      mode: m,
-      words: [],
-      wordIndex: 0,
-      meaningIndex: 0,
-      cards: [],
-      cardIndex: 0,
-      history: [],
-      error: null,
-    });
+    // Не сбрасываем words/cards — данные другого режима пусть остаются для
+    // мгновенного возврата. Только обнуляем history/error — они привязаны
+    // к выполненным действиям, между режимами не имеют смысла.
+    set({ mode: m, history: [], error: null });
+    // fetchInitial сделает сам решение: если данные уже есть — no-op.
     get().fetchInitial();
   },
 
   fetchInitial: async () => {
     if (get().isLoading) return;
+    const cur = get();
+    // Если данные текущего режима уже есть — не делаем повторный запрос.
+    // Это позволяет переключаться A↔B без skeleton-промежутка.
+    if (cur.mode === 'A' && cur.words.length > 0 && cur.wordIndex < cur.words.length) return;
+    if (cur.mode === 'B' && cur.cards.length > 0 && cur.cardIndex < cur.cards.length) return;
+
     set({ isLoading: true, error: null });
     try {
       if (get().mode === 'A') {
