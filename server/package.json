@@ -44,6 +44,7 @@
     "kokoro-js": "^1.2.1",
     "node-cron": "^4.2.1",
     "node-edge-tts": "^1.2.10",
+    "openai": "^6.35.0",
     "pg": "^8.18.0",
     "wink-lemmatizer": "^3.0.4"
   }

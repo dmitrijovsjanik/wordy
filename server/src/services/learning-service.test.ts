@@ -185,11 +185,11 @@ describe('computeTransition — active, wrong answer', () => {
 });
 
 describe('computeTransition — active, correct answer', () => {
-  // correctToAdvance for active is 2. Path:
+  // correctToAdvance for active is 2. Path при production.enabled=true:
   //   count=0 + correct → count=1, stays active, LEARN_HOURS[1] (8h).
-  //   count=1 + correct → newCount=2 ≥ 2 → advances. Since
-  //     production.enabled=false (current default), goes straight to review,
-  //     reviewStage=0, becameLearned=true, scheduled REVIEW_DAYS[0] days ahead.
+  //   count=1 + correct → newCount=2 ≥ 2 → advances to production
+  //     (НЕ review — production включён после фазы 6/7), reviewStage=0,
+  //     becameLearned=false (production не финал), nextReviewAt = now + LEARN_HOURS[0].
   it('count=0 + correct → count=1, stays active, scheduled at LEARN_HOURS[1]', () => {
     const result = computeTransition(input('active', 0, 0, true), NOW);
 
@@ -204,33 +204,30 @@ describe('computeTransition — active, correct answer', () => {
     );
   });
 
-  it('count=1 + correct → advances to review, becameLearned=true, REVIEW_DAYS[0]', () => {
-    // NOTE: This branch depends on learningConfig.tiers.production.enabled.
-    // When production.enabled becomes true, behavior changes (advances to
-    // production, not review, and becameLearned=false). Today we assert
-    // current behavior with production disabled.
-    // TODO(production-enabled): when production.enabled flips to true, add
-    // a sibling case asserting tier='production' and update this one.
-    expect(learningConfig.tiers.production.enabled).toBe(false);
+  it('count=1 + correct → advances to production, becameLearned=false, LEARN_HOURS[0]', () => {
+    // production.enabled=true после фазы 7 (cloze работает на 2K+ meanings
+    // с AI-examples). Active → Production → Review. becameLearned=false на
+    // переходе, потому что production не финал лестницы.
+    expect(learningConfig.tiers.production.enabled).toBe(true);
 
     const result = computeTransition(input('active', 1, 0, true), NOW);
 
-    expect(result.tier).toBe('review');
+    expect(result.tier).toBe('production');
     expect(result.tierCorrectCount).toBe(0);
     expect(result.reviewStage).toBe(0);
     expect(result.hasPenalty).toBe(false);
-    expect(result.becameLearned).toBe(true);
+    expect(result.becameLearned).toBe(false);
     expect(result.wasReset).toBe(false);
     expect(result.wasAdvanced).toBe(true);
     expect(result.nextReviewAt.getTime()).toBe(
-      addDays(NOW, REVIEW_DAYS[0]!).getTime(),
+      addHours(NOW, LEARN_HOURS[0]!).getTime(),
     );
   });
 
-  it('count above correctToAdvance still triggers review jump', () => {
+  it('count above correctToAdvance still triggers production jump', () => {
     const result = computeTransition(input('active', 2, 0, true), NOW);
-    expect(result.tier).toBe('review');
-    expect(result.becameLearned).toBe(true);
+    expect(result.tier).toBe('production');
+    expect(result.becameLearned).toBe(false);
   });
 
   it('reviewStage in input is ignored on active correct (output reviewStage=0)', () => {
@@ -446,14 +443,17 @@ describe('computeTransition — output shape', () => {
 
 describe('computeTransition — invariants', () => {
   // becameLearned is true only on the transition INTO review for the first
-  // time (active→review or production→review). Any other path → false.
-  it('becameLearned=true only on active→review and production→review', () => {
-    expect(
-      computeTransition(input('active', 1, 0, true), NOW).becameLearned,
-    ).toBe(true);
+  // time. С production.enabled=true это только production→review (active→production
+  // ставит becameLearned=false, потому что слово ещё не дошло до review).
+  it('becameLearned=true only on production→review', () => {
     expect(
       computeTransition(input('production', 2, 0, true), NOW).becameLearned,
     ).toBe(true);
+
+    // active+correct=2 теперь даёт переход в production, не review.
+    expect(
+      computeTransition(input('active', 1, 0, true), NOW).becameLearned,
+    ).toBe(false);
 
     expect(
       computeTransition(input('encounter', 0, 0, true), NOW).becameLearned,

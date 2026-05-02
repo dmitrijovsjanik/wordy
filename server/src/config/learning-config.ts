@@ -56,11 +56,13 @@ export const learningConfig = {
       enabled: true,
     },
     production: {
-      // Production — слово в предложении (cloze). Включится после батч-прогона
-      // AI-examples (фаза 6/7).
+      // Production — слово в предложении (cloze). Включён после фазы 6:
+      // 2037 meanings получили AI-examples + grammar + common_errors через
+      // OpenAI Batch API (см. scripts/generate-ai-content.ts). Cloze-генератор
+      // работает только для meanings с examples в word_ai_content.
       correctToAdvance: 3,
       allowedExerciseTypes: ['cloze'] as const,
-      enabled: false,
+      enabled: true,
     },
     review: {
       // Review — после освоения. Используется для интервальных повторений.

@@ -17,7 +17,7 @@
  *   - Лестницу пользователь не видит явно — это внутренняя логика отбора.
  */
 
-import { eq, and, sql, isNull, or, lte, ne, inArray } from 'drizzle-orm';
+import { eq, and, sql, isNull, or, lte, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { userWordProgress, collectionWords } from '../db/schema.js';
 import { learningConfig, type ExerciseType } from '../config/learning-config.js';
@@ -602,8 +602,6 @@ export async function pickNextItem(
         isNull(userWordProgress.nextReviewAt),
         lte(userWordProgress.nextReviewAt, now),
       )!,
-      // production отключён — пропускаем.
-      ne(userWordProgress.learningTier, 'production'),
       ...(collectionFilter ? [collectionFilter] : []),
       ...(exclude.length > 0
         ? [sql`${userWordProgress.meaningId} NOT IN (${sql.join(exclude.map(id => sql`${id}`), sql`, `)})`]
@@ -611,10 +609,11 @@ export async function pickNextItem(
     ))
     .orderBy(sql`CASE ${userWordProgress.learningTier}
         WHEN 'review' THEN 0
-        WHEN 'active' THEN 1
-        WHEN 'passive' THEN 2
-        WHEN 'encounter' THEN 3
-        ELSE 4 END`,
+        WHEN 'production' THEN 1
+        WHEN 'active' THEN 2
+        WHEN 'passive' THEN 3
+        WHEN 'encounter' THEN 4
+        ELSE 5 END`,
       sql`${userWordProgress.nextReviewAt} NULLS FIRST`,
     )
     .limit(1);
