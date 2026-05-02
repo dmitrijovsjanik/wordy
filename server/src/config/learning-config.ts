@@ -74,13 +74,17 @@ export const learningConfig = {
   },
 
   intervals: {
-    /** Encounter → Passive: первый показ через 4 часа после знакомства. */
-    encounterToPassiveHours: 4,
+    /** Encounter → Passive: 0 = слово сразу доступно как passive в той же сессии.
+     *  Обоснование: при cooldown'е >0 в первой сессии видны только encounter-карточки,
+     *  потому что каждое новое слово блокируется до следующего дня. */
+    encounterToPassiveHours: 0,
     /** Кулдаун после ошибки на passive/active (фаза изучения, без отката). */
     learningCooldownMinutes: 30,
     /** Интервалы между повторами правильных ответов на passive/active.
-     *  [0]=4h после первого правильного, [1]=8h после второго. */
-    learningIntervalsHours: [4, 8] as const,
+     *  [0]=0 — после первого правильного passive слово остаётся доступным в той же
+     *  сессии (но pickNextItem отдаст приоритет другим словам по ORDER BY).
+     *  [1]=8h — после второго правильного (продвижение active→production) уже spaced. */
+    learningIntervalsHours: [0, 8] as const,
     /** Интервалы review-фазы по `reviewStage` (0..N).
      *  При выходе из active в review reviewStage=0 → первый показ через 3 дня. */
     reviewIntervalsDays: [3, 7, 21, 60, 180] as const,
