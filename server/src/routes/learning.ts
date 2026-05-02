@@ -278,6 +278,23 @@ export default async function learningRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
+  // ─── POST /api/learning/mnemonic-revealed ──────────────────────────────
+  // Логирует факт раскрытия AI-мнемоники на passive-recall карточке.
+  // Источник для будущей оценки полезности AI-контента.
+
+  app.post<{ Body: { meaningId: number } }>('/api/learning/mnemonic-revealed', async (request) => {
+    const userId = request.user.id;
+    const { meaningId } = request.body;
+    if (typeof meaningId !== 'number') return { ok: false };
+    await recordEvent({
+      userId,
+      eventType: 'mnemonic_revealed',
+      meaningId,
+      questionType: 'passive-recall',
+    });
+    return { ok: true };
+  });
+
   // ─── GET /api/learning/problems ────────────────────────────────────────
   // Список «проблемных» meaning'ов (≥3 ошибок за 60 дней) + общий count.
 

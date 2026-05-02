@@ -23,7 +23,8 @@ export type ExerciseType =
   | 'cloze'
   | 'free-recall'
   | 'dictation'
-  | 'encounter-card';
+  | 'encounter-card'
+  | 'passive-recall-card';
 
 export type TierConfig = {
   /** Сколько раз нужно «правильно» подряд, чтобы перейти на следующий tier.
@@ -44,9 +45,13 @@ export const learningConfig = {
       enabled: true,
     },
     passive: {
-      // Passive recall — узнавание (multiple-choice, match-pairs, listening).
+      // Passive recall — флешкарта с флипом и самооценкой через свайп.
+      // Пользователь видит слово+пример, переворачивает карточку, видит перевод
+      // и сам выбирает «знал» (свайп вправо) / «не знал» (свайп влево).
+      // Multiple-choice/match-pairs/listening здесь больше не используются —
+      // это узнавание с подсказкой через варианты, а не настоящий passive recall.
       correctToAdvance: 2,
-      allowedExerciseTypes: ['multiple-choice', 'match-pairs', 'listening'] as const,
+      allowedExerciseTypes: ['passive-recall-card'] as const,
       enabled: true,
     },
     active: {

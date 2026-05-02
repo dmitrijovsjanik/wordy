@@ -192,6 +192,22 @@ export type EncounterCardApiQuestion = {
   doubleXpTimeLimitMs?: number;
 };
 
+// Passive recall card — флешкарта с флипом и самооценкой через свайп.
+// Лицо: word + example.en + meaningIndex/totalMeanings.
+// Обратная: translation + example.ru + кнопка «💡» для раскрытия мнемоники.
+// Свайп вправо = isCorrect=true, влево = false.
+export type PassiveRecallApiQuestion = {
+  type: 'passive-recall';
+  meaningId: number;
+  word: string;
+  translation: string;
+  example: { en: string; ru: string } | null;
+  mnemonic: string | null;
+  meaningIndex: number;
+  totalMeanings: number;
+  doubleXpTimeLimitMs?: number;
+};
+
 export type LearningTier = 'encounter' | 'passive' | 'active' | 'production' | 'review';
 
 // Карточка из режима обзора (фаза 4).
@@ -268,7 +284,8 @@ export type QuizQuestion =
   | ListeningApiQuestion
   | DictationApiQuestion
   | FreeRecallApiQuestion
-  | EncounterCardApiQuestion;
+  | EncounterCardApiQuestion
+  | PassiveRecallApiQuestion;
 
 export type QuizStartResponse = {
   sessionId: number;

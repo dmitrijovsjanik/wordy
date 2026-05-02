@@ -14,6 +14,7 @@ import { LEAGUE_ICONS } from '@/components/ui/league-icons';
 import { WordDisplay } from '@/components/game/word-display';
 import { MultipleChoice } from '@/components/game/question-types/multiple-choice';
 import { EncounterCard } from '@/components/game/question-types/encounter-card';
+import { PassiveRecallCard } from '@/components/game/question-types/passive-recall-card';
 import { RewardFeedback } from '@/components/game/reward-feedback';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QuizContainer } from '@/components/game/quiz-container';
@@ -67,6 +68,7 @@ export function Home() {
     submitAnswer,
     submitMatchPairsResults,
     submitEncounter,
+    submitPassiveRecall,
     skip,
     currentTier,
     problemsMode,
@@ -554,6 +556,17 @@ export function Home() {
                     question={currentQuestion}
                     disabled={isLoading || feedback !== null}
                     onAnswer={() => submitEncounter()}
+                  />
+                </div>
+              ) : currentQuestion && currentQuestion.type === 'passive-recall' ? (
+                /* Passive recall — флешкарта с флипом и свайпом. По требованию
+                   не показываем tier-бейджи и feedback-панель: вся обратная
+                   связь происходит внутри карточки (✓/✗ overlay 500ms). */
+                <div className="flex min-h-0 flex-1 flex-col justify-center px-2">
+                  <PassiveRecallCard
+                    question={currentQuestion}
+                    disabled={isLoading}
+                    onAnswer={(knew) => submitPassiveRecall(knew)}
                   />
                 </div>
               ) : currentQuestion && (

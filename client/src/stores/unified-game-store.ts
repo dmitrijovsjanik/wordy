@@ -86,6 +86,7 @@ function getCorrectAnswer(q: QuizQuestion): string {
   if (q.type === 'dictation') return q.correctAnswer;
   if (q.type === 'free-recall') return q.acceptableAnswers[0] ?? '';
   if (q.type === 'encounter') return q.translation;
+  if (q.type === 'passive-recall') return q.translation;
   return q.correctTranslation ?? '';
 }
 
@@ -101,6 +102,8 @@ function getGeneratorTypeFromQuestion(question: QuizQuestion): string {
   if (question.type === 'listening') return 'listening';
   if (question.type === 'dictation') return 'dictation';
   if (question.type === 'free-recall') return 'free-recall';
+  if (question.type === 'encounter') return 'encounter';
+  if (question.type === 'passive-recall') return 'passive-recall';
   // QuizQuestionBase — единственный с .direction
   return 'direction' in question && typeof question.direction === 'string' ? question.direction : 'en-ru';
 }
@@ -141,6 +144,7 @@ type UnifiedGameState = {
   fetchNext: () => Promise<void>;
   submitAnswer: (selectedMeaningId: number | null, userAnswer?: string, skip?: boolean) => Promise<void>;
   submitEncounter: () => Promise<void>;
+  submitPassiveRecall: (knew: boolean) => Promise<void>;
   submitMatchPairsResults: (results: Array<{ meaningId: number; isCorrect: boolean }>) => Promise<void>;
   skip: () => Promise<void>;
   reset: () => void;
@@ -409,8 +413,12 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
         ...livesUpdate,
       });
 
-      // Автопереход к следующему вопросу (НЕ если жизни кончились)
-      if (!res.livesExhausted) {
+      // Автопереход к следующему вопросу (НЕ если жизни кончились).
+      // Passive-recall сам управляет переходом (свой 500ms ✓/✗ overlay в
+      // карточке + явный вызов fetchNext в submitPassiveRecall) — не запускаем
+      // 1200ms таймер, иначе будет двойной fetchNext.
+      const isPassiveRecall = currentQuestion.type === 'passive-recall';
+      if (!res.livesExhausted && !isPassiveRecall) {
         setTimeout(() => {
           set({ feedback: null });
           get().fetchNext();
@@ -516,6 +524,18 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
     // Encounter всегда «правильно» — это просто показ карточки.
     // submitAnswer определит isCorrect=true по question.type и пройдёт через learning-API.
     await get().submitAnswer(currentQuestion.meaningId, undefined, false);
+  },
+
+  submitPassiveRecall: async (knew: boolean) => {
+    const { currentQuestion } = get();
+    if (!currentQuestion || currentQuestion.type !== 'passive-recall') return;
+    // knew=true → передаём meaningId (компарируется === meaningId → isCorrect=true).
+    // knew=false → null (selectedMeaningId !== meaningId → isCorrect=false).
+    // submitAnswer для passive-recall не ставит 1200ms-таймер, поэтому здесь
+    // мы сами очищаем feedback и сразу подгружаем следующий вопрос.
+    await get().submitAnswer(knew ? currentQuestion.meaningId : null, undefined, false);
+    set({ feedback: null });
+    await get().fetchNext();
   },
 
   expireDoubleXp: () => set({ doubleXpExpired: true }),

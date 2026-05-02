@@ -86,7 +86,7 @@ export function reversePair(pair: LanguagePair): LanguagePair {
 
 // ─── Generator Rotation ────────────────────────────────────────────────────
 
-export type GeneratorType = 'en-ru' | 'ru-en' | 'spelling' | 'match-pairs' | 'cloze' | 'listening' | 'dictation' | 'free-recall' | 'encounter';
+export type GeneratorType = 'en-ru' | 'ru-en' | 'spelling' | 'match-pairs' | 'cloze' | 'listening' | 'dictation' | 'free-recall' | 'encounter' | 'passive-recall';
 
 // Encounter card — пассивный показ слова на первом уровне лестницы.
 // Без проверки: пользователь нажимает «Понятно» → recordAnswer({isCorrect: true}) → tier=passive.
@@ -101,6 +101,22 @@ export type EncounterCardQuestion = {
   example: { en: string; ru: string } | null;   // AI-example или Yandex-example
   partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
   direction: 'en-ru';
+};
+
+// Passive recall card — второй уровень лестницы. Флешкарта с флипом и
+// самооценкой через свайп. На лицевой — слово и пример. На обратной —
+// перевод, перевод примера и кнопка раскрытия мнемоники. Свайп вправо =
+// «знал» (isCorrect=true), свайп влево = «не знал» (isCorrect=false).
+// Подробности UI: см. PassiveRecallCard на клиенте.
+export type PassiveRecallCardQuestion = {
+  type: 'passive-recall';
+  meaningId: number;
+  word: string;
+  translation: string;
+  example: { en: string; ru: string } | null;
+  mnemonic: string | null;          // null = мнемоники нет; кнопку «💡» не показывать
+  meaningIndex: number;              // 1-based позиция значения в порядке popularity_rank
+  totalMeanings: number;             // всего значений у слова
 };
 
 // Match-pairs question (соединение пар)

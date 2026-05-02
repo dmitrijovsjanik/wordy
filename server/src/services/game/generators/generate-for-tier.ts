@@ -8,9 +8,11 @@ import type {
   FreeRecallQuestion,
   ClozeQuestion,
   EncounterCardQuestion,
+  PassiveRecallCardQuestion,
   GeneratorType,
 } from '../types.js';
 import { generateEncounterCard } from './encounter.js';
+import { generatePassiveRecallFromMeaning } from './passive-recall.js';
 import { generateFromMeaning } from './multiple-choice.js';
 import { generateFreeRecallFromMeaning } from './free-recall.js';
 import { generateListeningFromMeaning } from './listening.js';
@@ -33,6 +35,7 @@ import { canGenerateCloze, generateClozeFromMeaning } from './cloze.js';
 
 export type TierQuestion =
   | EncounterCardQuestion
+  | PassiveRecallCardQuestion
   | LegacyQuestion
   | ListeningQuestion
   | DictationQuestion
@@ -47,6 +50,7 @@ export type GenerateForTierOpts = {
 /** Маппинг ExerciseType → GeneratorType (для рекорда в recentGenerators). */
 function exerciseToGeneratorType(ex: ExerciseType): GeneratorType {
   if (ex === 'encounter-card') return 'encounter';
+  if (ex === 'passive-recall-card') return 'passive-recall';
   if (ex === 'multiple-choice') return 'en-ru'; // multiple-choice пишется как en-ru/ru-en в recentGenerators
   if (ex === 'free-recall') return 'free-recall';
   if (ex === 'dictation') return 'dictation';
@@ -64,6 +68,9 @@ async function tryGenerate(
   try {
     if (exercise === 'encounter-card') {
       return await generateEncounterCard(meaning);
+    }
+    if (exercise === 'passive-recall-card') {
+      return await generatePassiveRecallFromMeaning(meaning);
     }
     if (exercise === 'multiple-choice') {
       return await generateFromMeaning(meaning);

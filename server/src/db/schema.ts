@@ -116,6 +116,9 @@ export const learningEventTypeEnum = pgEnum('learning_event_type', [
   // Откат свайпа в обзоре (жест «вниз»). payload.original_action хранит
   // что именно откатили: 'known' | 'unknown' | 'snooze'.
   'review_undo',
+  // Раскрытие мнемоники по кнопке на passive-recall карточке. Пишем для
+  // оценки полезности AI-мнемоник (доля раскрытий vs показов).
+  'mnemonic_revealed',
   // Онбординг (плейсмент-тест)
   'onboarding_step',
 ]);

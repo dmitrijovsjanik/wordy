@@ -155,6 +155,10 @@ export function learningUndoSwipe(
   return fetchApi<{ ok: boolean }>('POST', '/api/learning/undo-swipe', { meaningId, originalAction });
 }
 
+export function learningMnemonicRevealed(meaningId: number) {
+  return fetchApi<{ ok: boolean }>('POST', '/api/learning/mnemonic-revealed', { meaningId });
+}
+
 // ─── Проблемные слова (≥3 ошибок за 60 дней через learning_events) ─────────
 
 export type ProblemMeaning = {
