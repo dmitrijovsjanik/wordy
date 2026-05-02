@@ -5,6 +5,7 @@ import { useBackButton } from '@/hooks/use-back-button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BackButton } from '@/components/ui/back-button';
 import { ArticleQuiz } from '@/components/grammar/article-quiz';
+import { ArticleReference } from '@/components/grammar/article-reference';
 import { TenseQuiz } from '@/components/grammar/tense-quiz';
 import { TenseReference } from '@/components/grammar/tense-reference';
 import { CollocationQuiz } from '@/components/grammar/collocation-quiz';
@@ -15,6 +16,7 @@ export function GrammarPage() {
   const activeTab = useGrammarStore((s) => s.activeTab);
   const setActiveTab = useGrammarStore((s) => s.setActiveTab);
   const tenseView = useGrammarStore((s) => s.tenseView);
+  const articleView = useGrammarStore((s) => s.articleView);
 
   useBackButton(useCallback(() => navigate('/modes'), [navigate]));
 
@@ -58,7 +60,7 @@ export function GrammarPage() {
 
       {/* Content */}
       <div className="mt-4 flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {activeTab === 'articles' && <ArticleQuiz />}
+        {activeTab === 'articles' && (articleView === 'reference' ? <ArticleReference /> : <ArticleQuiz />)}
         {activeTab === 'tenses' && (tenseView === 'reference' ? <TenseReference /> : <TenseQuiz />)}
         {activeTab === 'collocations' && <CollocationQuiz />}
         {activeTab === 'false-friends' && <FalseFriendsQuiz />}

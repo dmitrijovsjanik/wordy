@@ -70,7 +70,7 @@ export function Cloze({
             (showResult || disabled) && 'opacity-40',
           )}
         >
-          Пропустить
+          Не знаю
         </Button>
       )}
     </>

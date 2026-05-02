@@ -1,10 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useSpeech } from '@/hooks/use-speech';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { VolumeHighIcon, EyeIcon } from '@hugeicons/core-free-icons';
-import { motion } from 'framer-motion';
+import { VolumeHighIcon } from '@hugeicons/core-free-icons';
 import type { AnswerFeedback } from '@/types/game';
 
 type ListeningProps = {
@@ -18,7 +17,6 @@ type ListeningProps = {
   showSkip?: boolean;
   audioWord: string;
   transcription?: string | null;
-  onReveal?: () => void;
 };
 
 export function Listening({
@@ -32,17 +30,14 @@ export function Listening({
   showSkip = true,
   audioWord,
   transcription,
-  onReveal,
 }: ListeningProps) {
   const { speak, isSpeaking, isLoading } = useSpeech({ lang: 'en-US', rate: 0.85 });
   const hasPlayedRef = useRef(false);
   const showResult = feedback !== null;
-  const [revealed, setRevealed] = useState(false);
 
   // Сброс при смене вопроса
   useEffect(() => {
     hasPlayedRef.current = false;
-    setRevealed(false);
   }, [questionKey]);
 
   useEffect(() => {
@@ -59,15 +54,10 @@ export function Listening({
     }
   };
 
-  const handleReveal = () => {
-    setRevealed(true);
-    onReveal?.();
-  };
-
   return (
     <>
-      {/* Кнопки: воспроизведение + показать слово */}
-      <div className="mb-4 flex items-center justify-center gap-3">
+      {/* Кнопка воспроизведения */}
+      <div className="mb-4 flex items-center justify-center">
         <Button
           variant="secondary"
           size="icon-xs"
@@ -80,31 +70,7 @@ export function Listening({
         >
           <HugeiconsIcon icon={VolumeHighIcon} size={24} />
         </Button>
-        {!revealed && !showResult && (
-          <Button
-            variant="secondary"
-            size="icon-xs"
-            onClick={handleReveal}
-          >
-            <HugeiconsIcon icon={EyeIcon} size={20} />
-          </Button>
-        )}
       </div>
-
-      {/* Показ слова: только после ответа (при reveal слово уже показывается в заголовке) */}
-      {showResult && !revealed && (
-        <motion.div
-          initial={{ opacity: 0, y: -4 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2 }}
-          className="mb-4 flex flex-col items-center gap-1"
-        >
-          <span className="text-lg font-bold text-[var(--gray-12)]">{audioWord}</span>
-          {transcription && (
-            <span className="text-sm text-[var(--gray-10)]">[{transcription}]</span>
-          )}
-        </motion.div>
-      )}
 
       {/* Options grid 2x2 */}
       <div className="grid w-full grid-cols-2 gap-3">
@@ -148,7 +114,7 @@ export function Listening({
             (showResult || disabled) && 'opacity-40',
           )}
         >
-          Пропустить
+          Не знаю
         </Button>
       )}
     </>

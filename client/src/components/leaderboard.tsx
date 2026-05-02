@@ -78,6 +78,7 @@ type LeaderboardEntry = {
   isCurrentUser: boolean;
   lpToday: number;
   positionChange: number;
+  isPremium?: boolean;
 };
 
 type GroupedZones = {
@@ -260,7 +261,12 @@ function LeaderboardList({ leaderboard, tier }: { leaderboard: LeaderboardEntry[
                   <Avatar src={entry.avatarUrl} fallback={entry.firstName} size={40} />
 
                   <div className="flex flex-1 flex-col">
-                    <span className="font-medium">{entry.firstName}</span>
+                    <span className="flex items-center gap-1 font-medium">
+                      {entry.firstName}
+                      {entry.isPremium && (
+                        <span className="inline-block h-2 w-2 rounded-full bg-[var(--amber-9)]" />
+                      )}
+                    </span>
                   </div>
 
                   {/* LP и сегодняшний прирост */}

@@ -64,7 +64,7 @@ function ReadingView() {
   const showTranslation = useReadingStore((s) => s.showTranslation);
   const toggleTranslation = useReadingStore((s) => s.toggleTranslation);
   const goToQuestions = useReadingStore((s) => s.goToQuestions);
-  const { speak, stop, isSpeaking, isLoading, error: ttsError } = useSpeech({ rate: 0.85 });
+  const { speakLong, stop, isSpeaking, isLoading, error: ttsError } = useSpeech({ rate: 0.85 });
 
   if (!passage) return null;
 
@@ -122,7 +122,7 @@ function ReadingView() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => speak(passage.text)}
+            onClick={() => speakLong(passage.text)}
             disabled={isLoading}
             className={cn('gap-1.5', isLoading && 'animate-pulse')}
           >

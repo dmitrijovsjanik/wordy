@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
+import { BlankSentence } from '@/components/game/blank-sentence';
 import { cn } from '@/lib/utils';
 import { getNextCollocationExercise, submitCollocationAnswer } from '@/lib/api';
 import type { CollocationData, CollocationType } from '@/types/grammar';
@@ -83,8 +84,12 @@ export function CollocationQuiz() {
       </div>
 
       {/* Blank phrase */}
-      <div className="mb-6 text-center font-[Unbounded] font-bold leading-relaxed text-[var(--gray-12)]" style={{ fontSize: 'clamp(1.75rem, 10vw, 2.25rem)' }}>
-        {collocation.blank}
+      <div className="mb-6 text-center text-2xl font-[Unbounded] font-bold leading-tight">
+        <BlankSentence
+          text={collocation.blank}
+          filledValues={showResult ? [feedback.correctAnswer] : undefined}
+          blankState={showResult ? (feedback.isCorrect ? 'correct' : 'wrong') : 'empty'}
+        />
       </div>
 
       {/* Translation after answer */}

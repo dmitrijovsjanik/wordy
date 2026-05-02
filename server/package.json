@@ -18,7 +18,9 @@
     "db:seed-topics": "tsx --env-file=.env src/db/seed/seed-topics.ts",
     "db:update-ranks": "tsx --env-file=.env src/db/seed/update-popularity-ranks.ts",
     "db:cleanup-latin": "tsx --env-file=.env src/db/seed/cleanup-latin-translations.ts",
-    "db:seed-full": "npm run db:import-ngsl && npm run db:enrich && npm run db:seed-topics && npm run db:generate-collections"
+    "db:seed-full": "npm run db:import-ngsl && npm run db:enrich && npm run db:seed-topics && npm run db:generate-collections",
+    "ai:seed": "tsx --env-file=.env src/scripts/seed-ai-content.ts",
+    "ai:generate": "tsx --env-file=.env src/scripts/generate-ai-content.ts"
   },
   "devDependencies": {
     "@types/node": "^25.2.0",
@@ -30,6 +32,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.74.0",
     "@fastify/cors": "^11.2.0",
     "@fastify/jwt": "^10.0.0",
     "drizzle-orm": "^0.45.1",

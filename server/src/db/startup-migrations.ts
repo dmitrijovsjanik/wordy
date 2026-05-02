@@ -95,6 +95,16 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    key: 'add-platform-id-check-constraint',
+    description: 'CHECK constraint: у пользователя должен быть хотя бы один platform ID (telegram_id или vk_id)',
+    run: async () => {
+      await db.execute(sql`
+        ALTER TABLE users ADD CONSTRAINT users_has_platform_id
+          CHECK (telegram_id IS NOT NULL OR vk_id IS NOT NULL)
+      `);
+    },
+  },
 ];
 
 export async function runStartupMigrations(): Promise<void> {

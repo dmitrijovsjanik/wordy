@@ -1,9 +1,9 @@
 import { useEffect } from 'react';
-import { telegram } from '@/lib/telegram';
+import { platformBridge } from '@/lib/platform-bridge';
 
 export function useMainButton(text: string, onClick: () => void, visible = true) {
   useEffect(() => {
-    if (!telegram.isAvailable) return;
+    if (!platformBridge.hasNativeMainButton) return;
 
     const btn = window.Telegram.WebApp.MainButton;
     btn.text = text;

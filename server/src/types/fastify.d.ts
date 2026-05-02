@@ -2,8 +2,8 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 
 declare module '@fastify/jwt' {
   interface FastifyJWT {
-    payload: { id: number; telegramId: string; role?: string };
-    user: { id: number; telegramId: string; role?: string };
+    payload: { id: number; platform: 'telegram' | 'vk'; platformId: string; role?: string };
+    user: { id: number; platform: 'telegram' | 'vk'; platformId: string; role?: string };
   }
 }
 

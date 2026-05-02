@@ -2,7 +2,7 @@ import { useEffect, useCallback, useState } from 'react';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { useOnboardingStore } from '@/stores/onboarding-store';
-import { telegram } from '@/lib/telegram';
+import { platformBridge } from '@/lib/platform-bridge';
 import { cn } from '@/lib/utils';
 import type { AnswerFeedback } from '@/types/game';
 
@@ -29,9 +29,9 @@ export function QuizStep() {
   useEffect(() => {
     if (lastAnswerCorrect === null) return;
     if (lastAnswerCorrect) {
-      telegram.hapticNotification('success');
+      platformBridge.hapticNotification('success');
     } else {
-      telegram.hapticNotification('error');
+      platformBridge.hapticNotification('error');
     }
   }, [lastAnswerCorrect]);
 

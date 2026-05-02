@@ -10,6 +10,8 @@ export async function getProfile(userId: number) {
     where: eq(users.id, userId),
     columns: {
       id: true,
+      telegramId: true,
+      vkId: true,
       firstName: true,
       username: true,
       avatarUrl: true,
@@ -21,6 +23,7 @@ export async function getProfile(userId: number) {
       nativeLanguage: true,
       learningLanguage: true,
       repeatMastered: true,
+      ttsVoice: true,
       estimatedCefr: true,
       onboardingCompletedAt: true,
       premiumUntil: true,
@@ -28,11 +31,28 @@ export async function getProfile(userId: number) {
       autoRenew: true,
       lastActivityAt: true,
       createdAt: true,
+      lives: true,
+      livesRestoredAt: true,
+      xpBoostUntil: true,
     },
   });
 
   if (!user) throw new Error('Пользователь не найден');
-  return user;
+
+  // Convert bigint to string for JSON serialization
+  const serialized = {
+    ...user,
+    telegramId: user.telegramId ? String(user.telegramId) : null,
+    vkId: user.vkId ? String(user.vkId) : null,
+  };
+
+  // Auto-restore lives if timer has expired
+  const now = new Date();
+  if (serialized.livesRestoredAt && serialized.livesRestoredAt <= now) {
+    return { ...serialized, lives: 5, livesRestoredAt: null };
+  }
+
+  return serialized;
 }
 
 export async function getStats(userId: number) {
@@ -114,10 +134,13 @@ export async function updateLanguages(userId: number, nativeLanguage: string, le
   return { nativeLanguage, learningLanguage };
 }
 
-export async function updateSettings(userId: number, settings: { repeatMastered?: boolean }) {
+export async function updateSettings(userId: number, settings: { repeatMastered?: boolean; ttsVoice?: string }) {
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (settings.repeatMastered !== undefined) {
     updates.repeatMastered = settings.repeatMastered;
+  }
+  if (settings.ttsVoice !== undefined) {
+    updates.ttsVoice = settings.ttsVoice;
   }
 
   await db

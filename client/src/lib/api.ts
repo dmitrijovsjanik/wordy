@@ -17,6 +17,7 @@ import type {
   QuizQuestion,
   InfiniteAnswerResponse,
   MatchPairsAnswerResponse,
+  GrammarAnswerResponse,
   DictionaryLookupResult,
   LeagueStatusResponse,
   LeaderboardEntry,
@@ -86,8 +87,16 @@ export function authInit(initData: string) {
   return fetchApi<AuthResponse>('POST', '/api/auth/init', { initData });
 }
 
+export function authVkInit(launchParams: string) {
+  return fetchApi<AuthResponse>('POST', '/api/auth/vk-init', { launchParams });
+}
+
 export function authDev() {
   return fetchApi<AuthResponse>('GET', '/api/auth/dev');
+}
+
+export function linkAccount(platform: 'telegram' | 'vk', initData: string) {
+  return fetchApi<{ success: boolean; message: string }>('POST', '/api/auth/link', { platform, initData });
 }
 
 // Quiz
@@ -154,8 +163,8 @@ export function updateLanguages(nativeLanguage: string, learningLanguage: string
   );
 }
 
-export function updateSettings(settings: { repeatMastered?: boolean }) {
-  return fetchApi<{ repeatMastered?: boolean }>('PATCH', '/api/users/me/settings', settings);
+export function updateSettings(settings: { repeatMastered?: boolean; ttsVoice?: string }) {
+  return fetchApi<{ repeatMastered?: boolean; ttsVoice?: string }>('PATCH', '/api/users/me/settings', settings);
 }
 
 export function purchaseStreakFreeze(days: number) {
@@ -195,6 +204,20 @@ export function unlinkCard() {
 
 export function getStreakCalendar(months = 6) {
   return fetchApi<StreakCalendarResponse>('GET', `/api/users/me/streak-calendar?months=${months}`);
+}
+
+// Lives
+export function getLivesStatus() {
+  return fetchApi<{ lives: number; livesRestoredAt: string | null; isInfinite: boolean }>('GET', '/api/users/me/lives');
+}
+
+export function refillLives() {
+  return fetchApi<{ lives: number; gems: number }>('POST', '/api/users/me/lives/refill');
+}
+
+// XP Boost
+export function purchaseXpBoost() {
+  return fetchApi<{ success: boolean; until: string; gems: number }>('POST', '/api/users/me/xp-boost/purchase');
 }
 
 // Collections
@@ -278,6 +301,7 @@ export function quizNext(
   recentGenerators: string[] = [],
   recentCorrect?: number,
   recentTotal?: number,
+  questionIndex?: number,
 ) {
   const params = new URLSearchParams();
   if (excludeIds.length > 0) params.set('exclude', excludeIds.join(','));
@@ -286,6 +310,9 @@ export function quizNext(
   // Adaptive difficulty params
   if (recentCorrect !== undefined) params.set('recentCorrect', String(recentCorrect));
   if (recentTotal !== undefined) params.set('recentTotal', String(recentTotal));
+
+  // Question index for grammar injection
+  if (questionIndex !== undefined) params.set('questionIndex', String(questionIndex));
 
   // Определяем параметры генерации
   if (generatorMode === 'spelling' || generatorMode === 'match-pairs') {
@@ -304,12 +331,29 @@ export function quizNext(
   return fetchApi<{ question: QuizQuestion | null }>('GET', `/api/quiz/next${query}`);
 }
 
-export function quizAnswerInfinite(meaningId: number, selectedMeaningId: number | null, streak: number, doubleXpClaimed = false) {
+export function quizAnswerInfinite(meaningId: number, selectedMeaningId: number | null, streak: number, doubleXpClaimed = false, skip = false) {
   return fetchApi<InfiniteAnswerResponse>('POST', '/api/quiz/answer-infinite', {
     meaningId,
     selectedMeaningId,
     streak,
     doubleXpClaimed,
+    skip,
+  });
+}
+
+export function quizAnswerGrammar(
+  grammarType: string,
+  answer: string,
+  streak: number,
+  params: { exerciseIndex?: number; blankIndex?: number; collocationIndex?: number; questionIndex?: number },
+  skip = false,
+) {
+  return fetchApi<GrammarAnswerResponse>('POST', '/api/quiz/answer-grammar', {
+    grammarType,
+    answer,
+    streak,
+    ...params,
+    skip,
   });
 }
 
@@ -319,6 +363,10 @@ export function quizAnswerMatchPairs(results: Array<{ meaningId: number; isCorre
     streak,
     doubleXpClaimed,
   });
+}
+
+export function getQuizHint(meaningId: number, level: number) {
+  return fetchApi<{ hint: string | null; hasMore: boolean }>('GET', `/api/quiz/hint?meaningId=${meaningId}&level=${level}`);
 }
 
 // Leagues

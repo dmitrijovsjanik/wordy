@@ -13,7 +13,7 @@ import {
 } from '@hugeicons/core-free-icons';
 import { useFriendStore } from '@/stores/friend-store';
 import { useBackButton } from '@/hooks/use-back-button';
-import { telegram } from '@/lib/telegram';
+import { platformBridge } from '@/lib/platform-bridge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -96,7 +96,7 @@ export function Friends() {
 
   const handleShare = useCallback(() => {
     if (!shareLink) return;
-    telegram.hapticImpact('light');
+    platformBridge.hapticImpact('light');
 
     if (navigator.share) {
       navigator.share({
@@ -256,7 +256,7 @@ function FriendCard({ friend }: { friend: FriendInfo }) {
       setTimeout(() => setConfirmDelete(false), 3000);
       return;
     }
-    telegram.hapticImpact('medium');
+    platformBridge.hapticImpact('medium');
     removeFriend(friend.id);
   }, [confirmDelete, friend.id, removeFriend]);
 
@@ -337,12 +337,12 @@ function FriendRequestCard({ request }: { request: FriendRequestInfo }) {
   const declineRequest = useFriendStore((s) => s.declineRequest);
 
   const handleAccept = useCallback(() => {
-    telegram.hapticNotification('success');
+    platformBridge.hapticNotification('success');
     acceptRequest(request.id);
   }, [request.id, acceptRequest]);
 
   const handleDecline = useCallback(() => {
-    telegram.hapticImpact('light');
+    platformBridge.hapticImpact('light');
     declineRequest(request.id);
   }, [request.id, declineRequest]);
 

@@ -188,7 +188,7 @@ export function MatchPairs({ pairs, questionKey, disabled = false, onComplete, o
             (isCompleted || disabled) && 'opacity-40',
           )}
         >
-          Пропустить
+          Не знаю
         </Button>
       )}
     </>

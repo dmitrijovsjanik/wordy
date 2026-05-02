@@ -213,6 +213,7 @@ export async function getLeaderboard(
       firstName: users.firstName,
       username: users.username,
       avatarUrl: users.avatarUrl,
+      premiumUntil: users.premiumUntil,
     })
     .from(userSeasonStats)
     .innerJoin(users, eq(userSeasonStats.userId, users.id))
@@ -248,6 +249,7 @@ export async function getLeaderboard(
       position: currentPosition,
       lpToday,
       positionChange,
+      isPremium: s.premiumUntil ? s.premiumUntil > new Date() : false,
     };
   });
 }

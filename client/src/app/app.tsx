@@ -5,7 +5,7 @@ import { BottomTabs } from '@/components/bottom-tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { useUserStore } from '@/stores/user-store';
-import { telegram } from '@/lib/telegram';
+import { platformBridge } from '@/lib/platform-bridge';
 import { acceptInvite, sendFriendRequest } from '@/lib/api';
 import { lazyWithRetry } from '@/lib/lazy-retry';
 
@@ -37,7 +37,7 @@ function DeepLinkHandler() {
   useEffect(() => {
     if (!isAuthenticated || processed.current) return;
 
-    const startParam = telegram.startParam;
+    const startParam = platformBridge.getStartParam();
     if (startParam?.startsWith('invite_')) {
       processed.current = true;
       const token = startParam.slice(7);

@@ -86,7 +86,7 @@ export function AnswerHistoryDrawer({
               {history.map((entry, idx) => (
                 <div
                   key={`${entry.timestamp}-${idx}`}
-                  className="flex items-start gap-3 rounded-xl px-3 py-2.5"
+                  className="flex items-start gap-3 rounded-xl bg-[var(--gray-2)] px-3 py-2.5"
                 >
                   {/* Статус */}
                   <div className={cn(

@@ -1,12 +1,15 @@
 import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { BookOpen02Icon } from '@hugeicons/core-free-icons';
 import { Button } from '@/components/ui/button';
+import { BlankSentence } from '@/components/game/blank-sentence';
+import { useGrammarStore } from '@/stores/grammar-store';
 import { cn } from '@/lib/utils';
 import { getNextArticleExercise, submitArticleAnswer } from '@/lib/api';
 import type { ArticleExercise, ArticleAnswer } from '@/types/grammar';
 
 const ARTICLE_OPTIONS: ArticleAnswer[] = ['a', 'an', 'the', '—'];
-const AUTO_ADVANCE_DELAY = 1500;
 
 type FeedbackState = {
   isCorrect: boolean;
@@ -19,6 +22,7 @@ type ArticleQuizProps = {
 };
 
 export function ArticleQuiz({ difficulty }: ArticleQuizProps) {
+  const setArticleView = useGrammarStore((s) => s.setArticleView);
   const [exercise, setExercise] = useState<ArticleExercise | null>(null);
   const [exerciseIndex, setExerciseIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
@@ -62,9 +66,7 @@ export function ArticleQuiz({ difficulty }: ArticleQuizProps) {
         explanation: result.explanation,
       });
 
-      setTimeout(() => {
-        void loadNextQuestion();
-      }, AUTO_ADVANCE_DELAY);
+      // User clicks "Далее" button to proceed
     } catch {
       setError('Не удалось отправить ответ. Попробуйте ещё раз.');
       setSelectedAnswer(null);
@@ -92,15 +94,32 @@ export function ArticleQuiz({ difficulty }: ArticleQuizProps) {
 
   if (!exercise) return null;
 
-  const sentenceParts = exercise.sentence.split('___');
+  // Determine blank display value and state
+  const displayAnswer = feedback
+    ? (feedback.correctAnswer === '—' ? '\u2014' : feedback.correctAnswer)
+    : selectedAnswer
+      ? (selectedAnswer === '—' ? '\u2014' : selectedAnswer)
+      : undefined;
+  const blankState = feedback
+    ? (feedback.isCorrect ? 'correct' as const : 'wrong' as const)
+    : 'empty' as const;
 
   return (
     <div className="flex flex-1 flex-col gap-6 px-4 pt-4">
-      {/* Rule category badge */}
-      <div className="flex items-center justify-center">
+      {/* Rule category badge + reference button */}
+      <div className="flex items-center justify-between">
         <span className="rounded-full bg-[var(--gray-3)] px-3 py-1 text-xs text-[var(--gray-11)]">
           {exercise.rule}
         </span>
+        <Button
+          variant="ghost"
+          size="compact"
+          onClick={() => setArticleView('reference')}
+          className="gap-1.5 text-[var(--brand-11)]"
+        >
+          <HugeiconsIcon icon={BookOpen02Icon} size={16} />
+          Справочник
+        </Button>
       </div>
 
       {/* Sentence with blank */}
@@ -113,28 +132,12 @@ export function ArticleQuiz({ difficulty }: ArticleQuizProps) {
           transition={{ duration: 0.2 }}
           className="flex flex-1 items-center justify-center"
         >
-          <p className="text-center font-[Unbounded] font-bold leading-relaxed text-[var(--gray-12)]" style={{ fontSize: 'clamp(1.75rem, 10vw, 2.25rem)' }}>
-            {sentenceParts.map((part, idx) => (
-              <span key={idx}>
-                {part}
-                {idx < sentenceParts.length - 1 && (
-                  <span
-                    className={cn(
-                      'mx-1 inline-block min-w-[3rem] border-b-2 px-1 text-center font-bold',
-                      !feedback && 'border-[var(--brand-9)] text-[var(--brand-9)]',
-                      feedback?.isCorrect && 'border-[var(--green-9)] text-[var(--green-9)]',
-                      feedback && !feedback.isCorrect && 'border-[var(--red-9)] text-[var(--red-9)]',
-                    )}
-                  >
-                    {feedback
-                      ? feedback.correctAnswer === '—' ? '\u2014' : feedback.correctAnswer
-                      : selectedAnswer
-                        ? selectedAnswer === '—' ? '\u2014' : selectedAnswer
-                        : '\u00A0'}
-                  </span>
-                )}
-              </span>
-            ))}
+          <p className="text-center text-2xl font-[Unbounded] font-bold leading-tight">
+            <BlankSentence
+              text={exercise.sentence}
+              filledValues={displayAnswer ? [displayAnswer] : undefined}
+              blankState={blankState}
+            />
           </p>
         </motion.div>
       </AnimatePresence>
@@ -160,6 +163,13 @@ export function ArticleQuiz({ difficulty }: ArticleQuizProps) {
             {feedback.explanation}
           </p>
         </motion.div>
+      )}
+
+      {/* Next button */}
+      {feedback && (
+        <Button onClick={() => void loadNextQuestion()} className="w-full">
+          Далее
+        </Button>
       )}
 
       {/* Answer buttons — 4 in a row */}

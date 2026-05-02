@@ -2,14 +2,16 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Lottie from 'lottie-react';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { UserIcon, Award01Icon, InformationCircleIcon, Clock01Icon, StarIcon } from '@hugeicons/core-free-icons';
+import { UserIcon, Award01Icon, InformationCircleIcon, Clock01Icon, StarIcon, FavouriteIcon, Rocket01Icon } from '@hugeicons/core-free-icons';
 import { useUserStore } from '@/stores/user-store';
 import { useBackButton } from '@/hooks/use-back-button';
 import { useResetTimer } from '@/hooks/use-reset-timer';
 import { StreakFreezeDialog, type FreezePack } from '@/components/ui/streak-freeze-dialog';
+import { ShopPurchaseDialog } from '@/components/ui/shop-purchase-dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { getDailyRewards, getPremiumStatus, cancelAutoRenew, enableAutoRenew, unlinkCard, type DailyRewardsResponse } from '@/lib/api';
+import { getDailyRewards, getPremiumStatus, cancelAutoRenew, enableAutoRenew, unlinkCard, createPayment, refillLives, purchaseXpBoost, type DailyRewardsResponse } from '@/lib/api';
+import { PremiumDrawer } from '@/components/ui/premium-drawer';
 import {
   Drawer,
   DrawerContent,
@@ -31,6 +33,28 @@ const FREEZE_PACKS: FreezePack[] = [
 ];
 
 const BASE_PRICE_PER_DAY = FREEZE_PACKS[0].gems;
+
+// ─── Пакеты кристаллов ─────────────────────────────────────────────────────
+
+type GemPack = {
+  id: string;
+  gems: number;
+  rubPrice: number;
+  bonus?: string;
+};
+
+const GEM_PACKS: GemPack[] = [
+  { id: 'gem_pack_100',  gems: 100,  rubPrice: 49 },
+  { id: 'gem_pack_500',  gems: 550,  rubPrice: 199, bonus: '+10%' },
+  { id: 'gem_pack_1500', gems: 1800, rubPrice: 499, bonus: '+20%' },
+];
+
+// ─── Константы ──────────────────────────────────────────────────────────────
+
+const LIVES_REFILL_COST = 250;
+const LIVES_RUB_PRICE = 49;
+const XP_BOOST_COST = 350;
+const XP_BOOST_RUB_PRICE = 69;
 
 const FREEZE_ITEM_TYPE_MAP: Record<number, string> = {
   1: 'freeze_1',
@@ -127,6 +151,8 @@ export function Shop() {
   const [dailyRewards, setDailyRewards] = useState<DailyRewardsResponse | null>(null);
   const [premiumStatus, setPremiumStatus] = useState<{ isPremium: boolean; premiumUntil: string | null; premiumPlan: string | null; autoRenew: boolean; hasCard: boolean } | null>(null);
   const [isToggling, setIsToggling] = useState(false);
+  const [premiumDrawerOpen, setPremiumDrawerOpen] = useState(false);
+  const [purchaseDialogType, setPurchaseDialogType] = useState<'xp_boost' | 'lives' | null>(null);
   const resetTimer = useResetTimer();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollUp, setCanScrollUp] = useState(false);
@@ -216,7 +242,24 @@ export function Shop() {
         </div>
       </div>
 
-      {/* Premium подписка */}
+      {/* Premium */}
+      {premiumStatus && !premiumStatus.isPremium && (
+        <button
+          onClick={() => setPremiumDrawerOpen(true)}
+          className="flex w-full items-center gap-3 rounded-2xl bg-[var(--amber-3)] px-4 py-3 text-left transition-colors active:bg-[var(--amber-4)]"
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--amber-4)]">
+            <HugeiconsIcon icon={StarIcon} size={18} className="text-[var(--amber-11)]" strokeWidth={2} />
+          </div>
+          <div className="flex flex-1 flex-col">
+            <span className="text-sm font-semibold text-[var(--amber-12)]">Wordy Premium</span>
+            <span className="text-xs text-[var(--amber-11)]">Безлимит, бесконечные жизни, x1.5 XP</span>
+          </div>
+          <span className="shrink-0 text-sm font-semibold text-[var(--amber-11)]">от 199 ₽/мес</span>
+        </button>
+      )}
+
+      {/* Premium подписка (управление) */}
       {premiumStatus?.isPremium && (
         <div className="flex flex-col gap-2">
           <span className="text-xs font-semibold uppercase tracking-wide text-[var(--gray-9)]">
@@ -234,6 +277,7 @@ export function Shop() {
                   {premiumStatus.premiumPlan === 'year' ? ' (годовая)' : ' (месячная)'}
                 </span>
               </div>
+              <span className="shrink-0 rounded-full bg-[var(--green-3)] px-2.5 py-1 text-xs font-semibold text-[var(--green-11)]">Активна</span>
             </div>
             {premiumStatus.hasCard && (
               <Button
@@ -303,6 +347,100 @@ export function Shop() {
         })}
       </div>
 
+      {/* Пакеты кристаллов */}
+      <div className="flex flex-col gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-[var(--gray-9)]">
+          Кристаллы
+        </span>
+        {GEM_PACKS.map((pack) => (
+          <button
+            key={pack.id}
+            onClick={async () => {
+              try {
+                const { confirmationUrl } = await createPayment(pack.id);
+                window.open(confirmationUrl, '_blank');
+              } catch {
+                // ignore
+              }
+            }}
+            className="flex w-full items-center gap-3 rounded-2xl bg-[var(--gray-2)] px-4 py-3 text-left transition-colors active:bg-[var(--gray-3)]"
+          >
+            <Lottie animationData={gemSpinData} loop autoplay className="h-9 w-9 shrink-0" />
+            <div className="flex flex-1 flex-col">
+              <span className="text-sm font-semibold">{pack.gems.toLocaleString('ru-RU')} кристаллов</span>
+              {pack.bonus && (
+                <span className="text-xs text-[var(--green-11)]">бонус {pack.bonus}</span>
+              )}
+            </div>
+            <span className="text-sm font-semibold text-[var(--gray-12)]">
+              {pack.rubPrice} ₽
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Ускорение XP */}
+      <div className="flex flex-col gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-[var(--gray-9)]">
+          Ускорение
+        </span>
+        <button
+          onClick={() => setPurchaseDialogType('xp_boost')}
+          className="flex w-full items-center gap-3 rounded-2xl bg-[var(--gray-2)] px-4 py-3 text-left transition-colors active:bg-[var(--gray-3)]"
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--iris-3)]">
+            <HugeiconsIcon icon={Rocket01Icon} size={20} className="text-[var(--iris-11)]" strokeWidth={2} />
+          </div>
+          <div className="flex flex-1 flex-col">
+            <span className="text-sm font-semibold">x1.5 XP на 24 часа</span>
+            {user?.xpBoostUntil && new Date(user.xpBoostUntil) > new Date() && (
+              <span className="text-xs text-[var(--green-11)]">
+                Активно до {new Date(user.xpBoostUntil).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-col items-end gap-0.5">
+            <div className="flex items-center gap-1">
+              <Lottie animationData={gemSpinData} loop autoplay className="h-4 w-4 shrink-0" />
+              <span className={`text-sm font-semibold ${user && user.gems >= XP_BOOST_COST ? 'text-[var(--blue-11)]' : 'text-[var(--red-11)]'}`}>
+                {XP_BOOST_COST}
+              </span>
+            </div>
+            <span className="text-[11px] text-[var(--gray-9)]">{XP_BOOST_RUB_PRICE} ₽</span>
+          </div>
+        </button>
+      </div>
+
+      {/* Восстановление жизней */}
+      {user && user.lives < 5 && (
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-[var(--gray-9)]">
+            Жизни
+          </span>
+          <button
+            onClick={() => setPurchaseDialogType('lives')}
+            className="flex w-full items-center gap-3 rounded-2xl bg-[var(--gray-2)] px-4 py-3 text-left transition-colors active:bg-[var(--gray-3)]"
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--red-3)]">
+              <HugeiconsIcon icon={FavouriteIcon} size={20} className="text-[var(--red-11)] [&_path]:fill-current" strokeWidth={2} />
+            </div>
+            <div className="flex flex-1 flex-col">
+              <span className="text-sm font-semibold">Восстановить жизни</span>
+              <span className="text-xs text-[var(--gray-11)]">{user.lives}/5</span>
+            </div>
+            <div className="flex flex-col items-end gap-0.5">
+              <div className="flex items-center gap-1">
+                <Lottie animationData={gemSpinData} loop autoplay className="h-4 w-4 shrink-0" />
+                <span className={`text-sm font-semibold ${user.gems >= LIVES_REFILL_COST ? 'text-[var(--blue-11)]' : 'text-[var(--red-11)]'}`}>
+                  {LIVES_REFILL_COST}
+                </span>
+              </div>
+              <span className="text-[11px] text-[var(--gray-9)]">{LIVES_RUB_PRICE} ₽</span>
+            </div>
+          </button>
+        </div>
+      )}
+
       {/* Прочие товары */}
       {SHOP_ITEMS.length > 0 && (
         <div className="flex flex-col gap-2">
@@ -337,6 +475,54 @@ export function Shop() {
         currentFreezes={user.streakFreezes}
         currentGems={user.gems}
         onPurchaseSuccess={refreshProfile}
+      />
+
+      <PremiumDrawer open={premiumDrawerOpen} onOpenChange={setPremiumDrawerOpen} limitType="collections" />
+
+      {/* Sheet покупки XP Boost / Lives */}
+      <ShopPurchaseDialog
+        open={purchaseDialogType === 'xp_boost'}
+        onOpenChange={(open) => !open && setPurchaseDialogType(null)}
+        icon={
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--iris-3)]">
+            <HugeiconsIcon icon={Rocket01Icon} size={32} className="text-[var(--iris-11)]" strokeWidth={2} />
+          </div>
+        }
+        title="Ускорение опыта"
+        description="x1.5 XP за каждый ответ в течение 24 часов"
+        gemPrice={XP_BOOST_COST}
+        rubPrice={XP_BOOST_RUB_PRICE}
+        currentGems={user.gems}
+        onPurchaseGems={async () => {
+          await purchaseXpBoost();
+          refreshProfile();
+        }}
+        onPurchaseRub={async () => {
+          const { confirmationUrl } = await createPayment('xp_boost_24h');
+          window.open(confirmationUrl, '_blank');
+        }}
+      />
+      <ShopPurchaseDialog
+        open={purchaseDialogType === 'lives'}
+        onOpenChange={(open) => !open && setPurchaseDialogType(null)}
+        icon={
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--red-3)]">
+            <HugeiconsIcon icon={FavouriteIcon} size={32} className="text-[var(--red-11)] [&_path]:fill-current" strokeWidth={2} />
+          </div>
+        }
+        title="Восстановить жизни"
+        description={`Полное восстановление до 5 жизней. Сейчас: ${user.lives}/5`}
+        gemPrice={LIVES_REFILL_COST}
+        rubPrice={LIVES_RUB_PRICE}
+        currentGems={user.gems}
+        onPurchaseGems={async () => {
+          await refillLives();
+          refreshProfile();
+        }}
+        onPurchaseRub={async () => {
+          const { confirmationUrl } = await createPayment('lives_refill');
+          window.open(confirmationUrl, '_blank');
+        }}
       />
 
       {/* Sheet информации о ресурсе */}

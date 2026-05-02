@@ -1,8 +1,12 @@
 import type { FastifyInstance } from 'fastify';
-import { sql, isNotNull } from 'drizzle-orm';
+import { eq, sql, isNotNull } from 'drizzle-orm';
 import { getProfile, getStats, getDailyRewards, updateLanguages, updateSettings, purchaseStreakFreeze, getStreakCalendar } from '../services/user-service.js';
+import { isPremium } from '../services/premium-service.js';
+import { getLivesStatus, refillLives } from '../services/lives-service.js';
+import { VALID_VOICES, DEFAULT_VOICE } from '../config/tts-config.js';
+import { XP_BOOST_GEM_COST, XP_BOOST_DURATION_MS } from '../config/xp-boost-config.js';
 import { db } from '../db/index.js';
-import { wordMeanings, userWordProgress } from '../db/schema.js';
+import { wordMeanings, userWordProgress, users } from '../db/schema.js';
 
 export default async function userRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
@@ -27,8 +31,22 @@ export default async function userRoutes(app: FastifyInstance) {
   });
 
   app.patch<{
-    Body: { repeatMastered?: boolean };
-  }>('/api/users/me/settings', async (request) => {
+    Body: { repeatMastered?: boolean; ttsVoice?: string };
+  }>('/api/users/me/settings', async (request, reply) => {
+    const { ttsVoice } = request.body;
+
+    if (ttsVoice !== undefined) {
+      if (!VALID_VOICES.includes(ttsVoice as typeof VALID_VOICES[number])) {
+        return reply.code(400).send({ error: 'Неизвестный голос', code: 'INVALID_VOICE' });
+      }
+      if (ttsVoice !== DEFAULT_VOICE) {
+        const premium = await isPremium(request.user.id);
+        if (!premium) {
+          return reply.code(403).send({ error: 'Необходима подписка PRO', code: 'PREMIUM_REQUIRED' });
+        }
+      }
+    }
+
     return updateSettings(request.user.id, request.body);
   });
 
@@ -63,6 +81,69 @@ export default async function userRoutes(app: FastifyInstance) {
       }
       throw error;
     }
+  });
+
+  // ─── Lives ─────────────────────────────────────────────────────────────────
+
+  app.get('/api/users/me/lives', async (request) => {
+    return getLivesStatus(request.user.id);
+  });
+
+  app.post('/api/users/me/lives/refill', async (request, reply) => {
+    try {
+      const result = await refillLives(request.user.id);
+      return { success: true, lives: result.lives, gems: result.gems };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Неизвестная ошибка';
+      if (message === 'INSUFFICIENT_GEMS') {
+        return reply.code(400).send({ error: 'Недостаточно кристаллов', code: 'INSUFFICIENT_GEMS' });
+      }
+      throw error;
+    }
+  });
+
+  // ─── XP Boost ─────────────────────────────────────────────────────────────
+
+  app.post('/api/users/me/xp-boost/purchase', async (request, reply) => {
+    const userId = request.user.id;
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: { gems: true, xpBoostUntil: true },
+    });
+
+    if (!user) return reply.code(404).send({ error: 'Пользователь не найден' });
+
+    if (user.gems < XP_BOOST_GEM_COST) {
+      return reply.code(400).send({ error: 'Недостаточно кристаллов', code: 'INSUFFICIENT_GEMS' });
+    }
+
+    const now = new Date();
+    // Продлеваем если буст активен, иначе от текущего времени
+    const baseDate = user.xpBoostUntil && user.xpBoostUntil > now
+      ? user.xpBoostUntil
+      : now;
+    const newBoostUntil = new Date(baseDate.getTime() + XP_BOOST_DURATION_MS);
+
+    await db
+      .update(users)
+      .set({
+        gems: sql`${users.gems} - ${XP_BOOST_GEM_COST}`,
+        xpBoostUntil: newBoostUntil,
+        updatedAt: now,
+      })
+      .where(eq(users.id, userId));
+
+    const updatedUser = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: { gems: true },
+    });
+
+    return {
+      success: true,
+      until: newBoostUntil.toISOString(),
+      gems: updatedUser?.gems ?? 0,
+    };
   });
 
   // ─── CEFR Progress ───────────────────────────────────────────────────────

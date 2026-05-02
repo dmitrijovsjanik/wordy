@@ -23,7 +23,8 @@ export type GameModeConfig = {
 // ─── Question Types ─────────────────────────────────────────────────────────
 // Тип вопроса определяет UI и логику взаимодействия
 
-export type QuestionType = 'multiple-choice' | 'spelling' | 'text-input' | 'match-pairs' | 'cloze' | 'listening' | 'dictation' | 'free-recall';
+export type QuestionType = 'multiple-choice' | 'spelling' | 'text-input' | 'match-pairs' | 'cloze' | 'listening' | 'dictation' | 'free-recall'
+  | 'grammar-article' | 'grammar-tense' | 'grammar-collocation' | 'grammar-false-friend' | 'grammar-tense-match';
 
 // ─── Question Data ──────────────────────────────────────────────────────────
 // Данные вопроса, специфичные для каждого типа
@@ -138,6 +139,8 @@ export type AnswerFeedback = {
   levelUp?: number;
   // Примеры предложений (для глубокой обработки)
   examples?: { en: string; ru: string }[];
+  // Мнемоника для запоминания
+  mnemonic?: string;
   // Milestones
   milestones?: { id: string; type: string; threshold: number; title: string; description: string; gemsReward: number; icon: string }[];
 };

@@ -3,18 +3,18 @@ import { EdgeTTS } from 'node-edge-tts';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
+import { VALID_VOICES, DEFAULT_VOICE } from '../config/tts-config.js';
 
-const VOICE = 'en-US-EmmaMultilingualNeural';
 const OUTPUT_FORMAT = 'audio-24khz-96kbitrate-mono-mp3';
 const MAX_TEXT_LENGTH = 2000;
 const TTS_TIMEOUT = 10000;
 const CACHE_MAX = 200;
 
-// LRU cache: normalized text → mp3 buffer
+// LRU cache: "voice|text" → mp3 buffer
 const cache = new Map<string, Buffer>();
 
-function cacheKey(text: string): string {
-  return text.trim().toLowerCase();
+function cacheKey(text: string, voice: string): string {
+  return `${voice}|${text.trim().toLowerCase()}`;
 }
 
 function cacheSet(key: string, buffer: Buffer) {
@@ -27,7 +27,7 @@ function cacheSet(key: string, buffer: Buffer) {
 
 export default async function ttsRoutes(app: FastifyInstance) {
   app.get<{
-    Querystring: { text?: string };
+    Querystring: { text?: string; voice?: string };
   }>('/api/tts', async (request, reply) => {
     const text = request.query.text?.trim();
 
@@ -39,7 +39,13 @@ export default async function ttsRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: `Text too long (max ${MAX_TEXT_LENGTH} chars)` });
     }
 
-    const key = cacheKey(text);
+    // Validate voice parameter (default to Emma)
+    const requestedVoice = request.query.voice?.trim() || DEFAULT_VOICE;
+    const voice = VALID_VOICES.includes(requestedVoice as typeof VALID_VOICES[number])
+      ? requestedVoice
+      : DEFAULT_VOICE;
+
+    const key = cacheKey(text, voice);
 
     // Check cache
     const cached = cache.get(key);
@@ -54,7 +60,7 @@ export default async function ttsRoutes(app: FastifyInstance) {
 
     try {
       const tts = new EdgeTTS({
-        voice: VOICE,
+        voice,
         lang: 'en-US',
         outputFormat: OUTPUT_FORMAT,
         timeout: TTS_TIMEOUT,

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { User } from '@/types/api';
-import { authInit, authDev, getMe, setToken, getToken, removeToken, updateSettings } from '@/lib/api';
-import { telegram } from '@/lib/telegram';
+import { authInit, authVkInit, authDev, getMe, setToken, getToken, removeToken, updateSettings } from '@/lib/api';
+import { platformBridge } from '@/lib/platform-bridge';
 
 type UserState = {
   user: User | null;
@@ -11,6 +11,7 @@ type UserState = {
   init: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   toggleRepeatMastered: () => Promise<void>;
+  setTtsVoice: (voice: string) => Promise<void>;
   logout: () => void;
 };
 
@@ -32,11 +33,18 @@ export const useUserStore = create<UserState>()((set) => ({
         return;
       }
 
-      // Authenticate
-      const initData = telegram.initData;
-      const res = initData
-        ? await authInit(initData)
-        : await authDev();
+      // Authenticate based on platform
+      const platform = platformBridge.platform;
+      const initData = platformBridge.getInitData();
+
+      let res;
+      if (platform === 'telegram' && initData) {
+        res = await authInit(initData);
+      } else if (platform === 'vk' && initData) {
+        res = await authVkInit(initData);
+      } else {
+        res = await authDev();
+      }
 
       setToken(res.token);
       const user = await getMe();
@@ -65,6 +73,19 @@ export const useUserStore = create<UserState>()((set) => ({
       await updateSettings({ repeatMastered: newValue });
     } catch {
       set({ user: { ...current, repeatMastered: !newValue } });
+    }
+  },
+
+  setTtsVoice: async (voice: string) => {
+    const current = useUserStore.getState().user;
+    if (!current) return;
+    const prevVoice = current.ttsVoice;
+    set({ user: { ...current, ttsVoice: voice } });
+    try {
+      await updateSettings({ ttsVoice: voice });
+    } catch {
+      set({ user: { ...current, ttsVoice: prevVoice } });
+      throw new Error('PREMIUM_REQUIRED');
     }
   },
 

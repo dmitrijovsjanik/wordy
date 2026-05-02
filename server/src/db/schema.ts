@@ -53,6 +53,14 @@ export const leagueTierEnum = pgEnum('league_tier', [
   'legend',
 ]);
 
+export const aiContentTypeEnum = pgEnum('ai_content_type', [
+  'examples',
+  'mnemonic',
+  'hints',
+  'grammar',
+  'common_errors',
+]);
+
 export const leagueNotificationTypeEnum = pgEnum('league_notification_type', [
   'season_started',
   'safe_zone_reached',
@@ -70,7 +78,8 @@ export const leagueNotificationTypeEnum = pgEnum('league_notification_type', [
 
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
-  telegramId: bigint('telegram_id', { mode: 'bigint' }).unique().notNull(),
+  telegramId: bigint('telegram_id', { mode: 'bigint' }).unique(),
+  vkId: bigint('vk_id', { mode: 'bigint' }).unique(),
   username: varchar('username', { length: 255 }),
   firstName: varchar('first_name', { length: 255 }).notNull(),
   avatarUrl: varchar('avatar_url', { length: 1024 }),
@@ -84,6 +93,7 @@ export const users = pgTable('users', {
   nativeLanguage: varchar('native_language', { length: 10 }).default('ru').notNull(),
   learningLanguage: varchar('learning_language', { length: 10 }).default('en').notNull(),
   repeatMastered: boolean('repeat_mastered').default(false).notNull(),
+  ttsVoice: varchar('tts_voice', { length: 64 }).default('en-US-EmmaMultilingualNeural').notNull(),
   friendCode: varchar('friend_code', { length: 12 }).unique(),
   lastActivityAt: timestamp('last_activity_at'),
   lastLoginDate: timestamp('last_login_date'), // Дата последнего входа для streak (без времени)
@@ -98,6 +108,11 @@ export const users = pgTable('users', {
   premiumPlan: varchar('premium_plan', { length: 20 }),
   autoRenew: boolean('auto_renew').default(false).notNull(),
   savedPaymentMethodId: varchar('saved_payment_method_id', { length: 64 }),
+  // Жизни (Hearts)
+  lives: integer('lives').default(5).notNull(),
+  livesRestoredAt: timestamp('lives_restored_at'), // null = жизни полные (5)
+  // XP Boost
+  xpBoostUntil: timestamp('xp_boost_until'), // null = нет активного буста
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -491,6 +506,9 @@ export const paymentItemTypeEnum = pgEnum('payment_item_type', [
   'freeze_14',
   'premium_month',
   'premium_year',
+  'gem_pack_100',
+  'gem_pack_500',
+  'gem_pack_1500',
 ]);
 
 export const payments = pgTable(
@@ -519,6 +537,25 @@ export const payments = pgTable(
   ],
 );
 
+// ─── AI Content ─────────────────────────────────────────────────────────────
+
+export const wordAiContent = pgTable(
+  'word_ai_content',
+  {
+    id: serial('id').primaryKey(),
+    meaningId: integer('meaning_id')
+      .references(() => wordMeanings.id, { onDelete: 'cascade' })
+      .notNull(),
+    contentType: aiContentTypeEnum('content_type').notNull(),
+    content: jsonb('content').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('word_ai_content_meaning_type_uniq').on(table.meaningId, table.contentType),
+    index('word_ai_content_meaning_idx').on(table.meaningId),
+  ],
+);
+
 // ─── Relations ──────────────────────────────────────────────────────────────
 
 export const wordsRelations = relations(words, ({ many }) => ({
@@ -528,6 +565,11 @@ export const wordsRelations = relations(words, ({ many }) => ({
 export const wordMeaningsRelations = relations(wordMeanings, ({ one, many }) => ({
   word: one(words, { fields: [wordMeanings.wordId], references: [words.id] }),
   topics: many(wordMeaningTopics),
+  aiContent: many(wordAiContent),
+}));
+
+export const wordAiContentRelations = relations(wordAiContent, ({ one }) => ({
+  meaning: one(wordMeanings, { fields: [wordAiContent.meaningId], references: [wordMeanings.id] }),
 }));
 
 export const topicsRelations = relations(topics, ({ many }) => ({

@@ -69,7 +69,7 @@ export function Spelling({
             (showResult || disabled) && 'opacity-40',
           )}
         >
-          Пропустить
+          Не знаю
         </Button>
       )}
     </>

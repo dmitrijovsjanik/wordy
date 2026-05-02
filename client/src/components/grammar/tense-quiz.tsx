@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { getNextTenseExercise, submitTenseAnswer } from '@/lib/api';
 import { useGrammarStore } from '@/stores/grammar-store';
+import { splitAnswer } from '@/components/game/blank-sentence';
 import { TENSE_REFERENCE_DATA, type FormulaPartRole } from './tense-reference-data';
 import type { TenseExercise, TenseAnswerResponse } from '@/types/grammar';
 
@@ -419,26 +420,32 @@ function SentenceDisplay({ sentence, subject, correctAnswer }: { sentence: strin
   const parts = sentence.split(/(___)/g);
   let subjectHighlighted = false;
 
+  // Split correctAnswer by " ... " for multi-blank sentences
+  const answerParts = correctAnswer ? splitAnswer(correctAnswer) : [];
+  let blankIdx = 0;
+
   return (
-    <h5 className="max-w-full break-words px-4 text-center font-[Unbounded] font-bold leading-relaxed text-[var(--gray-12)]" style={{ fontSize: 'clamp(1.75rem, 10vw, 2.25rem)' }}>
+    <h5 className="max-w-full break-words px-4 text-center text-2xl font-[Unbounded] font-bold leading-tight text-[var(--gray-12)]">
       {parts.map((part, idx) => {
         if (part === '___') {
           if (correctAnswer) {
+            const answerText = answerParts[blankIdx] ?? correctAnswer;
+            blankIdx++;
             return (
               <span
                 key={idx}
-                className="font-semibold text-[var(--green-11)]"
+                className="mx-0.5 inline-block border-b-2 px-1 text-center font-bold border-[var(--green-9)] text-[var(--green-11)]"
               >
-                {correctAnswer}
+                {answerText}
               </span>
             );
           }
           return (
             <span
               key={idx}
-              className="mx-1 inline-block min-w-[60px] border-b-2 border-[var(--brand-9)] text-center"
+              className="mx-0.5 inline-block min-w-[3rem] border-b-2 px-1 text-center border-[var(--brand-9)] text-[var(--brand-9)]"
             >
-              &nbsp;
+              {'\u00A0'}
             </span>
           );
         }

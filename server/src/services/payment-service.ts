@@ -4,6 +4,7 @@ import { db } from '../db/index.js';
 import { payments, users } from '../db/schema.js';
 import { YOOKASSA_API_URL, PAYMENT_ITEMS, RECEIPT_EMAIL } from '../config/payment-config.js';
 import { PREMIUM_DURATIONS } from '../config/premium-config.js';
+import { addGems } from './progression-service.js';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -234,6 +235,12 @@ const FREEZE_DAYS_MAP: Record<string, number> = {
   freeze_14: 14,
 };
 
+const GEM_PACK_MAP: Record<string, number> = {
+  gem_pack_100: 100,
+  gem_pack_500: 550,
+  gem_pack_1500: 1800,
+};
+
 async function fulfillOrder(
   paymentDbId: number,
   userId: number,
@@ -272,6 +279,28 @@ async function fulfillOrder(
     await db
       .update(users)
       .set({ premiumUntil, premiumPlan: plan })
+      .where(eq(users.id, userId));
+  } else if (itemType in GEM_PACK_MAP) {
+    const gemsToAdd = GEM_PACK_MAP[itemType];
+    await addGems(userId, gemsToAdd);
+  } else if (itemType === 'lives_refill') {
+    await db
+      .update(users)
+      .set({ lives: 5, livesRestoredAt: null, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+  } else if (itemType === 'xp_boost_24h') {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: { xpBoostUntil: true },
+    });
+    const now = new Date();
+    const baseDate = user?.xpBoostUntil && user.xpBoostUntil > now
+      ? user.xpBoostUntil
+      : now;
+    const newBoostUntil = new Date(baseDate.getTime() + 24 * 60 * 60 * 1000);
+    await db
+      .update(users)
+      .set({ xpBoostUntil: newBoostUntil, updatedAt: now })
       .where(eq(users.id, userId));
   }
 

@@ -1,14 +1,17 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { speakText, stopAudio } from '@/lib/tts';
+import { speakText, speakLongText, stopAudio } from '@/lib/tts';
+import { useUserStore } from '@/stores/user-store';
 
 type UseSpeechOptions = {
   lang?: string;
   rate?: number;
   pitch?: number;
+  voice?: string;
 };
 
 type UseSpeechReturn = {
   speak: (text: string) => void;
+  speakLong: (text: string) => void;
   stop: () => void;
   isSpeaking: boolean;
   isLoading: boolean;
@@ -21,7 +24,9 @@ type UseSpeechReturn = {
 const ERROR_CLEAR_MS = 3000;
 
 export function useSpeech(options: UseSpeechOptions = {}): UseSpeechReturn {
-  const { rate = 0.9 } = options;
+  const { rate = 0.9, voice: explicitVoice } = options;
+  const userVoice = useUserStore((s) => s.user?.ttsVoice);
+  const voice = explicitVoice ?? userVoice;
 
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -140,7 +145,7 @@ export function useSpeech(options: UseSpeechOptions = {}): UseSpeechReturn {
       setIsFading(false);
       setError(null);
 
-      speakText(text, rate)
+      speakText(text, rate, voice)
         .then((audio) => {
           if (!mountedRef.current) return;
           setIsLoading(false);
@@ -178,7 +183,40 @@ export function useSpeech(options: UseSpeechOptions = {}): UseSpeechReturn {
           showError('Не удалось загрузить озвучку');
         });
     },
-    [rate, finishSpeaking, showError],
+    [rate, voice, finishSpeaking, showError],
+  );
+
+  const speakLong = useCallback(
+    (text: string) => {
+      // Reset state
+      stopAudio();
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      if (fadeAnimationRef.current) cancelAnimationFrame(fadeAnimationRef.current);
+      audioRef.current = null;
+
+      setIsLoading(true);
+      setIsSpeaking(false);
+      setProgress(0);
+      setOpacity(1);
+      setIsFading(false);
+      setError(null);
+
+      speakLongText(text, rate, {
+        onSentenceStart: (idx, total) => {
+          if (!mountedRef.current) return;
+          setIsLoading(false);
+          setIsSpeaking(true);
+          setProgress(idx / total);
+        },
+        onSentenceEnd: (idx, total) => {
+          if (!mountedRef.current) return;
+          setProgress((idx + 1) / total);
+        },
+        onFinish: () => finishSpeaking(),
+        onError: () => showError('Не удалось загрузить озвучку'),
+      }, voice);
+    },
+    [rate, voice, finishSpeaking, showError],
   );
 
   const stop = useCallback(() => {
@@ -193,5 +231,5 @@ export function useSpeech(options: UseSpeechOptions = {}): UseSpeechReturn {
     if (fadeAnimationRef.current) cancelAnimationFrame(fadeAnimationRef.current);
   }, []);
 
-  return { speak, stop, isSpeaking, isLoading, progress, opacity, error, isSupported: true };
+  return { speak, speakLong, stop, isSpeaking, isLoading, progress, opacity, error, isSupported: true };
 }

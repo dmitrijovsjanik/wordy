@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { BlankSentence } from '@/components/game/blank-sentence';
 import { cn } from '@/lib/utils';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -57,8 +58,12 @@ export function Collocation({
       </span>
 
       {/* Фраза с пропуском */}
-      <div className="text-center text-xl font-semibold text-[var(--gray-12)]">
-        {collocation.blank}
+      <div className="text-center text-xl font-semibold">
+        <BlankSentence
+          text={collocation.blank}
+          filledValues={showResult ? [feedback.correctAnswer] : undefined}
+          blankState={showResult ? (feedback.isCorrect ? 'correct' : 'wrong') : 'empty'}
+        />
       </div>
 
       {/* Перевод (после ответа) */}

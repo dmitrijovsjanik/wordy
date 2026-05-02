@@ -9,6 +9,7 @@ import { Listening } from '@/components/game/question-types/listening';
 import { Dictation } from '@/components/game/question-types/dictation';
 import { FreeRecall } from '@/components/game/question-types/free-recall';
 import { QuizContainer } from '@/components/game/quiz-container';
+import { BlankSentence } from '@/components/game/blank-sentence';
 import { ArticleQuiz } from '@/components/grammar/article-quiz';
 import { TenseQuiz } from '@/components/grammar/tense-quiz';
 import { CollocationQuiz } from '@/components/grammar/collocation-quiz';
@@ -52,10 +53,12 @@ export function QuizShowcase() {
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<AnswerFeedback | null>(null);
   const [key, setKey] = useState(0);
+  const [listeningRevealed, setListeningRevealed] = useState(false);
 
   const reset = useCallback(() => {
     setSelectedAnswer(null);
     setFeedback(null);
+    setListeningRevealed(false);
     setKey((k) => k + 1);
   }, []);
 
@@ -145,7 +148,7 @@ export function QuizShowcase() {
 
               {activeType === 'match-pairs' && (
                 <div className="flex min-h-0 flex-1 flex-col items-center justify-center pb-8">
-                  <h2 className="mb-1 font-[Unbounded] font-bold text-[var(--gray-12)]" style={{ fontSize: 'clamp(1.75rem, 10vw, 2.25rem)' }}>Соедините пары</h2>
+                  <h2 className="mb-1 text-2xl font-[Unbounded] font-bold text-[var(--gray-12)]">Соедините пары</h2>
                   <p className="text-sm text-[var(--gray-11)]">Нажмите на слово, затем на его перевод</p>
                 </div>
               )}
@@ -153,8 +156,12 @@ export function QuizShowcase() {
               {activeType === 'cloze' && (
                 <div className="flex min-h-0 flex-1 flex-col items-center justify-center pb-8 px-4">
                   <div className="text-center">
-                    <p className="font-[Unbounded] font-bold leading-relaxed text-[var(--gray-12)]" style={{ fontSize: 'clamp(1.75rem, 10vw, 2.25rem)' }}>
-                      She ___ to the store yesterday.
+                    <p className="text-2xl font-[Unbounded] font-bold leading-tight">
+                      <BlankSentence
+                        text="She ___ to the store yesterday."
+                        filledValues={feedback ? [feedback.correctAnswer] : undefined}
+                        blankState={feedback ? (feedback.isCorrect ? 'correct' : 'wrong') : 'empty'}
+                      />
                     </p>
                     <p className="mt-2 text-sm text-[var(--gray-11)]">Она ходила в магазин вчера.</p>
                   </div>
@@ -163,7 +170,19 @@ export function QuizShowcase() {
 
               {activeType === 'listening' && (
                 <div className="flex min-h-0 flex-1 flex-col items-center justify-center pb-8">
-                  <h2 className="font-[Unbounded] font-bold text-[var(--gray-12)]" style={{ fontSize: 'clamp(1.75rem, 10vw, 2.25rem)' }}>Что вы слышите?</h2>
+                  {!listeningRevealed && !feedback && (
+                    <span className="mb-1 text-sm text-[var(--gray-11)]">Что вы слышите?</span>
+                  )}
+                  <WordDisplay
+                    word="team"
+                    originalForm={null}
+                    transcription="tiːm"
+                    meaningId={1}
+                    skipInitialAnimation
+                    showSpeaker={false}
+                    blurred={!listeningRevealed && !feedback}
+                    onRevealClick={() => setListeningRevealed(true)}
+                  />
                 </div>
               )}
 

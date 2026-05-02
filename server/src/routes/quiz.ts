@@ -8,11 +8,14 @@ import {
   generateQuestionFromPool,
   recordInfiniteAnswer,
   recordMatchPairsAnswer,
+  recordGrammarAnswer,
 } from '../services/quiz-service.js';
 import type { LanguagePair, GeneratorType } from '../services/game/types.js';
+import type { GrammarType } from '../services/game/generators/grammar.js';
 import { ERRORS_COLLECTION_ID } from '../config/errors-config.js';
+import { getAiHints } from '../services/ai-content-service.js';
 
-const VALID_GENERATORS = new Set<string>(['en-ru', 'ru-en', 'spelling', 'match-pairs', 'cloze', 'listening', 'dictation', 'free-recall']);
+const VALID_GENERATORS = new Set<string>(['en-ru', 'ru-en', 'spelling', 'match-pairs', 'cloze', 'listening', 'dictation', 'free-recall', 'grammar-article', 'grammar-tense', 'grammar-collocation', 'grammar-false-friend', 'grammar-tense-match']);
 
 export default async function quizRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
@@ -51,7 +54,7 @@ export default async function quizRoutes(app: FastifyInstance) {
 
   // ─── Infinite Quiz ──────────────────────────────────────────────────────
 
-  app.get<{ Querystring: { exclude?: string; lang?: string; collectionId?: string; type?: string; generators?: string; recentCorrect?: string; recentTotal?: string } }>('/api/quiz/next', async (request) => {
+  app.get<{ Querystring: { exclude?: string; lang?: string; collectionId?: string; type?: string; generators?: string; recentCorrect?: string; recentTotal?: string; questionIndex?: string } }>('/api/quiz/next', async (request) => {
     const excludeStr = request.query.exclude ?? '';
     const excludeIds = excludeStr
       ? excludeStr.split(',').map(Number).filter((n) => !Number.isNaN(n))
@@ -78,6 +81,7 @@ export default async function quizRoutes(app: FastifyInstance) {
     // Adaptive difficulty params
     const recentCorrect = Number(request.query.recentCorrect) || 0;
     const recentTotal = Number(request.query.recentTotal) || 0;
+    const questionIndex = Number(request.query.questionIndex) || 0;
 
     const question = await generateQuestionFromPool(
       request.user.id,
@@ -89,23 +93,65 @@ export default async function quizRoutes(app: FastifyInstance) {
       recentGenerators,
       recentCorrect,
       recentTotal,
+      questionIndex,
     );
     return { question };
   });
 
   app.post<{
-    Body: { meaningId: number; selectedMeaningId: number | null; streak?: number; doubleXpClaimed?: boolean };
+    Body: { meaningId: number; selectedMeaningId: number | null; streak?: number; doubleXpClaimed?: boolean; skip?: boolean };
   }>('/api/quiz/answer-infinite', async (request) => {
-    const { meaningId, selectedMeaningId, streak = 0, doubleXpClaimed = false } = request.body;
+    const { meaningId, selectedMeaningId, streak = 0, doubleXpClaimed = false, skip = false } = request.body;
     const result = await recordInfiniteAnswer(
       request.user.id,
       meaningId,
       selectedMeaningId,
       streak,
       doubleXpClaimed,
+      skip,
     );
     return result;
   });
+
+  // ─── Grammar Answer ────────────────────────────────────────────────────
+
+  app.post<{
+    Body: {
+      grammarType: GrammarType;
+      answer: string;
+      exerciseIndex?: number;
+      blankIndex?: number;
+      collocationIndex?: number;
+      questionIndex?: number;
+      streak?: number;
+      skip?: boolean;
+    };
+  }>('/api/quiz/answer-grammar', async (request) => {
+    const { grammarType, answer, exerciseIndex, blankIndex, collocationIndex, questionIndex, streak = 0, skip = false } = request.body;
+    const result = await recordGrammarAnswer(
+      request.user.id,
+      grammarType,
+      { exerciseIndex, blankIndex, collocationIndex, questionIndex, answer },
+      streak,
+      skip,
+    );
+    return result;
+  });
+
+  // ─── Hints ──────────────────────────────────────────────────────────────
+
+  app.get<{ Querystring: { meaningId: string; level: string } }>(
+    '/api/quiz/hint',
+    async (request) => {
+      const meaningId = Number(request.query.meaningId);
+      const level = Number(request.query.level);
+      if (!meaningId || !level) return { hint: null, hasMore: false };
+      const hints = await getAiHints(meaningId);
+      if (!hints) return { hint: null, hasMore: false };
+      const hint = hints.hints.find(h => h.level === level);
+      return { hint: hint?.text ?? null, hasMore: level < hints.hints.length };
+    },
+  );
 
   // ─── Match-Pairs Answer ─────────────────────────────────────────────────
 

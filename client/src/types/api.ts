@@ -1,5 +1,7 @@
 export type User = {
   id: number;
+  telegramId: string | null;
+  vkId: string | null;
   firstName: string;
   username: string | null;
   avatarUrl: string | null;
@@ -11,6 +13,7 @@ export type User = {
   nativeLanguage: string;
   learningLanguage: string;
   repeatMastered: boolean;
+  ttsVoice: string;
   premiumUntil: string | null;
   premiumPlan: string | null;
   autoRenew: boolean;
@@ -18,6 +21,9 @@ export type User = {
   createdAt: string;
   estimatedCefr: CefrLevel | null;
   onboardingCompletedAt: string | null;
+  lives: number;
+  livesRestoredAt: string | null;
+  xpBoostUntil: string | null;
 };
 
 export type AuthResponse = {
@@ -97,13 +103,84 @@ export type FreeRecallApiQuestion = {
   doubleXpTimeLimitMs?: number;
 };
 
+// ─── Grammar Questions (встроенные в основной квиз) ─────────────────────────
+
+export type GrammarArticleApiQuestion = {
+  type: 'grammar-article';
+  exercise: {
+    sentence: string;
+    blanks: Array<{ position: number; correctAnswer: string; explanation: string }>;
+    difficulty: 1 | 2 | 3;
+    rule: string;
+    ruleCategory: string;
+  };
+  exerciseIndex: number;
+};
+
+export type GrammarTenseApiQuestion = {
+  type: 'grammar-tense';
+  exercise: {
+    sentence: string;
+    sentenceRu: string;
+    subject: string;
+    options: string[];
+    correctAnswer: string;
+    tense: string;
+    signalWords: string[];
+    explanation: string;
+    difficulty: 1 | 2 | 3;
+  };
+  exerciseIndex: number;
+};
+
+export type GrammarCollocationApiQuestion = {
+  type: 'grammar-collocation';
+  collocation: {
+    blank: string;
+    correctAnswer: string;
+    options: string[];
+    type: string;
+    translation: string;
+    difficulty: 1 | 2 | 3;
+  };
+  collocationIndex: number;
+};
+
+export type GrammarFalseFriendApiQuestion = {
+  type: 'grammar-false-friend';
+  word: string;
+  options: string[];
+  correctAnswer: string;
+  wrongFriend: string;
+  example: string;
+  exampleRu: string;
+  questionIndex: number;
+};
+
+export type GrammarTenseMatchApiQuestion = {
+  type: 'grammar-tense-match';
+  pairs: Array<{
+    meaningId: number;
+    word: string;
+    translation: string;
+  }>;
+};
+
+export type GrammarApiQuestion =
+  | GrammarArticleApiQuestion
+  | GrammarTenseApiQuestion
+  | GrammarCollocationApiQuestion
+  | GrammarFalseFriendApiQuestion
+  | GrammarTenseMatchApiQuestion;
+
 export type QuizQuestion =
   | QuizQuestionBase
   | MatchPairsApiQuestion
   | ClozeApiQuestion
   | ListeningApiQuestion
   | DictationApiQuestion
-  | FreeRecallApiQuestion;
+  | FreeRecallApiQuestion
+  | GrammarApiQuestion;
 
 export type QuizStartResponse = {
   sessionId: number;
@@ -318,7 +395,11 @@ export type InfiniteAnswerResponse = {
   dailyCorrectCount?: number; // правильных ответов за день
   doubleXpApplied?: boolean;
   examples?: { en: string; ru: string }[]; // примеры предложений для глубокой обработки
+  mnemonic?: string; // мнемоника для запоминания слова
   milestones?: MilestoneData[]; // достигнутые milestones
+  lives?: number;
+  livesRestoredAt?: string | null;
+  livesExhausted?: boolean;
 };
 
 export type MilestoneData = {
@@ -344,6 +425,25 @@ export type CefrProgressResponse = {
   levels: CefrProgressLevel[];
 };
 
+export type GrammarAnswerResponse = {
+  isCorrect: boolean;
+  correctAnswer: string;
+  explanation?: string;
+  xpEarned: number;
+  xpModifier?: number;
+  totalXp?: number;
+  level?: number;
+  levelUp?: number;
+  lpEarned: number;
+  lpModifier?: number;
+  totalLp?: number;
+  gemsEarned?: number;
+  dailyCorrectCount?: number;
+  lives?: number;
+  livesRestoredAt?: string | null;
+  livesExhausted?: boolean;
+};
+
 export type MatchPairsAnswerResponse = {
   correctCount: number;
   totalCount: number;
@@ -357,6 +457,9 @@ export type MatchPairsAnswerResponse = {
   levelUp?: number;
   gemsEarned?: number;
   doubleXpApplied?: boolean;
+  lives?: number;
+  livesRestoredAt?: string | null;
+  livesExhausted?: boolean;
 };
 
 // ─── Leagues ─────────────────────────────────────────────────────────────────
@@ -404,6 +507,7 @@ export type LeaderboardEntry = {
   isCurrentUser: boolean;
   lpToday: number;
   positionChange: number;
+  isPremium?: boolean;
 };
 
 export type LeagueNotificationType =

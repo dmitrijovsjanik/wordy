@@ -1,17 +1,19 @@
+import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { VolumeHighIcon } from '@hugeicons/core-free-icons';
 import { useSpeech } from '@/hooks/use-speech';
+import { MagicTextReveal } from '@/components/ui/text-spoiler';
 
 type WordDisplayProps = {
   word: string;
   originalForm?: string | null;
   transcription?: string | null;
   meaningId: number;
-  // Для отключения анимации первого вопроса
   skipInitialAnimation?: boolean;
-  // Показывать ли кнопку озвучивания (только для английских слов)
   showSpeaker?: boolean;
+  blurred?: boolean;
+  onRevealClick?: () => void;
 };
 
 // Адаптивный размер шрифта в зависимости от длины слова
@@ -27,6 +29,7 @@ function getFontSize(word: string): string {
   return 'clamp(1.75rem, 10vw, 2.25rem)';
 }
 
+
 export function WordDisplay({
   word,
   originalForm,
@@ -34,18 +37,69 @@ export function WordDisplay({
   meaningId,
   skipInitialAnimation = false,
   showSpeaker = false,
+  blurred = false,
+  onRevealClick,
 }: WordDisplayProps) {
   const { speak, isSpeaking, isLoading, progress, opacity } = useSpeech({ lang: 'en-US', rate: 0.85 });
-
-  // Показываем karaoke-слой пока идёт воспроизведение или затухание
   const showKaraoke = isSpeaking || opacity > 0;
+  const canSpeak = showSpeaker;
+  const useSpoiler = onRevealClick !== undefined;
+  const [textVisible, setTextVisible] = useState(!blurred);
+  const handleRevealed = useCallback(() => setTextVisible(true), []);
 
   const handleSpeak = () => {
-    // Озвучиваем оригинальную форму если есть, иначе текущее слово
     speak(originalForm ?? word);
   };
 
-  const canSpeak = showSpeaker;
+  const normalContent = (
+    <button
+      type="button"
+      onClick={canSpeak ? handleSpeak : undefined}
+      disabled={!canSpeak}
+      className={`flex w-full flex-col items-center ${
+        canSpeak ? 'cursor-pointer' : 'cursor-default'
+      }`}
+    >
+      {originalForm && (
+        <span className="mb-1 text-xs text-[var(--gray-10)]">
+          {originalForm}
+        </span>
+      )}
+
+      <h2
+        className="max-w-full break-words px-4 text-center font-bold"
+        style={{ fontSize: getFontSize(word) }}
+      >
+        {word}
+      </h2>
+
+      {transcription && (
+        <span className="mt-1 flex items-center gap-1.5 text-sm text-[var(--gray-10)]">
+          {canSpeak && (
+            <span className={`relative ${isLoading ? 'animate-pulse' : ''}`}>
+              <HugeiconsIcon icon={VolumeHighIcon} size={16} strokeWidth={2} />
+              {showKaraoke && (
+                <span className="absolute inset-0 text-[var(--brand-11)]" style={{ opacity }}>
+                  <HugeiconsIcon icon={VolumeHighIcon} size={16} strokeWidth={2} />
+                </span>
+              )}
+            </span>
+          )}
+          <span className="relative">
+            <span>[{transcription}]</span>
+            {showKaraoke && (
+              <span
+                className="absolute inset-0 overflow-hidden text-[var(--brand-11)]"
+                style={{ width: `${progress * 100}%`, opacity }}
+              >
+                [{transcription}]
+              </span>
+            )}
+          </span>
+        </span>
+      )}
+    </button>
+  );
 
   return (
     <AnimatePresence mode="wait">
@@ -57,74 +111,70 @@ export function WordDisplay({
         exit={{ opacity: 0, y: -8 }}
         transition={{ duration: 0.2 }}
       >
-        {/* Кликабельная зона на всё слово */}
-        <button
-          type="button"
-          onClick={canSpeak ? handleSpeak : undefined}
-          disabled={!canSpeak}
-          className={`flex w-full flex-col items-center ${
-            canSpeak ? 'cursor-pointer' : 'cursor-default'
-          }`}
-        >
-          {/* Оригинальная форма сверху мелко (shoes при word=shoe) */}
-          {originalForm && (
-            <span className="mb-1 text-xs text-[var(--gray-10)]">
-              {originalForm}
-            </span>
-          )}
-
-          <h2
-            className="max-w-full break-words px-4 text-center font-bold"
-            style={{ fontSize: getFontSize(word) }}
+        {useSpoiler ? (
+          <button
+            type="button"
+            onClick={blurred ? onRevealClick : (canSpeak ? handleSpeak : undefined)}
+            className={`relative flex w-full flex-col items-center ${
+              blurred ? 'cursor-pointer' : canSpeak ? 'cursor-pointer' : 'cursor-default'
+            }`}
           >
-            {word}
-          </h2>
-
-          {transcription && (
-            <span className="mt-1 flex items-center gap-1.5 text-sm text-[var(--gray-10)]">
-              {canSpeak && (
-                <span className={`relative ${isLoading ? 'animate-pulse' : ''}`}>
-                  {/* Серая иконка — база */}
-                  <HugeiconsIcon
-                    icon={VolumeHighIcon}
-                    size={16}
-                    strokeWidth={2}
-                  />
-                  {/* Синяя иконка — поверх, с opacity */}
-                  {showKaraoke && (
-                    <span
-                      className="absolute inset-0 text-[var(--brand-11)]"
-                      style={{ opacity }}
-                    >
-                      <HugeiconsIcon
-                        icon={VolumeHighIcon}
-                        size={16}
-                        strokeWidth={2}
-                      />
-                    </span>
-                  )}
+            {/* Visible content — ONE container, ONE opacity toggle */}
+            <div className={`flex w-full flex-col items-center ${textVisible ? '' : 'opacity-0'}`}>
+              {originalForm && (
+                <span className="mb-1 text-xs text-[var(--gray-10)]">
+                  {originalForm}
                 </span>
               )}
-              <span className="relative">
-                {/* Фоновый слой — серый текст */}
-                <span>[{transcription}]</span>
 
-                {/* Karaoke-слой — заполняется цветом при проигрывании, затем плавно затухает */}
-                {showKaraoke && (
-                  <span
-                    className="absolute inset-0 overflow-hidden text-[var(--brand-11)]"
-                    style={{
-                      width: `${progress * 100}%`,
-                      opacity: opacity,
-                    }}
-                  >
-                    [{transcription}]
+              <h2
+                className="max-w-full break-words px-4 text-center font-bold"
+                style={{ fontSize: getFontSize(word) }}
+              >
+                {word}
+              </h2>
+
+              {transcription && (
+                <span className="mt-1 flex items-center gap-1.5 text-sm text-[var(--gray-10)]">
+                  {canSpeak && (
+                    <span className={`relative ${isLoading ? 'animate-pulse' : ''}`}>
+                      <HugeiconsIcon icon={VolumeHighIcon} size={16} strokeWidth={2} />
+                      {showKaraoke && (
+                        <span className="absolute inset-0 text-[var(--brand-11)]" style={{ opacity }}>
+                          <HugeiconsIcon icon={VolumeHighIcon} size={16} strokeWidth={2} />
+                        </span>
+                      )}
+                    </span>
+                  )}
+                  <span className="relative">
+                    <span>[{transcription}]</span>
+                    {showKaraoke && (
+                      <span
+                        className="absolute inset-0 overflow-hidden text-[var(--brand-11)]"
+                        style={{ width: `${progress * 100}%`, opacity }}
+                      >
+                        [{transcription}]
+                      </span>
+                    )}
                   </span>
-                )}
-              </span>
-            </span>
-          )}
-        </button>
+                </span>
+              )}
+            </div>
+
+            {/* Canvas overlay — separate layer, not affected by content opacity */}
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <MagicTextReveal
+                text={word}
+                revealed={!blurred}
+                onRevealed={handleRevealed}
+                fontSize={getFontSize(word)}
+                fontFamily="Unbounded, system-ui, sans-serif"
+              />
+            </div>
+          </button>
+        ) : (
+          normalContent
+        )}
       </motion.div>
     </AnimatePresence>
   );

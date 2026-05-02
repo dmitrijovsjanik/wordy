@@ -55,12 +55,12 @@ export default async function adminRoutes(app: FastifyInstance) {
       }
 
       const telegramId = data.id;
-      if (!isAdmin(telegramId)) {
+      if (!isAdmin('telegram', telegramId)) {
         return reply.status(403).send({ error: 'Нет доступа к админ-панели', code: 'NOT_ADMIN' });
       }
 
       const token = app.jwt.sign(
-        { id: 0, role: 'admin', telegramId },
+        { id: 0, role: 'admin', platform: 'telegram' as const, platformId: telegramId },
         { expiresIn: '7d' },
       );
 
