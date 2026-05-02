@@ -99,21 +99,33 @@ function TopCard({
   const y = useMotionValue(0);
   const rotate = useTransform(x, [-200, 200], [-12, 12]);
 
-  // Радиальный градиент: проявляется из правого/левого края по мере drag.
-  // Радиус и opacity растут пропорционально дальности перетаскивания.
-  // Используем cover-радиус (~120%), чтобы заполнение перекрывало карту целиком на пике.
-  const greenBg = useTransform(x, (val) => {
-    const k = Math.max(0, Math.min(1, val / 200));
-    if (k === 0) return 'radial-gradient(circle at 100% 50%, transparent 0%, transparent 100%)';
-    const radius = 30 + k * 110; // от 30% до 140%
-    return `radial-gradient(circle at 100% 50%, var(--green-5) 0%, var(--green-4) ${radius * 0.6}%, transparent ${radius}%)`;
+  // Точка касания на карте в процентах (0..100). Обновляется на pointer down,
+  // чтобы radial-gradient рос из именно того места, где юзер положил палец.
+  const originX = useMotionValue(50);
+  const originY = useMotionValue(50);
+
+  // Заливка ripple-стиль: круг расходится из точки касания. Радиус растёт
+  // пропорционально |x|; на пике перекрывает карту целиком. Цвет зависит
+  // от знака drag: вправо — зелёный, влево — красный.
+  const fillBg = useTransform([x, originX, originY], (latest) => {
+    const xv = latest[0] as number;
+    const ox = latest[1] as number;
+    const oy = latest[2] as number;
+    if (xv === 0) return 'radial-gradient(circle at 50% 50%, transparent 0%, transparent 100%)';
+    const k = Math.min(1, Math.abs(xv) / 200);
+    const radius = k * 180; // от 0 до 180% — на пике покрывает карту полностью
+    const isGreen = xv > 0;
+    const colorCenter = isGreen ? 'var(--green-5)' : 'var(--red-5)';
+    const colorMid = isGreen ? 'var(--green-4)' : 'var(--red-4)';
+    return `radial-gradient(circle at ${ox}% ${oy}%, ${colorCenter} 0%, ${colorMid} ${radius * 0.5}%, transparent ${radius}%)`;
   });
-  const redBg = useTransform(x, (val) => {
-    const k = Math.max(0, Math.min(1, -val / 200));
-    if (k === 0) return 'radial-gradient(circle at 0% 50%, transparent 0%, transparent 100%)';
-    const radius = 30 + k * 110;
-    return `radial-gradient(circle at 0% 50%, var(--red-5) 0%, var(--red-4) ${radius * 0.6}%, transparent ${radius}%)`;
-  });
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    originX.set(((e.clientX - rect.left) / rect.width) * 100);
+    originY.set(((e.clientY - rect.top) / rect.height) * 100);
+  };
 
   const handleDragEnd = (_: unknown, info: PanInfo) => {
     const { offset } = info;
@@ -143,6 +155,7 @@ function TopCard({
       dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
       dragSnapToOrigin
       dragElastic={0.6}
+      onPointerDown={handlePointerDown}
       onDragEnd={handleDragEnd}
       initial={{ opacity: 0, scale: 0.96 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -151,17 +164,11 @@ function TopCard({
       className="absolute inset-0 flex flex-col"
     >
       <Card className="relative flex flex-1 flex-col gap-4 overflow-hidden px-6 py-8 text-center">
-        {/* Слой подкраски — два независимых градиента: зелёный справа, красный слева.
-            Видна только активная сторона, противоположная — прозрачна. */}
+        {/* Ripple-заливка из точки касания. Цвет/радиус зависят от drag.x. */}
         <motion.div
           aria-hidden
           className="pointer-events-none absolute inset-0"
-          style={{ backgroundImage: greenBg }}
-        />
-        <motion.div
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{ backgroundImage: redBg }}
+          style={{ backgroundImage: fillBg }}
         />
 
         <div className="relative flex flex-1 flex-col items-center justify-center gap-2">
