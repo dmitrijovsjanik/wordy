@@ -12,7 +12,6 @@ import {
 } from '../services/quiz-service.js';
 import type { LanguagePair, GeneratorType } from '../services/game/types.js';
 import type { GrammarType } from '../services/game/generators/grammar.js';
-import { ERRORS_COLLECTION_ID } from '../config/errors-config.js';
 import { getAiHints } from '../services/ai-content-service.js';
 import { recordEvent } from '../services/analytics-service.js';
 
@@ -67,11 +66,8 @@ export default async function quizRoutes(app: FastifyInstance) {
     const fixedDirection = langParam ? (langParam as LanguagePair) : undefined;
     const lang = (langParam ?? 'en-ru') as LanguagePair;
 
-    // Поддержка collectionId='errors' для коллекции ошибок
     const rawCollectionId = request.query.collectionId;
-    const collectionId = rawCollectionId === ERRORS_COLLECTION_ID
-      ? ERRORS_COLLECTION_ID
-      : rawCollectionId ? Number(rawCollectionId) : undefined;
+    const collectionId = rawCollectionId ? Number(rawCollectionId) : undefined;
 
     // История недавних генераторов для авто-ротации
     const generatorsStr = request.query.generators ?? '';

@@ -31,7 +31,7 @@ import { GemsIndicator } from '@/components/ui/gems-indicator';
 import { Avatar } from '@/components/ui/avatar';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Cancel01Icon, Clock01Icon, CheckListIcon, AlertCircleIcon } from '@hugeicons/core-free-icons';
-import { ERRORS_COLLECTION_ID, learningProblemsCount } from '@/lib/api';
+import { learningProblemsCount } from '@/lib/api';
 import { xpForLevel } from '@/lib/progression-config';
 import { AnswerHistoryDrawer } from '@/components/answer-history-drawer';
 import { LivesExhaustedDrawer } from '@/components/game/lives-exhausted-drawer';
@@ -56,7 +56,6 @@ export function Home() {
     error,
     streak,
     collectionId,
-    errorsCleared,
     doubleXpTimeLimitMs,
     doubleXpExpired,
     answerHistory,
@@ -166,28 +165,17 @@ export function Home() {
     }
   }, [user, isLoadingLibrary, hasSystemCollection, navigate]);
 
-  // Название коллекции для бейджа фокусировки
+  // Название коллекции для бейджа фокусировки.
   const focusCollectionName = collectionId
-    ? collectionId === ERRORS_COLLECTION_ID
-      ? 'Ошибки'
-      : library.find((c) => c.id === collectionId)?.title ?? null
+    ? library.find((c) => c.id === collectionId)?.title ?? null
     : null;
 
   const handleExitFocus = useCallback(() => {
     // Сбрасываем collectionId без очистки currentQuestion, чтобы QuizContainer
-    // анимировал переход плавно (fade out → fade in) вместо мигания скелетона
+    // анимировал переход плавно (fade out → fade in) вместо мигания скелетона.
     useUnifiedGameStore.setState({ collectionId: undefined, recentMeaningIds: [], recentGenerators: [] });
     fetchNext();
   }, [fetchNext]);
-
-  // Когда ошибки пройдены — показать сообщение, через паузу загрузить обычный вопрос
-  useEffect(() => {
-    if (!errorsCleared) return;
-    const t = setTimeout(() => {
-      fetchNext();
-    }, 2000);
-    return () => clearTimeout(t);
-  }, [errorsCleared, fetchNext]);
 
   const handleDoubleXpExpired = useCallback(() => {
     expireDoubleXp();
@@ -398,7 +386,7 @@ export function Home() {
       {/* Quiz Card */}
       <div className="mt-2 flex min-h-0 flex-1 flex-col">
         {/* Loading state */}
-        {!currentQuestion && !feedback && isLoading && !errorsCleared && (
+        {!currentQuestion && !feedback && isLoading && (
           <div className="flex flex-1 flex-col items-center justify-center">
             <Skeleton className="h-10 w-40" />
             <div className="mt-10 grid w-full grid-cols-2 gap-3">
@@ -421,7 +409,7 @@ export function Home() {
         )}
 
         {/* Empty state */}
-        {!currentQuestion && !feedback && !isLoading && !error && !errorsCleared && (
+        {!currentQuestion && !feedback && !isLoading && !error && (
           <div className="flex flex-1 flex-col items-center justify-center gap-4">
             <p className="text-center text-[var(--gray-11)]">
               Нет доступных слов. Добавьте коллекцию!
@@ -432,8 +420,7 @@ export function Home() {
           </div>
         )}
 
-        {/* Question / Errors Cleared */}
-        {(currentQuestion || errorsCleared) && (
+        {currentQuestion && (
           <div className="flex min-h-0 flex-1 flex-col">
             {/* Streak + Status bar — outside QuizContainer so they don't fade */}
             <div className="shrink-0 flex flex-col items-center">
@@ -551,15 +538,8 @@ export function Home() {
               </AnimatePresence>
             </div>
 
-            <QuizContainer questionKey={errorsCleared ? 'errors-cleared' : getQuizContainerKey(currentQuestion!)}>
-              {errorsCleared ? (
-                <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3">
-                  <span className="text-4xl">&#10003;</span>
-                  <h2 className="text-center text-xl font-bold text-[var(--gray-12)]">
-                    Все ошибки пройдены!
-                  </h2>
-                </div>
-              ) : currentQuestion && currentQuestion.type === 'encounter' ? (
+            <QuizContainer questionKey={getQuizContainerKey(currentQuestion!)}>
+              {currentQuestion && currentQuestion.type === 'encounter' ? (
                 <div className="flex min-h-0 flex-1 flex-col justify-center px-2">
                   {/* 3-сигнальный прогресс: encounter = «Новое» */}
                   {currentTier === 'encounter' && (

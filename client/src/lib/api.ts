@@ -12,7 +12,6 @@ import type {
   CollectionGroup,
   LibraryCollection,
   CollectionDetail,
-  DifficultWordsResponse,
   AllWordsResponse,
   QuizQuestion,
   InfiniteAnswerResponse,
@@ -352,10 +351,6 @@ export function deleteCollection(id: number) {
   return fetchApi<{ success: boolean }>('DELETE', `/api/collections/${id}`);
 }
 
-export function getDifficultWords() {
-  return fetchApi<DifficultWordsResponse>('GET', '/api/collections/difficult');
-}
-
 export function getAllWords() {
   return fetchApi<AllWordsResponse>('GET', '/api/collections/words');
 }
@@ -377,13 +372,10 @@ export function removeCollectionWord(collectionId: number, wordId: number, type:
   return fetchApi<{ success: boolean; deleted: number }>('DELETE', `/api/collections/${collectionId}/words/${wordId}?type=${type}`);
 }
 
-// Виртуальный ID для коллекции ошибок
-export const ERRORS_COLLECTION_ID = 'errors' as const;
-
 // Infinite Quiz
 export function quizNext(
   excludeIds: number[] = [],
-  collectionId?: number | typeof ERRORS_COLLECTION_ID,
+  collectionId?: number,
   generatorMode?: string,
   recentGenerators: string[] = [],
   recentCorrect?: number,

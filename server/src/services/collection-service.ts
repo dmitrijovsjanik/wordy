@@ -1,4 +1,4 @@
-import { eq, and, sql, isNull, inArray, or, lte, lt, gte, asc } from 'drizzle-orm';
+import { eq, and, sql, isNull, inArray, or, lte, gte, asc } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   collections,
@@ -10,7 +10,6 @@ import {
   wordMeanings,
   words,
 } from '../db/schema.js';
-import { ERRORS_EXIT_SRS_STAGE, ERRORS_COLLECTION_ID } from '../config/errors-config.js';
 import { FREE_LIMITS } from '../config/premium-config.js';
 import { LEARNED_PROGRESS } from './srs-service.js';
 
@@ -452,112 +451,6 @@ export async function deleteUserCollection(userId: number, collectionId: number)
     .update(collections)
     .set({ deletedAt: new Date() })
     .where(eq(collections.id, collectionId));
-}
-
-// ─── Errors Collection (auto-collection) ────────────────────────────────────
-
-// Слова с ошибками, которые ещё не восстановлены (srsStage < ERRORS_EXIT_SRS_STAGE)
-export async function getErrorsCollection(userId: number) {
-  const progress = await db
-    .select({
-      meaningId: userWordProgress.meaningId,
-      correctCount: userWordProgress.correctCount,
-      incorrectCount: userWordProgress.incorrectCount,
-      srsStage: userWordProgress.srsStage,
-      word: words.text,
-      translation: wordMeanings.translation,
-    })
-    .from(userWordProgress)
-    .innerJoin(wordMeanings, eq(userWordProgress.meaningId, wordMeanings.id))
-    .innerJoin(words, eq(wordMeanings.wordId, words.id))
-    .where(
-      and(
-        eq(userWordProgress.userId, userId),
-        sql`${userWordProgress.incorrectCount} > 0`,
-        lt(userWordProgress.srsStage, ERRORS_EXIT_SRS_STAGE),
-      ),
-    )
-    .orderBy(sql`${userWordProgress.incorrectCount} DESC`);
-
-  // Кастомные слова с ошибками
-  const customProgress = await db
-    .select({
-      meaningId: sql<number>`-${userCustomWordProgress.customWordId}`,
-      correctCount: userCustomWordProgress.correctCount,
-      incorrectCount: userCustomWordProgress.incorrectCount,
-      srsStage: userCustomWordProgress.srsStage,
-      word: userCustomWords.wordText,
-      translation: userCustomWords.translation,
-    })
-    .from(userCustomWordProgress)
-    .innerJoin(userCustomWords, eq(userCustomWordProgress.customWordId, userCustomWords.id))
-    .where(
-      and(
-        eq(userCustomWordProgress.userId, userId),
-        sql`${userCustomWordProgress.incorrectCount} > 0`,
-        lt(userCustomWordProgress.srsStage, ERRORS_EXIT_SRS_STAGE),
-      ),
-    )
-    .orderBy(sql`${userCustomWordProgress.incorrectCount} DESC`);
-
-  const allErrors = [...progress, ...customProgress].sort(
-    (a, b) => b.incorrectCount - a.incorrectCount,
-  );
-
-  return {
-    totalWords: allErrors.length,
-    words: allErrors,
-    collection: {
-      id: ERRORS_COLLECTION_ID,
-      type: 'auto' as const,
-      title: 'Ошибки',
-      description: 'Слова, в которых вы ошибались',
-      iconName: 'alert-02',
-    },
-  };
-}
-
-// Алиас для обратной совместимости
-export const getDifficultWords = getErrorsCollection;
-
-// Пул слов для квизов из коллекции ошибок
-export async function getErrorsPool(userId: number): Promise<QuizPool> {
-  const progress = await db
-    .select({
-      meaningId: userWordProgress.meaningId,
-    })
-    .from(userWordProgress)
-    .where(
-      and(
-        eq(userWordProgress.userId, userId),
-        sql`${userWordProgress.incorrectCount} > 0`,
-        lt(userWordProgress.srsStage, ERRORS_EXIT_SRS_STAGE),
-      ),
-    );
-
-  const meaningIds = progress.map((p) => p.meaningId);
-
-  // Кастомные слова с ошибками
-  const customProgress = await db
-    .select({
-      id: userCustomWords.id,
-      wordText: userCustomWords.wordText,
-      translation: userCustomWords.translation,
-    })
-    .from(userCustomWordProgress)
-    .innerJoin(userCustomWords, eq(userCustomWordProgress.customWordId, userCustomWords.id))
-    .where(
-      and(
-        eq(userCustomWordProgress.userId, userId),
-        sql`${userCustomWordProgress.incorrectCount} > 0`,
-        lt(userCustomWordProgress.srsStage, ERRORS_EXIT_SRS_STAGE),
-      ),
-    );
-
-  return {
-    meaningIds,
-    customWords: customProgress,
-  };
 }
 
 // ─── All Words (deduplicated across library) ────────────────────────────────

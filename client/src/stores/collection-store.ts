@@ -3,7 +3,6 @@ import type {
   CollectionGroup,
   LibraryCollection,
   CollectionDetail,
-  DifficultWordsResponse,
 } from '@/types/api';
 import {
   getMarketplace,
@@ -16,7 +15,6 @@ import {
   updateCollection,
   deleteCollection,
   getAllWords,
-  getDifficultWords,
 } from '@/lib/api';
 
 const CACHE_TTL = 5 * 60 * 1000; // 5 минут
@@ -29,7 +27,6 @@ type CachedDetail = {
 type CollectionState = {
   marketplace: CollectionGroup[];
   library: LibraryCollection[];
-  errorsCollection: DifficultWordsResponse | null;
   allWords: {
     id?: number;
     word: string;
@@ -43,18 +40,15 @@ type CollectionState = {
   detailCache: Map<number, CachedDetail>;
   isLoadingLibrary: boolean;
   isLoadingMarketplace: boolean;
-  isLoadingErrors: boolean;
   isLoadingAllWords: boolean;
   isLoadingDetail: boolean;
   error: string | null;
   libraryFetchedAt: number | null;
   marketplaceFetchedAt: number | null;
-  errorsFetchedAt: number | null;
   allWordsFetchedAt: number | null;
 
   fetchMarketplace: (force?: boolean) => Promise<void>;
   fetchLibrary: (force?: boolean) => Promise<void>;
-  fetchErrorsCollection: (force?: boolean) => Promise<void>;
   fetchAllWords: (force?: boolean) => Promise<void>;
   fetchDetail: (id: number, force?: boolean) => Promise<void>;
   subscribe: (id: number) => Promise<void>;
@@ -77,19 +71,16 @@ type CollectionState = {
 export const useCollectionStore = create<CollectionState>()((set, get) => ({
   marketplace: [],
   library: [],
-  errorsCollection: null,
   allWords: [],
   currentDetail: null,
   detailCache: new Map(),
   isLoadingLibrary: false,
   isLoadingMarketplace: false,
-  isLoadingErrors: false,
   isLoadingAllWords: false,
   isLoadingDetail: false,
   error: null,
   libraryFetchedAt: null,
   marketplaceFetchedAt: null,
-  errorsFetchedAt: null,
   allWordsFetchedAt: null,
 
   fetchMarketplace: async (force = false) => {
@@ -119,21 +110,6 @@ export const useCollectionStore = create<CollectionState>()((set, get) => ({
       set({ library: res.collections, isLoadingLibrary: false, libraryFetchedAt: Date.now() });
     } catch {
       set({ isLoadingLibrary: false, error: 'Не удалось загрузить библиотеку' });
-    }
-  },
-
-  fetchErrorsCollection: async (force = false) => {
-    const { errorsFetchedAt, isLoadingErrors } = get();
-    if (!force && errorsFetchedAt && Date.now() - errorsFetchedAt < CACHE_TTL) {
-      return;
-    }
-    if (isLoadingErrors) return;
-    set({ isLoadingErrors: true });
-    try {
-      const res = await getDifficultWords();
-      set({ errorsCollection: res, isLoadingErrors: false, errorsFetchedAt: Date.now() });
-    } catch {
-      set({ isLoadingErrors: false });
     }
   },
 

@@ -1,8 +1,7 @@
 import { eq, and, sql, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { wordMeanings, quizSessions, quizAnswers, users, userWordProgress, userCustomWords, userCustomWordProgress } from '../db/schema.js';
-import { getQuizPool, getErrorsPool, type CustomWordForQuiz } from './collection-service.js';
-import { ERRORS_COLLECTION_ID } from '../config/errors-config.js';
+import { getQuizPool, type CustomWordForQuiz } from './collection-service.js';
 import { computeNextReview, LEARNED_PROGRESS } from './srs-service.js';
 import {
   rewardCorrectAnswer,
@@ -83,7 +82,7 @@ export async function generateQuestionFromPool(
   userId: number,
   excludeMeaningIds: number[] = [],
   langPair: LanguagePair = DEFAULT_LANG_PAIR,
-  collectionId?: number | typeof ERRORS_COLLECTION_ID,
+  collectionId?: number,
   fixedDirection?: LanguagePair,
   questionType?: 'spelling' | 'match-pairs' | 'cloze' | 'listening' | 'dictation' | 'free-recall',
   recentGenerators: GeneratorType[] = [],
@@ -99,7 +98,7 @@ async function generateQuestionFromPoolInternal(
   userId: number,
   excludeMeaningIds: number[] = [],
   langPair: LanguagePair = DEFAULT_LANG_PAIR,
-  collectionId?: number | typeof ERRORS_COLLECTION_ID,
+  collectionId?: number,
   fixedDirection?: LanguagePair,
   questionType?: 'spelling' | 'match-pairs' | 'cloze' | 'listening' | 'dictation' | 'free-recall',
   recentGenerators: GeneratorType[] = [],
@@ -108,21 +107,14 @@ async function generateQuestionFromPoolInternal(
   questionIndex: number = 0,
 ): Promise<AnyQuestion | null> {
   // ─── Grammar injection: каждый N-й вопрос — грамматический ──────────────
-  // Только в авто-режиме (без явного questionType) и не для ошибок
-  if (!questionType && collectionId !== ERRORS_COLLECTION_ID &&
-      questionIndex > 0 && questionIndex % GRAMMAR_EVERY_N === 0) {
+  if (!questionType && questionIndex > 0 && questionIndex % GRAMMAR_EVERY_N === 0) {
     return generateGrammarQuestion(userId, recentGenerators);
   }
 
-  // Для коллекции ошибок используем специальный пул
-  const pool = collectionId === ERRORS_COLLECTION_ID
-    ? await getErrorsPool(userId)
-    : await getQuizPool(userId, collectionId);
+  const pool = await getQuizPool(userId, collectionId);
   const totalPool = pool.meaningIds.length + pool.customWords.length;
 
   if (totalPool === 0) {
-    // Для коллекции ошибок — возвращаем null (все ошибки пройдены)
-    if (collectionId === ERRORS_COLLECTION_ID) return null;
     return generateRandom(excludeMeaningIds, langPair, fixedDirection);
   }
 
@@ -134,7 +126,7 @@ async function generateQuestionFromPoolInternal(
   const repeatMastered = user?.repeatMastered ?? false;
 
   const now = new Date();
-  const skipSrsTimer = collectionId === ERRORS_COLLECTION_ID;
+  const skipSrsTimer = false;
   let reviewReady: number[] = [];
   let unseen: number[] = [];
   let progressMap: Map<number, { meaningId: number; srsStage: number; nextReviewAt: Date | null }> = new Map();

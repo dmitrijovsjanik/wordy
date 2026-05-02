@@ -413,27 +413,6 @@ export type CollectionDetail = {
   words: CollectionWord[];
 };
 
-export type ErrorsCollectionMeta = {
-  id: 'errors';
-  type: 'auto';
-  title: string;
-  description: string;
-  iconName: string;
-};
-
-export type DifficultWordsResponse = {
-  totalWords: number;
-  words: {
-    meaningId: number;
-    correctCount: number;
-    incorrectCount: number;
-    srsStage: number;
-    word: string;
-    translation: string;
-  }[];
-  collection: ErrorsCollectionMeta;
-};
-
 export type AllWordsResponse = {
   words: {
     id?: number;

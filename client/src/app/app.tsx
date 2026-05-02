@@ -13,7 +13,6 @@ const Home = lazyWithRetry(() => import('@/components/home').then((m) => ({ defa
 const Collections = lazyWithRetry(() => import('@/components/collections').then((m) => ({ default: m.Collections })));
 const CollectionDetail = lazyWithRetry(() => import('@/components/collection-detail').then((m) => ({ default: m.CollectionDetail })));
 const CollectionCreate = lazyWithRetry(() => import('@/components/collection-create').then((m) => ({ default: m.CollectionCreate })));
-const ErrorsCollection = lazyWithRetry(() => import('@/components/errors-collection').then((m) => ({ default: m.ErrorsCollection })));
 const Profile = lazyWithRetry(() => import('@/components/profile').then((m) => ({ default: m.Profile })));
 const DuelCreate = lazyWithRetry(() => import('@/components/duel-create').then((m) => ({ default: m.DuelCreate })));
 const DuelGame = lazyWithRetry(() => import('@/components/duel-game').then((m) => ({ default: m.DuelGame })));
@@ -91,7 +90,6 @@ export function App() {
                   <Route path="/collections" element={<Collections />} />
                   <Route path="/collections/create" element={<CollectionCreate />} />
                   <Route path="/collections/:id" element={<CollectionDetail />} />
-                  <Route path="/errors" element={<ErrorsCollection />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/duel/create" element={<DuelCreate />} />
                   <Route path="/duel/:id" element={<DuelGame />} />

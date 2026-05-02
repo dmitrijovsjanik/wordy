@@ -1,9 +1,8 @@
 import { create } from 'zustand';
 import type { QuizQuestion, InfiniteAnswerResponse, LearningTier, LearningAnswerResponse } from '@/types/api';
 import type { AnswerHistoryEntry } from '@/types/game';
-import { quizNext, quizAnswerInfinite, quizAnswerMatchPairs, refillLives, learningNext, learningAnswer, learningProblemsNext, ERRORS_COLLECTION_ID } from '@/lib/api';
+import { quizNext, quizAnswerInfinite, quizAnswerMatchPairs, refillLives, learningNext, learningAnswer, learningProblemsNext } from '@/lib/api';
 import { useLeagueStore } from './league-store';
-import { useCollectionStore } from './collection-store';
 
 const MAX_RECENT = 20;
 const MAX_RECENT_GENERATORS = 10;
@@ -118,12 +117,11 @@ type UnifiedGameState = {
   isLoading: boolean;
   error: string | null;
   streak: number;
-  collectionId: number | typeof ERRORS_COLLECTION_ID | undefined;
+  collectionId: number | undefined;
   generatorMode: QuestionGeneratorMode;
   /** Режим «Проблемные слова» — fetchNext идёт на /api/learning/problems/next.
    *  Включается с экрана /problems, выключается при уходе оттуда. */
   problemsMode: boolean;
-  errorsCleared: boolean;
   doubleXpTimeLimitMs: number | null;
   doubleXpExpired: boolean;
   questionIndex: number;
@@ -137,7 +135,7 @@ type UnifiedGameState = {
   livesRestoredAt: string | null;
   livesExhausted: boolean;
 
-  setCollectionId: (id: number | typeof ERRORS_COLLECTION_ID | undefined) => void;
+  setCollectionId: (id: number | undefined) => void;
   setGeneratorMode: (mode: QuestionGeneratorMode) => void;
   setProblemsMode: (on: boolean) => void;
   fetchNext: () => Promise<void>;
@@ -182,12 +180,11 @@ function adaptLearningResponse(
   };
 }
 
-/** Использовать learning-API только для auto-режима (не grammar/spelling/match-pairs/etc — они на старом /api/quiz). */
-function shouldUseLearningApi(generatorMode: QuestionGeneratorMode, collectionId: number | typeof ERRORS_COLLECTION_ID | undefined): boolean {
+/** Использовать learning-API только для auto-режима без выбранной коллекции.
+ *  Для en-ru/ru-en/match-pairs или конкретной коллекции — старый /api/quiz. */
+function shouldUseLearningApi(generatorMode: QuestionGeneratorMode, collectionId: number | undefined): boolean {
   if (generatorMode !== 'auto') return false;
-  // ERRORS_COLLECTION_ID = строка 'errors', /api/learning/* пока не поддерживает её
-  // (там обычные слова, не отдельные ошибки). Старый путь даёт правильный feed.
-  if (collectionId === ERRORS_COLLECTION_ID) return false;
+  if (collectionId !== undefined) return false;
   return true;
 }
 
@@ -204,7 +201,6 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
   collectionId: undefined,
   generatorMode: 'auto',
   problemsMode: false,
-  errorsCleared: false,
   doubleXpTimeLimitMs: null,
   doubleXpExpired: false,
   questionIndex: 0,
@@ -237,7 +233,6 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
       recentGenerators: [],
       currentQuestion: null,
       feedback: null,
-      errorsCleared: false,
     });
   },
 
@@ -263,7 +258,6 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
           currentTier: res.tier,
           recentGenerators: updatedGenerators,
           isLoading: false,
-          errorsCleared: false,
           doubleXpTimeLimitMs: null,
           doubleXpExpired: false,
         });
@@ -284,23 +278,17 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
           currentTier: res.tier,
           recentGenerators: updatedGenerators,
           isLoading: false,
-          errorsCleared: false,
           doubleXpTimeLimitMs: null,
           doubleXpExpired: false,
         });
         return;
       }
 
-      // Старый путь для grammar/spelling/match-pairs/cloze/listening/dictation/free-recall и errors-collection.
+      // Старый путь: en-ru/ru-en/match-pairs формат-выбор или конкретная коллекция.
       const res = await quizNext(recentMeaningIds, collectionId, generatorMode, recentGenerators, recentCorrectCount, recentTotalCount, questionIndex);
 
-      // Если ошибки закончились — показываем сообщение, переход на обычный режим через паузу
-      if (!res.question && collectionId === ERRORS_COLLECTION_ID) {
-        set({ collectionId: undefined, currentQuestion: null, currentQuestionSource: null, currentTier: null, recentMeaningIds: [], recentGenerators: [], errorsCleared: true, isLoading: false });
-        return;
-      }
-
       // Трекаем тип генератора для авто-ротации
+
       const updatedGenerators = res.question
         ? [...recentGenerators, getGeneratorTypeFromQuestion(res.question)].slice(-MAX_RECENT_GENERATORS)
         : recentGenerators;
@@ -313,12 +301,11 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
         currentTier: null,
         recentGenerators: updatedGenerators,
         isLoading: false,
-        errorsCleared: false,
         doubleXpTimeLimitMs,
         doubleXpExpired: false,
       });
     } catch {
-      set({ isLoading: false, error: 'Не удалось загрузить вопрос', errorsCleared: false });
+      set({ isLoading: false, error: 'Не удалось загрузить вопрос' });
     }
   },
 
@@ -378,8 +365,6 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
         useLeagueStore.getState().updateLp(res.totalLp);
       }
 
-      // Инвалидируем кеш коллекции ошибок (incorrectCount мог измениться)
-      useCollectionStore.setState({ errorsFetchedAt: null });
 
       // Track adaptive difficulty stats (last 10 answers)
       const prevCorrect = get().recentCorrectCount;
@@ -458,8 +443,6 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
         useLeagueStore.getState().updateLp(res.totalLp);
       }
 
-      // Инвалидируем кеш коллекции ошибок (incorrectCount мог измениться)
-      useCollectionStore.setState({ errorsFetchedAt: null });
 
       // Записываем историю ответов для каждой пары
       const pairEntries: AnswerHistoryEntry[] = currentQuestion.pairs.map((pair) => {

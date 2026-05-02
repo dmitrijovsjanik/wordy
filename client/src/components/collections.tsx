@@ -7,7 +7,7 @@ import { TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { PremiumDrawer } from '@/components/ui/premium-drawer';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Add01Icon, Alert02Icon, Book02Icon } from '@hugeicons/core-free-icons';
+import { Add01Icon, Book02Icon } from '@hugeicons/core-free-icons';
 import { Progress } from '@/components/ui/progress';
 import { ICON_MAP, DEFAULT_ICON } from '@/lib/icon-map';
 import type { MarketplaceCollection, CollectionGroup, LibraryCollection, CefrLevel } from '@/types/api';
@@ -209,10 +209,6 @@ export function Collections() {
   const fetchMarketplace = useCollectionStore((s) => s.fetchMarketplace);
   const fetchAllWords = useCollectionStore((s) => s.fetchAllWords);
 
-  const errorsCollection = useCollectionStore((s) => s.errorsCollection);
-  const isLoadingErrors = useCollectionStore((s) => s.isLoadingErrors);
-  const fetchErrorsCollection = useCollectionStore((s) => s.fetchErrorsCollection);
-
   const [showPremiumDrawer, setShowPremiumDrawer] = useState(false);
   const customCollectionsCount = library.filter((c) => c.type === 'user').length;
 
@@ -220,8 +216,7 @@ export function Collections() {
     fetchLibrary();
     fetchMarketplace();
     fetchAllWords();
-    fetchErrorsCollection();
-  }, [fetchLibrary, fetchMarketplace, fetchAllWords, fetchErrorsCollection]);
+  }, [fetchLibrary, fetchMarketplace, fetchAllWords]);
 
   return (
     <div className="flex min-h-full flex-col px-4">
@@ -269,26 +264,6 @@ export function Collections() {
                 </span>
               </div>
             </div>
-
-            {/* Карточка "Ошибки" — показываем если есть слова с ошибками */}
-            {!isLoadingErrors && errorsCollection && errorsCollection.totalWords > 0 && (
-              <div
-                className="flex cursor-pointer items-center gap-3 rounded-xl bg-[var(--gray-2)] p-3 active:bg-[var(--gray-3)]"
-                onClick={() => navigate('/errors')}
-              >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--tomato-4)]">
-                  <HugeiconsIcon icon={Alert02Icon} size={20} className="text-[var(--tomato-11)]" />
-                </div>
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="truncate text-sm font-medium text-[var(--gray-12)]">
-                    {errorsCollection.collection.title}
-                  </span>
-                  <span className="text-xs text-[var(--gray-11)]">
-                    {errorsCollection.totalWords} {errorsCollection.totalWords === 1 ? 'слово' : errorsCollection.totalWords < 5 ? 'слова' : 'слов'}
-                  </span>
-                </div>
-              </div>
-            )}
 
             {/* Пользовательские коллекции — выше каталожных */}
             {library.filter((c) => c.type !== 'system').map((col) => (
