@@ -208,6 +208,27 @@ export type ReviewFeedResponse = {
   cards: ReviewFeedCard[];
 };
 
+// Режим A: слова со всеми значениями.
+export type ReviewFeedMeaning = {
+  meaningId: number;
+  translation: string;
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+  cefr: string | null;
+  example: { en: string; ru: string } | null;
+  mnemonic: string | null;
+};
+
+export type ReviewFeedWord = {
+  wordId: number;
+  word: string;
+  transcription: string | null;
+  meanings: ReviewFeedMeaning[];
+};
+
+export type ReviewFeedWordsResponse = {
+  words: ReviewFeedWord[];
+};
+
 export type LearningNextResponse = {
   question: QuizQuestion | null;
   tier: LearningTier | null;

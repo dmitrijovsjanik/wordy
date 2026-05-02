@@ -1,76 +1,229 @@
 import { create } from 'zustand';
-import type { ReviewFeedCard } from '@/types/api';
-import { reviewFeedNext, learningSwipe } from '@/lib/api';
+import type { ReviewFeedCard, ReviewFeedWord } from '@/types/api';
+import { reviewFeedNext, reviewFeedWords, learningSwipe, learningUndoSwipe } from '@/lib/api';
 
 const PREFETCH_THRESHOLD = 5;
+const MODE_KEY = 'wordy:reviewMode';
+
+type Action = 'known' | 'unknown' | 'snooze';
+
+type HistoryEntry =
+  | { mode: 'A'; prevWordIndex: number; prevMeaningIndex: number; action: Action; meaningIds: number[] }
+  | { mode: 'B'; prevCardIndex: number; action: Action; meaningIds: number[] };
 
 type ReviewState = {
-  cards: ReviewFeedCard[];
-  currentIndex: number;
-  isLoading: boolean;     // первичная загрузка (UI блокируется)
-  isPrefetching: boolean; // фоновая подгрузка (UI не блокируется)
-  error: string | null;
+  mode: 'A' | 'B';
 
+  // Режим A: слова со стопками значений.
+  words: ReviewFeedWord[];
+  wordIndex: number;
+  meaningIndex: number;
+
+  // Режим B: плоский поток.
+  cards: ReviewFeedCard[];
+  cardIndex: number;
+
+  // Общее.
+  isLoading: boolean;
+  isPrefetching: boolean;
+  error: string | null;
+  history: HistoryEntry[];
+
+  setMode: (m: 'A' | 'B') => void;
   fetchInitial: () => Promise<void>;
-  swipe: (action: 'known' | 'unknown' | 'snooze') => Promise<void>;
+  swipe: (action: Action) => Promise<void>;
+  undo: () => Promise<void>;
   reset: () => void;
 };
 
+function loadMode(): 'A' | 'B' {
+  const v = localStorage.getItem(MODE_KEY);
+  return v === 'B' ? 'B' : 'A';
+}
+
+function saveMode(m: 'A' | 'B') {
+  localStorage.setItem(MODE_KEY, m);
+}
+
 export const useReviewStore = create<ReviewState>()((set, get) => ({
+  mode: loadMode(),
+  words: [],
+  wordIndex: 0,
+  meaningIndex: 0,
   cards: [],
-  currentIndex: 0,
+  cardIndex: 0,
   isLoading: false,
   isPrefetching: false,
   error: null,
+  history: [],
+
+  setMode: (m) => {
+    saveMode(m);
+    set({
+      mode: m,
+      words: [],
+      wordIndex: 0,
+      meaningIndex: 0,
+      cards: [],
+      cardIndex: 0,
+      history: [],
+      error: null,
+    });
+    get().fetchInitial();
+  },
 
   fetchInitial: async () => {
     if (get().isLoading) return;
-    set({ isLoading: true, error: null, cards: [], currentIndex: 0 });
+    set({ isLoading: true, error: null });
     try {
-      const res = await reviewFeedNext();
-      set({ cards: res.cards, isLoading: false });
+      if (get().mode === 'A') {
+        const res = await reviewFeedWords({ limit: 15 });
+        set({ words: res.words, wordIndex: 0, meaningIndex: 0, isLoading: false });
+      } else {
+        const res = await reviewFeedNext({ limit: 30 });
+        set({ cards: res.cards, cardIndex: 0, isLoading: false });
+      }
     } catch {
-      set({ isLoading: false, error: 'Не удалось загрузить карточки' });
+      set({ isLoading: false, error: 'Не удалось загрузить' });
     }
   },
 
   swipe: async (action) => {
-    const { cards, currentIndex, isPrefetching } = get();
-    const card = cards[currentIndex];
-    if (!card) return;
+    const state = get();
+    if (state.mode === 'A') {
+      const word = state.words[state.wordIndex];
+      if (!word) return;
+      const meaning = word.meanings[state.meaningIndex];
+      if (!meaning) return;
 
-    // Оптимистично сдвигаем индекс — UI не ждёт сети.
-    set({ currentIndex: currentIndex + 1 });
+      if (action === 'snooze') {
+        // Skip всей стопки: snooze всех ещё не отвеченных значений начиная с текущего.
+        const remaining = word.meanings.slice(state.meaningIndex).map(m => m.meaningId);
+        set({
+          history: [...state.history, {
+            mode: 'A',
+            prevWordIndex: state.wordIndex,
+            prevMeaningIndex: state.meaningIndex,
+            action,
+            meaningIds: remaining,
+          }],
+          wordIndex: state.wordIndex + 1,
+          meaningIndex: 0,
+        });
+        // Prefetch если близко к концу.
+        prefetchIfNeeded();
+        // Сетевой запрос — fire-and-forget.
+        learningSwipe({ meaningIds: remaining, action: 'snooze' }).catch((e) => console.error('[review] swipe failed:', e));
+        return;
+      }
 
-    // Фоновый prefetch если близко к концу очереди и не идёт другой prefetch.
-    const remaining = cards.length - (currentIndex + 1);
-    if (remaining <= PREFETCH_THRESHOLD && !isPrefetching) {
-      set({ isPrefetching: true });
-      reviewFeedNext()
-        .then((res) => {
-          // Дописываем новые карточки в хвост, исключая уже свайпнутые
-          // (повторы из БД маловероятны, но защитимся через Set).
-          const seen = new Set(get().cards.slice(0, get().currentIndex).map(c => c.meaningId));
-          const merged = [
-            ...get().cards,
-            ...res.cards.filter(c => !seen.has(c.meaningId) && !get().cards.some(existing => existing.meaningId === c.meaningId)),
-          ];
-          set({ cards: merged, isPrefetching: false });
-        })
-        .catch(() => set({ isPrefetching: false }));
+      // known / unknown — решение по одному значению.
+      const nextMeaningIndex = state.meaningIndex + 1;
+      const isLastMeaning = nextMeaningIndex >= word.meanings.length;
+      set({
+        history: [...state.history, {
+          mode: 'A',
+          prevWordIndex: state.wordIndex,
+          prevMeaningIndex: state.meaningIndex,
+          action,
+          meaningIds: [meaning.meaningId],
+        }],
+        wordIndex: isLastMeaning ? state.wordIndex + 1 : state.wordIndex,
+        meaningIndex: isLastMeaning ? 0 : nextMeaningIndex,
+      });
+      prefetchIfNeeded();
+      learningSwipe({ meaningId: meaning.meaningId, action }).catch((e) => console.error('[review] swipe failed:', e));
+      return;
     }
 
-    // Запись свайпа на сервер. Ошибки логируем, но не откатываем UI —
-    // пользователь уже двинулся дальше. На N=10 потеря свайпа допустима;
-    // если станет проблемой — добавим retry-очередь в localStorage.
-    try {
-      await learningSwipe({ meaningId: card.meaningId, action });
-    } catch (e) {
-      console.error('[review] swipe failed:', e);
+    // Режим B (плоский).
+    const card = state.cards[state.cardIndex];
+    if (!card) return;
+    set({
+      history: [...state.history, {
+        mode: 'B',
+        prevCardIndex: state.cardIndex,
+        action,
+        meaningIds: [card.meaningId],
+      }],
+      cardIndex: state.cardIndex + 1,
+    });
+    prefetchIfNeeded();
+    learningSwipe({ meaningId: card.meaningId, action }).catch((e) => console.error('[review] swipe failed:', e));
+  },
+
+  undo: async () => {
+    const state = get();
+    const last = state.history[state.history.length - 1];
+    if (!last) return;
+    // Возвращаем индексы сразу — UI отзывчив.
+    if (last.mode === 'A') {
+      set({
+        wordIndex: last.prevWordIndex,
+        meaningIndex: last.prevMeaningIndex,
+        history: state.history.slice(0, -1),
+      });
+    } else {
+      set({
+        cardIndex: last.prevCardIndex,
+        history: state.history.slice(0, -1),
+      });
+    }
+    // Снимаем серверные записи (паралельно, не ждём).
+    for (const id of last.meaningIds) {
+      learningUndoSwipe(id).catch((e) => console.error('[review] undo failed:', e));
     }
   },
 
   reset: () => {
-    set({ cards: [], currentIndex: 0, isLoading: false, isPrefetching: false, error: null });
+    set({
+      words: [],
+      wordIndex: 0,
+      meaningIndex: 0,
+      cards: [],
+      cardIndex: 0,
+      history: [],
+      isLoading: false,
+      isPrefetching: false,
+      error: null,
+    });
   },
 }));
+
+/** Внутренний helper для бесконечного prefetch'а. Не часть store-API. */
+function prefetchIfNeeded() {
+  const state = useReviewStore.getState();
+  if (state.isPrefetching) return;
+
+  if (state.mode === 'A') {
+    const remaining = state.words.length - state.wordIndex;
+    if (remaining > PREFETCH_THRESHOLD) return;
+    useReviewStore.setState({ isPrefetching: true });
+    reviewFeedWords({ limit: 15, excludeWordIds: state.words.map(w => w.wordId) })
+      .then((res) => {
+        const seen = new Set(useReviewStore.getState().words.map(w => w.wordId));
+        const merged = [
+          ...useReviewStore.getState().words,
+          ...res.words.filter(w => !seen.has(w.wordId)),
+        ];
+        useReviewStore.setState({ words: merged, isPrefetching: false });
+      })
+      .catch(() => useReviewStore.setState({ isPrefetching: false }));
+    return;
+  }
+
+  // Mode B prefetch.
+  const remaining = state.cards.length - state.cardIndex;
+  if (remaining > PREFETCH_THRESHOLD) return;
+  useReviewStore.setState({ isPrefetching: true });
+  reviewFeedNext({ limit: 30 })
+    .then((res) => {
+      const seen = new Set(useReviewStore.getState().cards.map(c => c.meaningId));
+      const merged = [
+        ...useReviewStore.getState().cards,
+        ...res.cards.filter(c => !seen.has(c.meaningId)),
+      ];
+      useReviewStore.setState({ cards: merged, isPrefetching: false });
+    })
+    .catch(() => useReviewStore.setState({ isPrefetching: false }));
+}

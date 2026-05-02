@@ -33,6 +33,7 @@ import type {
   LearningNextResponse,
   LearningAnswerResponse,
   ReviewFeedResponse,
+  ReviewFeedWordsResponse,
 } from '@/types/api';
 
 const TOKEN_KEY = 'wordy_token';
@@ -139,8 +140,17 @@ export function learningAnswer(input: {
   return fetchApi<LearningAnswerResponse>('POST', '/api/learning/answer', input);
 }
 
-export function learningSwipe(input: { meaningId: number; action: 'known' | 'unknown' | 'snooze'; snoozeDays?: number }) {
+export function learningSwipe(input: {
+  meaningId?: number;
+  meaningIds?: number[];
+  action: 'known' | 'unknown' | 'snooze';
+  snoozeDays?: number;
+}) {
   return fetchApi<{ ok: boolean }>('POST', '/api/learning/swipe', input);
+}
+
+export function learningUndoSwipe(meaningId: number) {
+  return fetchApi<{ ok: boolean }>('POST', '/api/learning/undo-swipe', { meaningId });
 }
 
 // ─── Review Feed (фаза 4) ──────────────────────────────────────────────────
@@ -150,6 +160,14 @@ export function reviewFeedNext(opts: { limit?: number } = {}) {
   if (opts.limit) params.set('limit', String(opts.limit));
   const qs = params.toString();
   return fetchApi<ReviewFeedResponse>('GET', `/api/review-feed/next${qs ? '?' + qs : ''}`);
+}
+
+export function reviewFeedWords(opts: { limit?: number; excludeWordIds?: number[] } = {}) {
+  const params = new URLSearchParams();
+  if (opts.limit) params.set('limit', String(opts.limit));
+  if (opts.excludeWordIds?.length) params.set('exclude', opts.excludeWordIds.join(','));
+  const qs = params.toString();
+  return fetchApi<ReviewFeedWordsResponse>('GET', `/api/review-feed/words${qs ? '?' + qs : ''}`);
 }
 
 // Duels

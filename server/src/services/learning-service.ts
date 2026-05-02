@@ -516,6 +516,25 @@ export async function applySwipe(input: ApplySwipeInput): Promise<void> {
   });
 }
 
+/**
+ * Откат свайпа. Удаляет запись `user_word_progress` для пары (userId, meaningId),
+ * чтобы слово снова появилось в feed обзора. Используется жестом «вниз» в режиме A.
+ *
+ * Если записи не было — no-op (не падаем).
+ */
+export async function undoSwipe(userId: number, meaningId: number): Promise<void> {
+  await db
+    .delete(userWordProgress)
+    .where(and(eq(userWordProgress.userId, userId), eq(userWordProgress.meaningId, meaningId)));
+
+  await recordEvent({
+    userId,
+    eventType: 'review_swiped_unknown', // переиспользуем event_type, помечая через payload
+    meaningId,
+    payload: { undo: true },
+  });
+}
+
 // ─── Public API: pickNextItem (минимальная версия для фазы 2) ───────────────
 
 /**

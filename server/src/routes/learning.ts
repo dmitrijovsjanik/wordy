@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { eq, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { wordMeanings, userWordProgress } from '../db/schema.js';
-import { pickNextItem, recordAnswer, applySwipe } from '../services/learning-service.js';
+import { pickNextItem, recordAnswer, applySwipe, undoSwipe } from '../services/learning-service.js';
 import { generateForTier } from '../services/game/generators/index.js';
 import type { PooledMeaning } from '../services/game/types.js';
 import { recordEvent } from '../services/analytics-service.js';
@@ -253,14 +253,30 @@ export default async function learningRoutes(app: FastifyInstance) {
 
   app.post<{
     Body: {
-      meaningId: number;
+      meaningId?: number;
+      meaningIds?: number[];
       action: 'known' | 'unknown' | 'snooze';
       snoozeDays?: number;
     };
   }>('/api/learning/swipe', async (request) => {
     const userId = request.user.id;
-    const { meaningId, action, snoozeDays } = request.body;
-    await applySwipe({ userId, meaningId, action, snoozeDays });
+    const { meaningId, meaningIds, action, snoozeDays } = request.body;
+    // Поддерживаем и одиночный meaningId, и batch (для skip всей стопки).
+    const ids = meaningIds && meaningIds.length > 0
+      ? meaningIds
+      : (typeof meaningId === 'number' ? [meaningId] : []);
+    if (ids.length === 0) return { ok: false };
+    for (const id of ids) {
+      await applySwipe({ userId, meaningId: id, action, snoozeDays });
+    }
+    return { ok: true };
+  });
+
+  // POST /api/learning/undo-swipe — откат последнего свайпа (жест «вниз» в обзоре).
+  app.post<{ Body: { meaningId: number } }>('/api/learning/undo-swipe', async (request) => {
+    const userId = request.user.id;
+    const { meaningId } = request.body;
+    await undoSwipe(userId, meaningId);
     return { ok: true };
   });
 }
