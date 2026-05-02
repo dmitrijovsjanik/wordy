@@ -156,6 +156,32 @@ export function learningUndoSwipe(
   return fetchApi<{ ok: boolean }>('POST', '/api/learning/undo-swipe', { meaningId, originalAction });
 }
 
+// ─── Проблемные слова (≥3 ошибок за 60 дней через learning_events) ─────────
+
+export type ProblemMeaning = {
+  meaningId: number;
+  word: string;
+  translation: string;
+  errorCount: number;
+  tier: 'encounter' | 'passive' | 'active' | 'production' | 'review';
+};
+
+export function learningProblems() {
+  return fetchApi<{ count: number; meanings: ProblemMeaning[] }>('GET', '/api/learning/problems');
+}
+
+export function learningProblemsCount() {
+  return fetchApi<{ count: number }>('GET', '/api/learning/problems/count');
+}
+
+export function learningProblemsNext(opts: { recentGenerators?: string[]; excludeMeaningIds?: number[] } = {}) {
+  const params = new URLSearchParams();
+  if (opts.recentGenerators?.length) params.set('generators', opts.recentGenerators.join(','));
+  if (opts.excludeMeaningIds?.length) params.set('exclude', opts.excludeMeaningIds.join(','));
+  const qs = params.toString();
+  return fetchApi<LearningNextResponse>('GET', `/api/learning/problems/next${qs ? '?' + qs : ''}`);
+}
+
 // ─── Review Feed (фаза 4) ──────────────────────────────────────────────────
 
 export function reviewFeedNext(opts: { limit?: number } = {}) {

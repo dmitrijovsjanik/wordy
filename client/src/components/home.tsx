@@ -30,8 +30,8 @@ import { StreakInfoSheet } from '@/components/ui/streak-info-sheet';
 import { GemsIndicator } from '@/components/ui/gems-indicator';
 import { Avatar } from '@/components/ui/avatar';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Cancel01Icon, Clock01Icon, CheckListIcon } from '@hugeicons/core-free-icons';
-import { ERRORS_COLLECTION_ID } from '@/lib/api';
+import { Cancel01Icon, Clock01Icon, CheckListIcon, AlertCircleIcon } from '@hugeicons/core-free-icons';
+import { ERRORS_COLLECTION_ID, learningProblemsCount } from '@/lib/api';
 import { xpForLevel } from '@/lib/progression-config';
 import { AnswerHistoryDrawer } from '@/components/answer-history-drawer';
 import { LivesExhaustedDrawer } from '@/components/game/lives-exhausted-drawer';
@@ -69,6 +69,8 @@ export function Home() {
     submitEncounter,
     skip,
     currentTier,
+    problemsMode,
+    setProblemsMode,
     expireDoubleXp,
     setLastUserAnswer,
     clearHistory,
@@ -132,6 +134,22 @@ export function Home() {
 
   // Answer history drawer
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
+
+  // Счётчик проблемных слов (бейдж над квизом).
+  // Обновляется при mount и после каждого ответа (через feedback dependency).
+  const [problemsCount, setProblemsCount] = useState<number | null>(null);
+  useEffect(() => {
+    let alive = true;
+    learningProblemsCount()
+      .then((res) => alive && setProblemsCount(res.count))
+      .catch(() => alive && setProblemsCount(null));
+    return () => { alive = false; };
+  }, [feedback]);
+
+  const handleExitProblemsMode = useCallback(() => {
+    setProblemsMode(false);
+    fetchNext();
+  }, [setProblemsMode, fetchNext]);
 
   // Onboarding redirect — new users go to /onboarding
   const library = useCollectionStore((s) => s.library);
@@ -477,9 +495,28 @@ export function Home() {
                 </AnimatePresence>
               </div>
 
-              {/* Collection focus badge / errors cleared message */}
+              {/* Бейджи режима фокусировки.
+                  Приоритет: problemsMode (повтор проблемных) → коллекция →
+                  ничего. Только один бейдж за раз. */}
               <AnimatePresence>
-                {focusCollectionName && (
+                {problemsMode ? (
+                  <motion.div
+                    key="problems-mode-badge"
+                    initial={{ opacity: 0, height: 0, scaleX: 0.8 }}
+                    animate={{ opacity: 1, height: 'auto', scaleX: 1 }}
+                    exit={{ opacity: 0, height: 0, scaleX: 0.8 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                    className="mt-2 flex justify-center"
+                  >
+                    <Badge variant="error" className="h-8 max-w-[calc(100vw-2rem)] gap-1.5 pr-1.5 text-xs">
+                      <HugeiconsIcon icon={AlertCircleIcon} size={14} className="text-white" />
+                      <span className="truncate">Повтор проблемных</span>
+                      <button onClick={handleExitProblemsMode} className="rounded-full p-0.5 hover:bg-white/20 transition-colors">
+                        <HugeiconsIcon icon={Cancel01Icon} size={14} className="text-white/80" />
+                      </button>
+                    </Badge>
+                  </motion.div>
+                ) : focusCollectionName ? (
                   <motion.div
                     key="focus-badge"
                     initial={{ opacity: 0, height: 0, scaleX: 0.8 }}
@@ -495,7 +532,22 @@ export function Home() {
                       </button>
                     </Badge>
                   </motion.div>
-                )}
+                ) : problemsCount && problemsCount > 0 ? (
+                  <motion.button
+                    key="problems-count-badge"
+                    onClick={() => navigate('/problems')}
+                    initial={{ opacity: 0, height: 0, scaleX: 0.8 }}
+                    animate={{ opacity: 1, height: 'auto', scaleX: 1 }}
+                    exit={{ opacity: 0, height: 0, scaleX: 0.8 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                    className="mt-2 flex justify-center"
+                  >
+                    <Badge variant="error" className="h-8 gap-1.5 text-xs">
+                      <HugeiconsIcon icon={AlertCircleIcon} size={14} className="text-white" />
+                      <span>{problemsCount} проблемных слов</span>
+                    </Badge>
+                  </motion.button>
+                ) : null}
               </AnimatePresence>
             </div>
 

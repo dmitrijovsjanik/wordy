@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { QuizQuestion, InfiniteAnswerResponse, LearningTier, LearningAnswerResponse } from '@/types/api';
 import type { AnswerHistoryEntry } from '@/types/game';
-import { quizNext, quizAnswerInfinite, quizAnswerMatchPairs, refillLives, learningNext, learningAnswer, ERRORS_COLLECTION_ID } from '@/lib/api';
+import { quizNext, quizAnswerInfinite, quizAnswerMatchPairs, refillLives, learningNext, learningAnswer, learningProblemsNext, ERRORS_COLLECTION_ID } from '@/lib/api';
 import { useLeagueStore } from './league-store';
 import { useCollectionStore } from './collection-store';
 
@@ -120,6 +120,9 @@ type UnifiedGameState = {
   streak: number;
   collectionId: number | typeof ERRORS_COLLECTION_ID | undefined;
   generatorMode: QuestionGeneratorMode;
+  /** Режим «Проблемные слова» — fetchNext идёт на /api/learning/problems/next.
+   *  Включается с экрана /problems, выключается при уходе оттуда. */
+  problemsMode: boolean;
   errorsCleared: boolean;
   doubleXpTimeLimitMs: number | null;
   doubleXpExpired: boolean;
@@ -136,6 +139,7 @@ type UnifiedGameState = {
 
   setCollectionId: (id: number | typeof ERRORS_COLLECTION_ID | undefined) => void;
   setGeneratorMode: (mode: QuestionGeneratorMode) => void;
+  setProblemsMode: (on: boolean) => void;
   fetchNext: () => Promise<void>;
   submitAnswer: (selectedMeaningId: number | null, userAnswer?: string, skip?: boolean) => Promise<void>;
   submitEncounter: () => Promise<void>;
@@ -199,6 +203,7 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
   streak: loadStreak(),
   collectionId: undefined,
   generatorMode: 'auto',
+  problemsMode: false,
   errorsCleared: false,
   doubleXpTimeLimitMs: null,
   doubleXpExpired: false,
@@ -224,14 +229,46 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
     set({ collectionId: id, recentMeaningIds: [], recentGenerators: [], currentQuestion: null, feedback: null });
   },
   setGeneratorMode: (mode) => set({ generatorMode: mode }),
+  setProblemsMode: (on) => {
+    saveQuestion(null);
+    set({
+      problemsMode: on,
+      recentMeaningIds: [],
+      recentGenerators: [],
+      currentQuestion: null,
+      feedback: null,
+      errorsCleared: false,
+    });
+  },
 
   fetchNext: async () => {
     // Предотвращаем параллельные запросы (важно для React StrictMode)
     if (get().isLoading) return;
     set({ isLoading: true, error: null });
     try {
-      const { recentMeaningIds, collectionId, generatorMode, recentGenerators, questionIndex } = get();
+      const { recentMeaningIds, collectionId, generatorMode, recentGenerators, questionIndex, problemsMode } = get();
       const { recentCorrectCount, recentTotalCount } = get();
+
+      // Режим «Проблемные слова»: своя выборка через learning_events,
+      // тот же learning-API для submit'а ответа.
+      if (problemsMode) {
+        const res = await learningProblemsNext({ recentGenerators, excludeMeaningIds: recentMeaningIds });
+        const updatedGenerators = res.question
+          ? [...recentGenerators, getGeneratorTypeFromQuestion(res.question)].slice(-MAX_RECENT_GENERATORS)
+          : recentGenerators;
+        saveQuestion(res.question);
+        set({
+          currentQuestion: res.question,
+          currentQuestionSource: 'learning',
+          currentTier: res.tier,
+          recentGenerators: updatedGenerators,
+          isLoading: false,
+          errorsCleared: false,
+          doubleXpTimeLimitMs: null,
+          doubleXpExpired: false,
+        });
+        return;
+      }
 
       // Разветвление: для auto-режима без коллекции ошибок используем новую лестницу.
       if (shouldUseLearningApi(generatorMode, collectionId)) {
@@ -510,6 +547,7 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
       isLoading: false,
       error: null,
       collectionId: undefined,
+      problemsMode: false,
       doubleXpTimeLimitMs: null,
       doubleXpExpired: false,
       questionIndex: 0,
