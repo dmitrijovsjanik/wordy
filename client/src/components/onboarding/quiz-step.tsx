@@ -3,7 +3,6 @@ import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { useOnboardingStore } from '@/stores/onboarding-store';
 import { platformBridge } from '@/lib/platform-bridge';
-import { telegram } from '@/lib/telegram';
 import { cn } from '@/lib/utils';
 import type { AnswerFeedback } from '@/types/game';
 
@@ -17,12 +16,13 @@ export function QuizStep() {
 
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
 
-  // Telegram integration: disable swipes and enable closing confirmation
+  // Platform integration: disable swipes and enable closing confirmation.
+  // На Telegram — реальные вызовы Telegram WebApp API, на VK — no-op.
   useEffect(() => {
-    telegram.disableVerticalSwipes();
-    telegram.enableClosingConfirmation();
+    platformBridge.disableVerticalSwipes();
+    platformBridge.enableClosingConfirmation();
     return () => {
-      telegram.disableClosingConfirmation();
+      platformBridge.disableClosingConfirmation();
     };
   }, []);
 
