@@ -11,19 +11,17 @@ import { ReviewCard } from './review-card';
 import { WordStack } from './word-stack';
 import { cn } from '@/lib/utils';
 
-// Variants для вертикальной карусели слов.
-// forward: текущее уезжает вверх, новое прилетает снизу.
-// backward (undo): текущее уезжает вниз, новое прилетает сверху.
+// Variants для вертикальной карусели слов. Текущая верхняя карта улетает
+// независимо (drag-driven, см. word-stack), поэтому здесь только enter:
+// новая стопка появляется снизу при forward, сверху при backward.
+// Exit делаем минимальный fade — старая стопка под улетевшей картой просто исчезает.
 const wordVariants = {
   enter: (direction: 'forward' | 'backward') => ({
     y: direction === 'forward' ? '60%' : '-60%',
     opacity: 0,
   }),
   center: { y: 0, opacity: 1 },
-  exit: (direction: 'forward' | 'backward') => ({
-    y: direction === 'forward' ? '-60%' : '60%',
-    opacity: 0,
-  }),
+  exit: { opacity: 0, transition: { duration: 0.15 } },
 };
 
 /**
