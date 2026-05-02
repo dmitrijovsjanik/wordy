@@ -58,6 +58,10 @@ export type RecordAnswerInput = {
   isCorrect: boolean;
   questionType?: ExerciseType | string;
   answerTimeMs?: number;
+  /** true, если пользователь нажал «пропустить». Влияет только на аналитику —
+   *  пишется event question_skipped, а не question_answered. Tier-машина
+   *  обрабатывает skip как обычный wrong (не отдельная ветка). */
+  skip?: boolean;
 };
 
 export type RecordAnswerResult = {
@@ -287,7 +291,7 @@ export function computeTransition(
  * остаётся отдельный pathway в quiz-service. Будет переработано в фазе 3.
  */
 export async function recordAnswer(input: RecordAnswerInput): Promise<RecordAnswerResult> {
-  const { userId, meaningId, isCorrect, questionType, answerTimeMs } = input;
+  const { userId, meaningId, isCorrect, questionType, answerTimeMs, skip } = input;
   const now = new Date();
 
   // Загружаем текущий прогресс или создаём новую запись.
@@ -350,10 +354,10 @@ export async function recordAnswer(input: RecordAnswerInput): Promise<RecordAnsw
     });
   }
 
-  // Analytics: question_answered + tier_advanced/tier_reset/meaning_learned.
+  // Analytics: question_answered (или question_skipped) + tier_advanced/tier_reset/meaning_learned.
   await recordEvent({
     userId,
-    eventType: 'question_answered',
+    eventType: skip ? 'question_skipped' : 'question_answered',
     meaningId,
     tierBefore,
     tierAfter: transition.tier,

@@ -190,6 +190,7 @@ export default async function learningRoutes(app: FastifyInstance) {
       isCorrect,
       questionType,
       answerTimeMs,
+      skip,
     });
 
     // 2) Награды и жизни (без gems за streak/daily milestones — TODO в фазе 5).
