@@ -1,4 +1,5 @@
-import { motion, useMotionValue, useTransform, AnimatePresence, animate, type PanInfo } from 'framer-motion';
+import { useEffect } from 'react';
+import { motion, useMotionValue, useTransform, useSpring, AnimatePresence, animate, type PanInfo } from 'framer-motion';
 import { Card } from '@/components/ui/card';
 import type { ReviewFeedWord } from '@/types/api';
 
@@ -104,16 +105,35 @@ function TopCard({
   const originX = useMotionValue(50);
   const originY = useMotionValue(50);
 
-  // Заливка ripple-стиль: круг расходится из точки касания. Радиус растёт
-  // пропорционально |x|; на пике перекрывает карту целиком. Цвет зависит
-  // от знака drag: вправо — зелёный, влево — красный.
-  const fillBg = useTransform([x, originX, originY], (latest) => {
+  // Бистабильный флаг «карта в зоне дропа» (|x| >= порог). 0 или 1.
+  // Через useSpring переход 0↔1 сглаживается в ~100мс — резкого скачка не видно,
+  // но и долго смешиваться с partial-значением не будет.
+  const inDropZone = useMotionValue(0);
+  const dropZoneSpring = useSpring(inDropZone, { stiffness: 380, damping: 32 });
+
+  useEffect(() => {
+    const unsub = x.on('change', (val) => {
+      inDropZone.set(Math.abs(val) >= SWIPE_THRESHOLD_X ? 1 : 0);
+    });
+    return unsub;
+  }, [x, inDropZone]);
+
+  // Заливка ripple-стиль: круг расходится из точки касания.
+  //   До порога:   радиус = (|x| / порог) * 75%   — линейно до ~75%.
+  //   На пороге:   через spring перетекает к 220% — карта целиком окрашена.
+  //   После возврата за порог: симметрично обратно.
+  const fillBg = useTransform([x, originX, originY, dropZoneSpring], (latest) => {
     const xv = latest[0] as number;
     const ox = latest[1] as number;
     const oy = latest[2] as number;
-    if (xv === 0) return 'radial-gradient(circle at 50% 50%, transparent 0%, transparent 100%)';
-    const k = Math.min(1, Math.abs(xv) / 200);
-    const radius = k * 180; // от 0 до 180% — на пике покрывает карту полностью
+    const lock = latest[3] as number; // 0..1, плавно через spring
+    if (xv === 0 && lock < 0.01) {
+      return 'radial-gradient(circle at 50% 50%, transparent 0%, transparent 100%)';
+    }
+    const k = Math.min(1, Math.abs(xv) / SWIPE_THRESHOLD_X);
+    const partialRadius = k * 75;     // 0..75%
+    const fullRadius = 220;            // полное покрытие на пороге
+    const radius = partialRadius + (fullRadius - partialRadius) * lock;
     const isGreen = xv > 0;
     const colorCenter = isGreen ? 'var(--green-5)' : 'var(--red-5)';
     const colorMid = isGreen ? 'var(--green-4)' : 'var(--red-4)';
