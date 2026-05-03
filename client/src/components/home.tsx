@@ -790,9 +790,13 @@ export function Home() {
                           валидации пропуск окрашивается + появляется перевод. */}
                       <div className="relative w-full">
                         <div className="text-center text-2xl font-[Unbounded] font-bold leading-tight">
+                          {/* filledValues всегда передаём, чтобы пропуск
+                              резервировал ширину настоящего слова. До ответа
+                              текст невидим (blankState=empty → text-transparent
+                              в BlankSentence). */}
                           <BlankSentence
                             text={currentQuestion.sentence}
-                            filledValues={answerFeedback ? [currentQuestion.correctAnswer] : undefined}
+                            filledValues={[currentQuestion.correctAnswer]}
                             blankState={
                               !answerFeedback
                                 ? 'empty'
