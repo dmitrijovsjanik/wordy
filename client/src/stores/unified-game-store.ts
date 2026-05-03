@@ -475,10 +475,19 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
       if (res.livesRestoredAt !== undefined) livesUpdate.livesRestoredAt = res.livesRestoredAt ?? null;
       if (res.livesExhausted) livesUpdate.livesExhausted = true;
 
+      // Encounter и passive-recall не показывают feedback-панель — у них своя
+      // логика перехода (encounter: моментальный fetchNext в submitEncounter;
+      // passive-recall: 500ms ✓/✗ overlay + fetchNext в submitPassiveRecall).
+      // Чтобы карточка не «дёргалась» (исчезновение бейджа, дизейбл кнопки) —
+      // не трогаем feedback и currentTier для них.
+      const skipFeedbackUpdate = currentQuestion.type === 'encounter' || currentQuestion.type === 'passive-recall';
+
       set({
-        feedback: { ...res, meaningId },
-        currentQuestionSource: null, // сбросим до следующего fetchNext
-        currentTier: null,
+        ...(skipFeedbackUpdate ? {} : {
+          feedback: { ...res, meaningId },
+          currentQuestionSource: null, // сбросим до следующего fetchNext
+          currentTier: null,
+        }),
         recentMeaningIds: updatedRecent,
         isLoading: false,
         streak: newStreak,
@@ -491,12 +500,9 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
         ...livesUpdate,
       });
 
-      // Автопереход к следующему вопросу (НЕ если жизни кончились).
-      // Passive-recall сам управляет переходом (свой 500ms ✓/✗ overlay в
-      // карточке + явный вызов fetchNext в submitPassiveRecall) — не запускаем
-      // 1200ms таймер, иначе будет двойной fetchNext.
-      const isPassiveRecall = currentQuestion.type === 'passive-recall';
-      if (!res.livesExhausted && !isPassiveRecall) {
+      // Автопереход к следующему вопросу через 1.2с (НЕ если жизни кончились).
+      // Encounter/passive-recall: переход явный в собственных submit-методах.
+      if (!res.livesExhausted && !skipFeedbackUpdate) {
         setTimeout(() => {
           set({ feedback: null });
           get().fetchNext();
@@ -599,20 +605,21 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
   submitEncounter: async () => {
     const { currentQuestion } = get();
     if (!currentQuestion || currentQuestion.type !== 'encounter') return;
-    // Encounter всегда «правильно» — это просто показ карточки.
-    // submitAnswer определит isCorrect=true по question.type и пройдёт через learning-API.
+    // Encounter — просто показ карточки, без валидации. submitAnswer для
+    // encounter не ставит feedback/не сбрасывает currentTier (skipFeedbackUpdate),
+    // карточка не «дёргается». После submit сразу подгружаем следующий вопрос
+    // — переход моментальный, без 1.2с задержки feedback-панели.
     await get().submitAnswer(currentQuestion.meaningId, undefined, false);
+    await get().fetchNext();
   },
 
   submitPassiveRecall: async (knew: boolean) => {
     const { currentQuestion } = get();
     if (!currentQuestion || currentQuestion.type !== 'passive-recall') return;
-    // knew=true → передаём meaningId (компарируется === meaningId → isCorrect=true).
-    // knew=false → null (selectedMeaningId !== meaningId → isCorrect=false).
-    // submitAnswer для passive-recall не ставит 1200ms-таймер, поэтому здесь
-    // мы сами очищаем feedback и сразу подгружаем следующий вопрос.
+    // knew=true → meaningId, knew=false → null (computedIsCorrect в submitAnswer).
+    // submitAnswer для passive-recall не ставит feedback/не сбрасывает currentTier
+    // (skipFeedbackUpdate) и не запускает 1.2с таймер — здесь сразу fetchNext.
     await get().submitAnswer(knew ? currentQuestion.meaningId : null, undefined, false);
-    set({ feedback: null });
     await get().fetchNext();
   },
 
