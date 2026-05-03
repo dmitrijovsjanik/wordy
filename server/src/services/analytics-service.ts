@@ -26,7 +26,10 @@ export type LearningTier = 'encounter' | 'passive' | 'active' | 'production' | '
 export type LearningEventInput = {
   userId: number;
   eventType: LearningEventType;
+  /** Для per-meaning событий (L4 production, rollback). */
   meaningId?: number | null;
+  /** Для per-word событий (L1-3 encounter/passive/active, word-level review). */
+  wordId?: number | null;
   tierBefore?: LearningTier | null;
   tierAfter?: LearningTier | null;
   questionType?: string | null;
@@ -47,6 +50,7 @@ export async function recordEvent(event: LearningEventInput): Promise<void> {
       userId: event.userId,
       eventType: event.eventType,
       meaningId: event.meaningId ?? null,
+      wordId: event.wordId ?? null,
       tierBefore: event.tierBefore ?? null,
       tierAfter: event.tierAfter ?? null,
       questionType: event.questionType ?? null,

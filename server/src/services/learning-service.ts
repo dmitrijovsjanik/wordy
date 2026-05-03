@@ -17,11 +17,12 @@
  *   - Лестницу пользователь не видит явно — это внутренняя логика отбора.
  */
 
-import { eq, and, sql, isNull, or, lte, inArray } from 'drizzle-orm';
+import { eq, and, sql, isNull, or, lte, inArray, ne } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { userWordProgress, collectionWords } from '../db/schema.js';
+import { userWordProgress, userWordProgressWord, collectionWords, wordMeanings, words } from '../db/schema.js';
 import { learningConfig, type ExerciseType } from '../config/learning-config.js';
 import { recordEvent, type LearningTier } from './analytics-service.js';
+import { FUNCTIONAL_POS, FUNCTIONAL_ENGLISH_WORDS } from '../db/word-filters.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -623,6 +624,464 @@ export async function pickNextItem(
   return { meaningId: row.meaningId, tier: row.tier };
 }
 
+// ─── Word-level operations (L1-3 + word-review) ─────────────────────────────
+//
+// Параллельная ветка к meaning-уровневым функциям выше. Используется на
+// уровнях encounter/passive/active (L1-3) и для review-фазы на word-level.
+// На L4 production переход управляется meaning-уровневыми функциями.
+//
+// Инвариант (введён здесь, не выполняется в backfill-данных):
+//   - word.tier ∈ {encounter, passive, active, production, review}
+//   - word.tier == 'production' ⟹ есть meaning-записи с tier='production'
+//   - word.tier == 'review' ⟹ все eligible meanings слова на tier='review'
+
+export type RecordWordAnswerInput = {
+  userId: number;
+  wordId: number;
+  isCorrect: boolean;
+  questionType?: ExerciseType | string;
+  answerTimeMs?: number;
+  skip?: boolean;
+};
+
+export type RecordWordAnswerResult = {
+  tierBefore: LearningTier;
+  tierAfter: LearningTier;
+  becameLearned: boolean;
+  wasReset: boolean;
+  nextReviewAt: Date;
+  /** true, если слово ушло в L4 production и созданы meaning-записи. */
+  enteredProduction: boolean;
+};
+
+/**
+ * Загружает eligible meanings слова — те, что прошли учебный фильтр
+ * (popularity_rank ≤ 3, frequency ≥ 5, кириллический перевод, не functional).
+ * Используется при L3→L4 переходе для создания meaning-записей.
+ */
+async function getEligibleMeaningsForWord(wordId: number): Promise<{ id: number }[]> {
+  const rows = await db
+    .select({ id: wordMeanings.id })
+    .from(wordMeanings)
+    .innerJoin(words, eq(words.id, wordMeanings.wordId))
+    .where(and(
+      eq(wordMeanings.wordId, wordId),
+      or(isNull(wordMeanings.popularityRank), lte(wordMeanings.popularityRank, 3))!,
+      or(isNull(wordMeanings.frequency), sql`${wordMeanings.frequency} >= 5`)!,
+      sql`${wordMeanings.translation} ~ '[а-яА-ЯёЁ]'`,
+      or(
+        isNull(wordMeanings.translationPartOfSpeech),
+        sql`${wordMeanings.translationPartOfSpeech} NOT IN (${sql.join(FUNCTIONAL_POS.map(p => sql`${p}`), sql`, `)})`,
+      )!,
+      sql`${words.text} NOT IN (${sql.join(FUNCTIONAL_ENGLISH_WORDS.map(w => sql`${w}`), sql`, `)})`,
+    ));
+  return rows;
+}
+
+/**
+ * L3 → L4 переход. Вызывается из recordWordAnswer когда слово достигло
+ * tier='production' на word-level (т.е. прошло L3 active recall).
+ *
+ * Что делает:
+ *   1. Удаляет stale meaning-записи на tier ∈ {encounter, passive, active}
+ *      (это backfill-артефакты от старой архитектуры — больше не нужны)
+ *   2. Вставляет meaning-записи на tier='production' для всех eligible
+ *      meanings слова. ON CONFLICT DO NOTHING — если запись уже есть
+ *      (например, на production+ от прошлой попытки), не трогаем.
+ */
+async function transitionWordToProduction(userId: number, wordId: number, now: Date): Promise<void> {
+  // 1. Удалить stale L1-3 meaning-записи слова.
+  await db.execute(sql`
+    DELETE FROM user_word_progress
+    USING word_meanings wm
+    WHERE wm.id = user_word_progress.meaning_id
+      AND wm.word_id = ${wordId}
+      AND user_word_progress.user_id = ${userId}
+      AND user_word_progress.learning_tier IN ('encounter', 'passive', 'active')
+  `);
+
+  // 2. Вставить meaning-записи на production для eligible meanings.
+  const eligible = await getEligibleMeaningsForWord(wordId);
+  for (const m of eligible) {
+    await db
+      .insert(userWordProgress)
+      .values({
+        userId,
+        meaningId: m.id,
+        state: 'learning',
+        learningTier: 'production',
+        tierCorrectCount: 0,
+        nextReviewAt: now,
+        lastSeenAt: now,
+      })
+      .onConflictDoNothing();
+  }
+}
+
+/**
+ * Проверяет, все ли eligible meanings слова достигли tier='review'.
+ * Если да — продвигает word-level запись с tier='production' на 'review'.
+ *
+ * Вызывается из meaning-level recordAnswer когда meaning достигает
+ * production → review.
+ */
+async function promoteWordToReviewIfReady(userId: number, wordId: number, now: Date): Promise<void> {
+  const eligible = await getEligibleMeaningsForWord(wordId);
+  if (eligible.length === 0) return;
+
+  const meaningIds = eligible.map(m => m.id);
+  const rows = await db
+    .select({ tier: userWordProgress.learningTier })
+    .from(userWordProgress)
+    .where(and(
+      eq(userWordProgress.userId, userId),
+      inArray(userWordProgress.meaningId, meaningIds),
+    ));
+
+  // Должны быть записи на ВСЕ eligible meanings (мы их создали при L3→L4)
+  // и каждая — на review.
+  if (rows.length < meaningIds.length) return;
+  const allReview = rows.every(r => r.tier === 'review');
+  if (!allReview) return;
+
+  // Промоушн word-уровневой записи: production → review.
+  await db
+    .update(userWordProgressWord)
+    .set({
+      learningTier: 'review',
+      tierCorrectCount: 0,
+      reviewStage: 0,
+      nextReviewAt: addDays(now, learningConfig.intervals.reviewIntervalsDays[0]!),
+      hasPenalty: false,
+      masteredAt: now,
+      updatedAt: now,
+    })
+    .where(and(
+      eq(userWordProgressWord.userId, userId),
+      eq(userWordProgressWord.wordId, wordId),
+      eq(userWordProgressWord.learningTier, 'production'),
+    ));
+
+  await recordEvent({
+    userId,
+    eventType: 'meaning_learned', // переиспользуем enum: «word fully learned»
+    wordId,
+    tierBefore: 'production',
+    tierAfter: 'review',
+  });
+}
+
+/**
+ * Записать ответ на word-level (L1-3 + word-review).
+ * Аналог recordAnswer, но оперирует userWordProgressWord и обрабатывает
+ * L3→L4 переход.
+ */
+export async function recordWordAnswer(input: RecordWordAnswerInput): Promise<RecordWordAnswerResult> {
+  const { userId, wordId, isCorrect, questionType, answerTimeMs, skip } = input;
+  const now = new Date();
+
+  const [existing] = await db
+    .select()
+    .from(userWordProgressWord)
+    .where(and(eq(userWordProgressWord.userId, userId), eq(userWordProgressWord.wordId, wordId)))
+    .limit(1);
+
+  const tierBefore: LearningTier = existing?.learningTier ?? 'encounter';
+  const tierCorrectCountBefore = existing?.tierCorrectCount ?? 0;
+  const reviewStageBefore = existing?.reviewStage ?? 0;
+  const hasPenaltyBefore = existing?.hasPenalty ?? false;
+
+  const transition = computeTransition({
+    tier: tierBefore,
+    tierCorrectCount: tierCorrectCountBefore,
+    reviewStage: reviewStageBefore,
+    hasPenalty: hasPenaltyBefore,
+    isCorrect,
+  }, now);
+
+  // Persist word-level row.
+  if (existing) {
+    await db
+      .update(userWordProgressWord)
+      .set({
+        learningTier: transition.tier,
+        tierCorrectCount: transition.tierCorrectCount,
+        reviewStage: transition.reviewStage,
+        nextReviewAt: transition.nextReviewAt,
+        hasPenalty: transition.hasPenalty,
+        masteredAt: transition.becameLearned ? now : existing.masteredAt,
+        correctCount: isCorrect ? sql`${userWordProgressWord.correctCount} + 1` : userWordProgressWord.correctCount,
+        incorrectCount: !isCorrect ? sql`${userWordProgressWord.incorrectCount} + 1` : userWordProgressWord.incorrectCount,
+        fromPlacement: false,
+        lastSeenAt: now,
+        updatedAt: now,
+      })
+      .where(eq(userWordProgressWord.id, existing.id));
+  } else {
+    await db.insert(userWordProgressWord).values({
+      userId,
+      wordId,
+      state: 'learning',
+      learningTier: transition.tier,
+      tierCorrectCount: transition.tierCorrectCount,
+      reviewStage: transition.reviewStage,
+      nextReviewAt: transition.nextReviewAt,
+      hasPenalty: transition.hasPenalty,
+      masteredAt: transition.becameLearned ? now : null,
+      correctCount: isCorrect ? 1 : 0,
+      incorrectCount: isCorrect ? 0 : 1,
+      lastSeenAt: now,
+    });
+  }
+
+  // L3 → L4: создать meaning-записи на production.
+  // Это происходит когда tierBefore='active' и transition.tier='production'.
+  // computeTransition даёт tier='production' только когда production tier
+  // включён в конфиге; иначе сразу 'review'.
+  let enteredProduction = false;
+  if (tierBefore === 'active' && transition.tier === 'production' && transition.wasAdvanced) {
+    await transitionWordToProduction(userId, wordId, now);
+    enteredProduction = true;
+  }
+
+  // Analytics events.
+  await recordEvent({
+    userId,
+    eventType: skip ? 'question_skipped' : 'question_answered',
+    wordId,
+    tierBefore,
+    tierAfter: transition.tier,
+    questionType: questionType ?? null,
+    isCorrect,
+    answerTimeMs: answerTimeMs ?? null,
+  });
+
+  if (transition.wasAdvanced) {
+    await recordEvent({
+      userId,
+      eventType: 'tier_advanced',
+      wordId,
+      tierBefore,
+      tierAfter: transition.tier,
+    });
+  }
+  if (transition.wasReset) {
+    await recordEvent({
+      userId,
+      eventType: 'tier_reset',
+      wordId,
+      tierBefore,
+      tierAfter: transition.tier,
+    });
+  }
+  if (transition.becameLearned) {
+    await recordEvent({
+      userId,
+      eventType: 'meaning_learned', // словарный enum, semantically «word learned»
+      wordId,
+      tierBefore,
+      tierAfter: transition.tier,
+    });
+  }
+
+  return {
+    tierBefore,
+    tierAfter: transition.tier,
+    becameLearned: transition.becameLearned,
+    wasReset: transition.wasReset,
+    nextReviewAt: transition.nextReviewAt,
+    enteredProduction,
+  };
+}
+
+/**
+ * Применить swipe из обзора на уровне Word. Аналогично applySwipe, но в
+ * userWordProgressWord (по wordId).
+ */
+export async function applyWordSwipe(input: { userId: number; wordId: number; action: SwipeAction; snoozeDays?: number }): Promise<void> {
+  const { userId, wordId, action } = input;
+  const now = new Date();
+
+  const [existing] = await db
+    .select()
+    .from(userWordProgressWord)
+    .where(and(eq(userWordProgressWord.userId, userId), eq(userWordProgressWord.wordId, wordId)))
+    .limit(1);
+
+  if (action === 'known') {
+    if (existing) {
+      await db.update(userWordProgressWord)
+        .set({ state: 'known_from_review', snoozedUntil: null, lastSeenAt: now, updatedAt: now })
+        .where(eq(userWordProgressWord.id, existing.id));
+    } else {
+      await db.insert(userWordProgressWord).values({
+        userId, wordId, state: 'known_from_review', learningTier: 'encounter',
+        tierCorrectCount: 0, lastSeenAt: now,
+      });
+    }
+    await recordEvent({ userId, eventType: 'review_swiped_known', wordId });
+    return;
+  }
+
+  if (action === 'unknown') {
+    if (existing) {
+      await db.update(userWordProgressWord)
+        .set({
+          state: 'learning', learningTier: 'encounter', tierCorrectCount: 0,
+          reviewStage: 0, hasPenalty: false, nextReviewAt: now, fromPlacement: false,
+          snoozedUntil: null, lastSeenAt: now, updatedAt: now,
+        })
+        .where(eq(userWordProgressWord.id, existing.id));
+    } else {
+      await db.insert(userWordProgressWord).values({
+        userId, wordId, state: 'learning', learningTier: 'encounter',
+        tierCorrectCount: 0, nextReviewAt: now, lastSeenAt: now,
+      });
+    }
+    await recordEvent({ userId, eventType: 'review_swiped_unknown', wordId });
+    return;
+  }
+
+  // snooze
+  const baseDays = input.snoozeDays ?? learningConfig.review.snoozeDaysDefault;
+  const jitter = learningConfig.review.snoozeJitterDays;
+  const days = baseDays + (Math.floor(Math.random() * (2 * jitter + 1)) - jitter);
+  const snoozedUntil = addDays(now, Math.max(1, days));
+  if (existing) {
+    await db.update(userWordProgressWord)
+      .set({ state: 'snoozed', snoozedUntil, lastSeenAt: now, updatedAt: now })
+      .where(eq(userWordProgressWord.id, existing.id));
+  } else {
+    await db.insert(userWordProgressWord).values({
+      userId, wordId, state: 'snoozed', snoozedUntil,
+      learningTier: 'encounter', tierCorrectCount: 0, lastSeenAt: now,
+    });
+  }
+  await recordEvent({ userId, eventType: 'review_swiped_snooze', wordId, payload: { snoozeDays: days } });
+}
+
+/**
+ * Откат свайпа на word-level. Удаляет word-progress запись.
+ */
+export async function undoWordSwipe(
+  userId: number,
+  wordId: number,
+  originalAction?: 'known' | 'unknown' | 'snooze',
+): Promise<void> {
+  await db
+    .delete(userWordProgressWord)
+    .where(and(eq(userWordProgressWord.userId, userId), eq(userWordProgressWord.wordId, wordId)));
+  await recordEvent({
+    userId,
+    eventType: 'review_undo',
+    wordId,
+    payload: originalAction ? { originalAction } : null,
+  });
+}
+
+/**
+ * Word-level pickNextItem. Возвращает word на текущем tier'е (encounter/passive/
+ * active/review). Tier='production' игнорируется — это L4 (per-meaning).
+ */
+export async function pickNextWord(
+  userId: number,
+  opts: { excludeWordIds?: number[]; collectionId?: number } = {},
+): Promise<{ wordId: number; tier: LearningTier } | null> {
+  const exclude = opts.excludeWordIds ?? [];
+  const now = new Date();
+
+  // Если задан collectionId — ограничиваем пул.
+  let collectionFilter: ReturnType<typeof inArray> | null = null;
+  if (typeof opts.collectionId === 'number') {
+    const meaningIds = await db
+      .select({ meaningId: collectionWords.meaningId })
+      .from(collectionWords)
+      .where(eq(collectionWords.collectionId, opts.collectionId));
+    if (meaningIds.length === 0) return null;
+    const wordIds = await db
+      .select({ wordId: wordMeanings.wordId })
+      .from(wordMeanings)
+      .where(inArray(wordMeanings.id, meaningIds.map(r => r.meaningId)));
+    if (wordIds.length === 0) return null;
+    const uniqueWordIds = [...new Set(wordIds.map(r => r.wordId))];
+    collectionFilter = inArray(userWordProgressWord.wordId, uniqueWordIds);
+  }
+
+  const results = await db
+    .select({ wordId: userWordProgressWord.wordId, tier: userWordProgressWord.learningTier })
+    .from(userWordProgressWord)
+    .where(and(
+      eq(userWordProgressWord.userId, userId),
+      eq(userWordProgressWord.state, 'learning'),
+      // Production-tier на word-уровне игнорируем — handled by meaning-side.
+      ne(userWordProgressWord.learningTier, 'production'),
+      or(isNull(userWordProgressWord.snoozedUntil), lte(userWordProgressWord.snoozedUntil, now))!,
+      or(isNull(userWordProgressWord.nextReviewAt), lte(userWordProgressWord.nextReviewAt, now))!,
+      ...(collectionFilter ? [collectionFilter] : []),
+      ...(exclude.length > 0
+        ? [sql`${userWordProgressWord.wordId} NOT IN (${sql.join(exclude.map(id => sql`${id}`), sql`, `)})`]
+        : []),
+    ))
+    .orderBy(sql`CASE ${userWordProgressWord.learningTier}
+        WHEN 'review' THEN 0
+        WHEN 'active' THEN 2
+        WHEN 'passive' THEN 3
+        WHEN 'encounter' THEN 4
+        ELSE 5 END`,
+      sql`${userWordProgressWord.nextReviewAt} NULLS FIRST`,
+    )
+    .limit(1);
+
+  const row = results[0];
+  if (!row) return null;
+  return { wordId: row.wordId, tier: row.tier };
+}
+
+// ─── Combined picker: word-level OR meaning-level ───────────────────────────
+
+export type NextPick =
+  | { kind: 'word'; wordId: number; tier: LearningTier }
+  | { kind: 'meaning'; meaningId: number; tier: LearningTier };
+
+const TIER_PRIORITY: Record<LearningTier, number> = {
+  review: 0,
+  production: 1,
+  active: 2,
+  passive: 3,
+  encounter: 4,
+};
+
+/**
+ * Объединённый picker: возвращает либо word (L1-3 + word-review), либо
+ * meaning (L4 production + per-meaning rollback). По tier-приоритету.
+ *
+ * Логика: запрашиваем оба пула, выбираем top-1 из каждого, затем top-1
+ * по tier-приоритету.
+ */
+export async function pickNextItemCombined(
+  userId: number,
+  opts: { excludeWordIds?: number[]; excludeMeaningIds?: number[]; collectionId?: number } = {},
+): Promise<NextPick | null> {
+  const wordPick = await pickNextWord(userId, {
+    excludeWordIds: opts.excludeWordIds,
+    collectionId: opts.collectionId,
+  });
+  const meaningPick = await pickNextItem(userId, {
+    excludeMeaningIds: opts.excludeMeaningIds,
+    collectionId: opts.collectionId,
+  });
+
+  if (!wordPick && !meaningPick) return null;
+  if (!meaningPick) return { kind: 'word', wordId: wordPick!.wordId, tier: wordPick!.tier };
+  if (!wordPick) return { kind: 'meaning', meaningId: meaningPick.meaningId, tier: meaningPick.tier };
+
+  // Оба есть — выбираем по tier-приоритету.
+  if (TIER_PRIORITY[wordPick.tier] <= TIER_PRIORITY[meaningPick.tier]) {
+    return { kind: 'word', wordId: wordPick.wordId, tier: wordPick.tier };
+  }
+  return { kind: 'meaning', meaningId: meaningPick.meaningId, tier: meaningPick.tier };
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function addMinutes(d: Date, m: number): Date {
@@ -633,4 +1092,20 @@ function addHours(d: Date, h: number): Date {
 }
 function addDays(d: Date, n: number): Date {
   return new Date(d.getTime() + n * 24 * 60 * 60 * 1000);
+}
+
+// ─── Hook for meaning-level recordAnswer: promote word to review ────────────
+
+/**
+ * Экспорт для использования из существующего recordAnswer (meaning-level)
+ * после успешного перехода production → review одного из meaning'ов.
+ *
+ * Я не модифицирую существующий recordAnswer чтобы не сломать тесты на
+ * чистоту computeTransition. Вместо этого вызывающий код в /api/learning/answer
+ * после meaning-level recordAnswer должен сам вызвать promoteWordToReview
+ * если recordAnswer вернул becameLearned=true (significant only when tier
+ * before was production).
+ */
+export async function promoteWordToReview(userId: number, wordId: number): Promise<void> {
+  await promoteWordToReviewIfReady(userId, wordId, new Date());
 }

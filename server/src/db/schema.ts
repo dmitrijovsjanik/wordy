@@ -672,7 +672,12 @@ export const learningEvents = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
     eventType: learningEventTypeEnum('event_type').notNull(),
+    // meaningId — для событий per-meaning (production, rollback). nullable.
     meaningId: integer('meaning_id').references(() => wordMeanings.id, { onDelete: 'set null' }),
+    // wordId — для событий per-word (encounter, passive, active, review при
+    // word-level прохождении). nullable. Один из meaning_id/word_id всегда
+    // заполнен в зависимости от типа учебной единицы.
+    wordId: integer('word_id').references(() => words.id, { onDelete: 'set null' }),
     tierBefore: learningTierEnum('tier_before'),
     tierAfter: learningTierEnum('tier_after'),
     questionType: varchar('question_type', { length: 32 }),
@@ -685,6 +690,7 @@ export const learningEvents = pgTable(
     index('learning_events_user_created_idx').on(table.userId, table.createdAt),
     index('learning_events_type_created_idx').on(table.eventType, table.createdAt),
     index('learning_events_meaning_idx').on(table.meaningId),
+    index('learning_events_word_idx').on(table.wordId),
   ],
 );
 
