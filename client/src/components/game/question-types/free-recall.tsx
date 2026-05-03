@@ -27,6 +27,9 @@ type FreeRecallProps = {
   onTextSubmit?: (text: string) => void;
   onSkip?: () => void;
   showSkip?: boolean;
+  /** Скрыть нижнюю плашку «Верно!»/«Неверно». Используется на главной,
+   *  где валидация показывается в stimulus-области через цвет. */
+  hideResultPanel?: boolean;
 };
 
 export function FreeRecall({
@@ -41,6 +44,7 @@ export function FreeRecall({
   onTextSubmit,
   onSkip,
   showSkip = true,
+  hideResultPanel = false,
 }: FreeRecallProps) {
   const [inputValue, setInputValue] = useState('');
   const [localFeedback, setLocalFeedback] = useState<FreeRecallFeedback | null>(null);
@@ -152,9 +156,11 @@ export function FreeRecall({
         </Button>
       </div>
 
-      {/* Результат */}
+      {/* Результат — плашка с текстом «Верно!»/«Неверно». На главной скрыта
+          (hideResultPanel=true): валидация показывается в stimulus-области
+          через цвет правильного ответа. */}
       <AnimatePresence mode="wait">
-        {showResult && (
+        {showResult && !hideResultPanel && (
           <motion.div
             key={`feedback-${questionKey}`}
             initial={{ opacity: 0, y: 8 }}

@@ -23,6 +23,8 @@ import { Listening } from '@/components/game/question-types/listening';
 import { Dictation } from '@/components/game/question-types/dictation';
 import { FreeRecall } from '@/components/game/question-types/free-recall';
 import { ClozeInput } from '@/components/game/question-types/cloze-input';
+import { BlankSentence } from '@/components/game/blank-sentence';
+import { cn } from '@/lib/utils';
 import { ExampleSentences } from '@/components/game/example-sentences';
 import { MnemonicCard } from '@/components/game/mnemonic-card';
 import { MilestoneModal } from '@/components/milestone-modal';
@@ -751,16 +753,29 @@ export function Home() {
                     </div>
                   ) : currentQuestion.type === 'free-recall' ? (
                     <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center pb-8">
-                      {/* Free Recall: напиши перевод */}
+                      {/* Free Recall: до ответа — стимул (русское слово); после
+                          ответа — корректный английский перевод, окрашенный по
+                          результату валидации (зелёный = верно, красный = нет). */}
                       <div className="relative">
-                        <WordDisplay
-                          word={currentQuestion.prompt}
-                          originalForm={null}
-                          transcription={currentQuestion.transcription}
-                          meaningId={currentQuestion.meaningId}
-                          skipInitialAnimation={currentQuestion.meaningId === firstMeaningIdRef.current}
-                          showSpeaker={currentQuestion.direction === 'en-ru'}
-                        />
+                        {answerFeedback ? (
+                          <div
+                            className={cn(
+                              'text-center font-[Unbounded] text-3xl font-bold leading-tight',
+                              answerFeedback.isCorrect ? 'text-[var(--green-11)]' : 'text-[var(--red-11)]',
+                            )}
+                          >
+                            {currentQuestion.acceptableAnswers[0] ?? ''}
+                          </div>
+                        ) : (
+                          <WordDisplay
+                            word={currentQuestion.prompt}
+                            originalForm={null}
+                            transcription={currentQuestion.transcription}
+                            meaningId={currentQuestion.meaningId}
+                            skipInitialAnimation={currentQuestion.meaningId === firstMeaningIdRef.current}
+                            showSpeaker={currentQuestion.direction === 'en-ru'}
+                          />
+                        )}
                       </div>
                       {rewardDisplay && (
                         <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
@@ -769,10 +784,39 @@ export function Home() {
                       )}
                     </div>
                   ) : currentQuestion.type === 'cloze-input' ? (
-                    /* Cloze-input: дизайн перенесён из CollocationQuiz —
-                       весь контент (предложение, перевод, инпут) в ClozeInput.
-                       Здесь только контейнер для reward feedback. */
-                    <div className="relative flex justify-center pb-2 pt-2">
+                    <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center pb-8">
+                      {/* Cloze-input: предложение с пропуском — стимул на всю
+                          высоту stimulus-блока (как WordDisplay у L3). После
+                          валидации пропуск окрашивается + появляется перевод. */}
+                      <div className="relative w-full">
+                        <div className="text-center text-2xl font-[Unbounded] font-bold leading-tight">
+                          <BlankSentence
+                            text={currentQuestion.sentence}
+                            filledValues={answerFeedback ? [currentQuestion.correctAnswer] : undefined}
+                            blankState={
+                              !answerFeedback
+                                ? 'empty'
+                                : answerFeedback.isCorrect
+                                  ? 'correct'
+                                  : 'wrong'
+                            }
+                          />
+                        </div>
+                        <AnimatePresence>
+                          {answerFeedback && (
+                            <motion.div
+                              key="cloze-translation"
+                              initial={{ opacity: 0, y: -4 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0 }}
+                              transition={{ duration: 0.2 }}
+                              className="mt-4 text-center text-sm text-[var(--gray-11)]"
+                            >
+                              {currentQuestion.sentenceRu}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
                       {rewardDisplay && (
                         <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
                           <RewardFeedback reward={rewardDisplay} />
@@ -870,12 +914,11 @@ export function Home() {
                         onTextSubmit={setLastUserAnswer}
                         onSkip={handleSkip}
                         showSkip
+                        hideResultPanel
                       />
                     ) : currentQuestion.type === 'cloze-input' ? (
                       <ClozeInput
                         questionKey={`${currentQuestion.meaningId}-${questionIndex}`}
-                        sentence={currentQuestion.sentence}
-                        sentenceRu={currentQuestion.sentenceRu}
                         acceptableAnswers={currentQuestion.acceptableAnswers}
                         feedback={null}
                         disabled={isLoading}

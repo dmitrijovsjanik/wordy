@@ -1,10 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Tick01Icon } from '@hugeicons/core-free-icons';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { BlankSentence } from '@/components/game/blank-sentence';
 import { cn } from '@/lib/utils';
 import { checkAnswer, type AnswerResult } from '@/lib/answer-check';
 
@@ -15,10 +13,6 @@ type ClozeInputFeedback = {
 
 type ClozeInputProps = {
   questionKey: string | number;
-  /** Английское предложение с _____ */
-  sentence: string;
-  /** Русский перевод полного предложения (показывается после ответа). */
-  sentenceRu: string;
   /** Допустимые варианты для проверки. */
   acceptableAnswers: string[];
   feedback: ClozeInputFeedback | null;
@@ -31,20 +25,14 @@ type ClozeInputProps = {
 };
 
 /**
- * Cloze-input — production-tier (L4) на главной.
+ * Cloze-input — production-tier (L4): инпут + кнопка submit.
  *
- * Дизайн взят из CollocationQuiz: предложение с пропуском крупным
- * Unbounded-шрифтом + русский перевод снизу как фидбек. Отличие — вместо
- * 2×2 сетки вариантов используется инпут.
- *
- * После сабмита: пропуск заполняется правильным ответом (зелёным если
- * пользователь был прав, красным — если ошибся), появляется перевод,
- * через ~1.2с (через стор) — следующий вопрос.
+ * Стимул (BlankSentence + перевод) рендерится в верхней stimulus-области
+ * home.tsx и заполняется по результату валидации. Здесь только форма ввода
+ * — чтобы инпут был прибит к низу как у L3 free-recall.
  */
 export function ClozeInput({
   questionKey,
-  sentence,
-  sentenceRu,
   acceptableAnswers,
   feedback,
   disabled = false,
@@ -86,45 +74,8 @@ export function ClozeInput({
     }
   }
 
-  // Состояние пропуска: пустой → синий, после ответа → зелёный/красный.
-  const blankState = !showResult
-    ? 'empty'
-    : activeFeedback.result === 'wrong'
-      ? 'wrong'
-      : 'correct';
-
-  // После ответа в пропуск подставляем правильный ответ (как в collocation-quiz),
-  // чтобы пользователь сразу видел нужное слово в контексте.
-  const filledValues = showResult ? [activeFeedback.correctAnswer] : undefined;
-
   return (
-    <div className="flex flex-1 flex-col">
-      {/* Предложение с пропуском — крупный шрифт по центру (как collocation). */}
-      <div className="mb-6 text-center text-2xl font-[Unbounded] font-bold leading-tight">
-        <BlankSentence
-          text={sentence}
-          filledValues={filledValues}
-          blankState={blankState}
-        />
-      </div>
-
-      {/* Русский перевод появляется после ответа (как в collocation-quiz). */}
-      <AnimatePresence>
-        {showResult && (
-          <motion.div
-            key="translation"
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="mb-4 text-center text-sm text-[var(--gray-11)]"
-          >
-            {sentenceRu}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Инпут + сабмит вместо 2×2 сетки опций. */}
+    <div className="flex w-full flex-col gap-3">
       <div className="flex gap-2">
         <Input
           ref={inputRef}
@@ -161,7 +112,7 @@ export function ClozeInput({
           size="sm"
           disabled={showResult || disabled}
           onClick={onSkip}
-          className={cn('mt-3 w-full', (showResult || disabled) && 'opacity-40')}
+          className={cn('w-full', (showResult || disabled) && 'opacity-40')}
         >
           Не знаю
         </Button>
