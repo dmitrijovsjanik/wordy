@@ -3,6 +3,7 @@ import { db } from '../db/index.js';
 import { users, wordMeanings, words, collections, userCollections, placementResults, collectionWords, userWordProgress } from '../db/schema.js';
 import { LEARNED_PROGRESS } from './srs-service.js';
 import { generateFromMeaning, getPopularityFilter, getFrequencyFilter, CYRILLIC_FILTER } from './game/generators/multiple-choice.js';
+import { nonFunctionalDrizzleFilter } from '../db/word-filters.js';
 import type { PooledMeaning, LegacyQuestion } from './game/types.js';
 import {
   PLACEMENT_QUESTIONS_COUNT, WORDS_PER_LEVEL, CEFR_ORDER,
@@ -153,6 +154,7 @@ async function loadWordPools(): Promise<Record<string, number[]>> {
           popularityFilter,
           frequencyFilter,
           CYRILLIC_FILTER,
+          nonFunctionalDrizzleFilter,
         ),
       )
       .orderBy(sql`RANDOM()`)

@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { learningConfig } from '../config/learning-config.js';
+import { NON_FUNCTIONAL_SQL } from '../db/word-filters.js';
 import type { LearningTier } from './analytics-service.js';
 
 /**
@@ -52,6 +53,7 @@ export async function getProblemMeanings(userId: number): Promise<ProblemMeaning
       AND le.is_correct = false
       AND le.created_at > now() - (${windowDays}::int * interval '1 day')
       AND le.meaning_id IS NOT NULL
+      AND ${NON_FUNCTIONAL_SQL}
     GROUP BY le.meaning_id, w.text, wm.translation, uwp.learning_tier
     HAVING COUNT(*) >= ${thresholdCount}
     ORDER BY COUNT(*) DESC
@@ -80,11 +82,13 @@ export async function getProblemMeaningsCount(userId: number): Promise<number> {
     SELECT COUNT(*)::int AS cnt FROM (
       SELECT le.meaning_id
       FROM learning_events le
+      JOIN word_meanings wm ON wm.id = le.meaning_id
       WHERE le.user_id = ${userId}
         AND le.event_type IN ('question_answered', 'question_skipped')
         AND le.is_correct = false
         AND le.created_at > now() - (${windowDays}::int * interval '1 day')
         AND le.meaning_id IS NOT NULL
+        AND ${NON_FUNCTIONAL_SQL}
       GROUP BY le.meaning_id
       HAVING COUNT(*) >= ${thresholdCount}
     ) t
@@ -116,6 +120,7 @@ export async function pickNextProblemMeaning(
       le.meaning_id AS "meaningId",
       uwp.learning_tier AS tier
     FROM learning_events le
+    JOIN word_meanings wm ON wm.id = le.meaning_id
     LEFT JOIN user_word_progress uwp
       ON uwp.user_id = le.user_id AND uwp.meaning_id = le.meaning_id
     WHERE le.user_id = ${userId}
@@ -123,6 +128,7 @@ export async function pickNextProblemMeaning(
       AND le.is_correct = false
       AND le.created_at > now() - (${windowDays}::int * interval '1 day')
       AND le.meaning_id IS NOT NULL
+      AND ${NON_FUNCTIONAL_SQL}
       ${exclude}
     GROUP BY le.meaning_id, uwp.learning_tier
     HAVING COUNT(*) >= ${thresholdCount}

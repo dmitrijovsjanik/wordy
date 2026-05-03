@@ -18,6 +18,7 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { learningConfig } from '../config/learning-config.js';
+import { NON_FUNCTIONAL_SQL } from '../db/word-filters.js';
 
 export type ReviewFeedCard = {
   meaningId: number;
@@ -94,6 +95,7 @@ export async function getReviewFeed(
       AND (wm.popularity_rank IS NULL OR wm.popularity_rank <= 3)
       AND (wm.frequency IS NULL OR wm.frequency >= 5)
       AND wm.translation ~ '[а-яА-ЯёЁ]'
+      AND ${NON_FUNCTIONAL_SQL}
       AND (
         uwp.id IS NULL
         OR (uwp.state = 'snoozed' AND uwp.snoozed_until IS NOT NULL AND uwp.snoozed_until <= NOW())
@@ -184,6 +186,7 @@ export async function getReviewFeedWords(
       AND (wm.popularity_rank IS NULL OR wm.popularity_rank <= 3)
       AND (wm.frequency IS NULL OR wm.frequency >= 5)
       AND wm.translation ~ '[а-яА-ЯёЁ]'
+      AND ${NON_FUNCTIONAL_SQL}
       AND (
         uwp.id IS NULL
         OR (uwp.state = 'snoozed' AND uwp.snoozed_until IS NOT NULL AND uwp.snoozed_until <= NOW())

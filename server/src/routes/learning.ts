@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { eq, and, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { wordMeanings, userWordProgress } from '../db/schema.js';
+import { NON_FUNCTIONAL_SQL } from '../db/word-filters.js';
 import { pickNextItem, recordAnswer, applySwipe, undoSwipe } from '../services/learning-service.js';
 import {
   getProblemMeanings,
@@ -52,6 +53,7 @@ async function introduceUnseenMeaning(userId: number, collectionId?: number): Pr
       AND (wm.popularity_rank IS NULL OR wm.popularity_rank <= 3)
       AND (wm.frequency IS NULL OR wm.frequency >= 5)
       AND wm.translation ~ '[а-яА-ЯёЁ]'
+      AND ${NON_FUNCTIONAL_SQL}
     ORDER BY w.frequency_rank NULLS LAST
     LIMIT 1
   `);
@@ -368,6 +370,7 @@ export default async function learningRoutes(app: FastifyInstance) {
         AND (wm.popularity_rank IS NULL OR wm.popularity_rank <= 3)
         AND (wm.frequency IS NULL OR wm.frequency >= 5)
         AND wm.translation ~ '[а-яА-ЯёЁ]'
+        AND ${NON_FUNCTIONAL_SQL}
         ORDER BY w.frequency_rank NULLS LAST
         LIMIT 1
       `);
