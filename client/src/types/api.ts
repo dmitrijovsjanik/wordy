@@ -192,6 +192,20 @@ export type EncounterCardApiQuestion = {
   doubleXpTimeLimitMs?: number;
 };
 
+// Cloze-input — production-tier: предложение с пропуском без вариантов.
+// Пользователь печатает пропущенное слово.
+export type ClozeInputApiQuestion = {
+  type: 'cloze-input';
+  meaningId: number;
+  sentence: string;       // "I need to _____ a decision"
+  sentenceRu: string;     // "Мне нужно принять решение"
+  correctAnswer: string;
+  acceptableAnswers: string[];
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+  word: string;
+  doubleXpTimeLimitMs?: number;
+};
+
 // Passive recall card — флешкарта с флипом и самооценкой через свайп.
 // Лицо: word + example.en + meaningIndex/totalMeanings.
 // Обратная: translation + example.ru + кнопка «💡» для раскрытия мнемоники.
@@ -285,7 +299,8 @@ export type QuizQuestion =
   | DictationApiQuestion
   | FreeRecallApiQuestion
   | EncounterCardApiQuestion
-  | PassiveRecallApiQuestion;
+  | PassiveRecallApiQuestion
+  | ClozeInputApiQuestion;
 
 export type QuizStartResponse = {
   sessionId: number;

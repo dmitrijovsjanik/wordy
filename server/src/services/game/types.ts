@@ -86,7 +86,7 @@ export function reversePair(pair: LanguagePair): LanguagePair {
 
 // ─── Generator Rotation ────────────────────────────────────────────────────
 
-export type GeneratorType = 'en-ru' | 'ru-en' | 'spelling' | 'match-pairs' | 'cloze' | 'listening' | 'dictation' | 'free-recall' | 'encounter' | 'passive-recall';
+export type GeneratorType = 'en-ru' | 'ru-en' | 'spelling' | 'match-pairs' | 'cloze' | 'cloze-input' | 'listening' | 'dictation' | 'free-recall' | 'encounter' | 'passive-recall';
 
 // Encounter card — пассивный показ слова на первом уровне лестницы.
 // Без проверки: пользователь нажимает «Понятно» → recordAnswer({isCorrect: true}) → tier=passive.
@@ -136,6 +136,20 @@ export type ClozeQuestion = {
   correctAnswer: string;    // "make"
   word: string;             // целевое слово (для feedback)
   transcription: string | null;
+  doubleXpTimeLimitMs?: number;
+};
+
+// Cloze-input question — то же что cloze, но без вариантов: пользователь
+// печатает пропущенное слово. Формат для production-tier (контекстный recall).
+export type ClozeInputQuestion = {
+  type: 'cloze-input';
+  meaningId: number;
+  sentence: string;        // "I need to _____ a decision"
+  sentenceRu: string;      // "Мне нужно принять решение"
+  correctAnswer: string;    // "make"
+  acceptableAnswers: string[]; // для typo-tolerance
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+  word: string;
   doubleXpTimeLimitMs?: number;
 };
 

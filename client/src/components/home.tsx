@@ -22,6 +22,7 @@ import { MatchPairs } from '@/components/game/question-types/match-pairs';
 import { Listening } from '@/components/game/question-types/listening';
 import { Dictation } from '@/components/game/question-types/dictation';
 import { FreeRecall } from '@/components/game/question-types/free-recall';
+import { ClozeInput } from '@/components/game/question-types/cloze-input';
 import { ExampleSentences } from '@/components/game/example-sentences';
 import { MnemonicCard } from '@/components/game/mnemonic-card';
 import { MilestoneModal } from '@/components/milestone-modal';
@@ -300,6 +301,7 @@ export function Home() {
         break;
       case 'dictation':
       case 'free-recall':
+      case 'cloze-input':
         return;
       default: {
         // QuizQuestionBase (multiple-choice). После guard'ов выше тип сужен,
@@ -766,6 +768,20 @@ export function Home() {
                         </div>
                       )}
                     </div>
+                  ) : currentQuestion.type === 'cloze-input' ? (
+                    /* Cloze-input: предложение со стимулом рендерится внутри
+                       ClozeInput. Здесь — только заголовок и контейнер для
+                       reward feedback. */
+                    <div className="relative flex flex-col items-center justify-center pb-4 pt-2">
+                      <h2 className="font-[Unbounded] text-base font-semibold text-[var(--gray-12)]">
+                        Заполните пропуск
+                      </h2>
+                      {rewardDisplay && (
+                        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
+                          <RewardFeedback reward={rewardDisplay} />
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center pb-8">
                       {/* Word display (multiple-choice / spelling) */}
@@ -849,6 +865,20 @@ export function Home() {
                         direction={currentQuestion.direction}
                         transcription={currentQuestion.transcription}
                         audioWord={currentQuestion.audioWord}
+                        acceptableAnswers={currentQuestion.acceptableAnswers}
+                        feedback={null}
+                        disabled={isLoading}
+                        meaningId={currentQuestion.meaningId}
+                        onAnswer={submitAnswer}
+                        onTextSubmit={setLastUserAnswer}
+                        onSkip={handleSkip}
+                        showSkip
+                      />
+                    ) : currentQuestion.type === 'cloze-input' ? (
+                      <ClozeInput
+                        questionKey={`${currentQuestion.meaningId}-${questionIndex}`}
+                        sentence={currentQuestion.sentence}
+                        sentenceRu={currentQuestion.sentenceRu}
                         acceptableAnswers={currentQuestion.acceptableAnswers}
                         feedback={null}
                         disabled={isLoading}

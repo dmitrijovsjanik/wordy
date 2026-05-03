@@ -87,6 +87,7 @@ function getCorrectAnswer(q: QuizQuestion): string {
   if (q.type === 'free-recall') return q.acceptableAnswers[0] ?? '';
   if (q.type === 'encounter') return q.translation;
   if (q.type === 'passive-recall') return q.translation;
+  if (q.type === 'cloze-input') return q.correctAnswer;
   return q.correctTranslation ?? '';
 }
 
@@ -104,6 +105,7 @@ function getGeneratorTypeFromQuestion(question: QuizQuestion): string {
   if (question.type === 'free-recall') return 'free-recall';
   if (question.type === 'encounter') return 'encounter';
   if (question.type === 'passive-recall') return 'passive-recall';
+  if (question.type === 'cloze-input') return 'cloze-input';
   // QuizQuestionBase — единственный с .direction
   return 'direction' in question && typeof question.direction === 'string' ? question.direction : 'en-ru';
 }
@@ -409,7 +411,7 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
         // Для свободного ввода (dictation/free-recall) — прокидываем
         // acceptableAnswers и partOfSpeech, чтобы сервер сам перевалидировал
         // через text-normalizer и не доверял слепо клиентскому isCorrect.
-        const isFreeInput = currentQuestion.type === 'dictation' || currentQuestion.type === 'free-recall';
+        const isFreeInput = currentQuestion.type === 'dictation' || currentQuestion.type === 'free-recall' || currentQuestion.type === 'cloze-input';
         const isDemo = get().demoMeaningId !== null;
         const learnRes = await learningAnswer({
           meaningId,

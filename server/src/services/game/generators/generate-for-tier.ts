@@ -7,6 +7,7 @@ import type {
   DictationQuestion,
   FreeRecallQuestion,
   ClozeQuestion,
+  ClozeInputQuestion,
   EncounterCardQuestion,
   PassiveRecallCardQuestion,
   GeneratorType,
@@ -18,6 +19,7 @@ import { generateFreeRecallFromMeaning } from './free-recall.js';
 import { generateListeningFromMeaning } from './listening.js';
 import { generateDictationFromMeaning, canGenerateDictation } from './dictation.js';
 import { canGenerateCloze, generateClozeFromMeaning } from './cloze.js';
+import { canGenerateClozeInput, generateClozeInputFromMeaning } from './cloze-input.js';
 
 /**
  * Универсальный отбор упражнения для текущего tier'а на лестнице.
@@ -40,7 +42,8 @@ export type TierQuestion =
   | ListeningQuestion
   | DictationQuestion
   | FreeRecallQuestion
-  | ClozeQuestion;
+  | ClozeQuestion
+  | ClozeInputQuestion;
 
 export type GenerateForTierOpts = {
   /** Последние использованные generator-типы (для anti-repeat). */
@@ -56,6 +59,7 @@ function exerciseToGeneratorType(ex: ExerciseType): GeneratorType {
   if (ex === 'dictation') return 'dictation';
   if (ex === 'listening') return 'listening';
   if (ex === 'cloze') return 'cloze';
+  if (ex === 'cloze-input') return 'cloze-input';
   if (ex === 'spelling') return 'spelling';
   if (ex === 'match-pairs') return 'match-pairs';
   return 'en-ru';
@@ -91,6 +95,10 @@ async function tryGenerate(
     if (exercise === 'cloze') {
       if (!canGenerateCloze(meaning)) return null;
       return await generateClozeFromMeaning(meaning);
+    }
+    if (exercise === 'cloze-input') {
+      if (!canGenerateClozeInput(meaning)) return null;
+      return generateClozeInputFromMeaning(meaning);
     }
     // spelling и match-pairs не поддерживаются в новой лестнице (отдельные режимы).
     return null;
@@ -134,8 +142,14 @@ export async function generateForTier(
     if (q) return { question: q, generatorType: exerciseToGeneratorType(ex) };
   }
 
+  // Production-tier fallback: если cloze-input не сгенерился (нет подходящего
+  // примера), показываем free-recall — чтобы tier не блокировался.
+  if (tier === 'production') {
+    const fallback = await tryGenerate('free-recall', meaning);
+    if (fallback) return { question: fallback, generatorType: 'free-recall' };
+  }
+
   // Без fallback'а на multiple-choice — на главной экране НЕ должно быть
-  // квиз-форматов (по требованию). Если все разрешённые типы для tier'а
-  // не сгенерились (что не должно случаться для free-recall) — вернуть null.
+  // квиз-форматов (по требованию).
   return null;
 }

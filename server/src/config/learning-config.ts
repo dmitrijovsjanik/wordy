@@ -21,6 +21,7 @@ export type ExerciseType =
   | 'match-pairs'
   | 'listening'
   | 'cloze'
+  | 'cloze-input'
   | 'free-recall'
   | 'dictation'
   | 'encounter-card'
@@ -63,11 +64,12 @@ export const learningConfig = {
       enabled: true,
     },
     production: {
-      // Production — тот же free-recall ru→en, что и active. Cloze отключён,
-      // т.к. имеет варианты ответа и подпадает под «никаких квизов на главной».
-      // По мере определения отдельной механики для production tier'а — заменить.
+      // Production — контекстный recall: предложение с пропуском, без вариантов.
+      // Отличается от active (просто слово→слово) тем, что слово используется
+      // в контексте предложения. Если для meaning'а нет подходящего примера —
+      // generate-for-tier фолбэчит на free-recall.
       correctToAdvance: 3,
-      allowedExerciseTypes: ['free-recall'] as const,
+      allowedExerciseTypes: ['cloze-input'] as const,
       enabled: true,
     },
     review: {
