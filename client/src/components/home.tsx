@@ -84,7 +84,7 @@ export function Home() {
     currentTier,
     problemsMode,
     setProblemsMode,
-    demoMeaningId,
+    demoWordId,
     startDemo,
     exitDemo,
     questionIndex,
@@ -377,7 +377,7 @@ export function Home() {
         </div>
         {/* Кнопка демо-режима: сбрасывает одно слово на encounter и проводит
             его через все уровни лестницы подряд (для тестирования). */}
-        {demoMeaningId === null && (
+        {demoWordId === null && (
           <Button
             variant="secondary"
             size="sm"
@@ -445,7 +445,7 @@ export function Home() {
         {/* Empty state */}
         {!currentQuestion && !feedback && !isLoading && !error && (
           <div className="flex flex-1 flex-col items-center justify-center gap-4">
-            {demoMeaningId !== null ? (
+            {demoWordId !== null ? (
               <>
                 <p className="text-center text-[var(--gray-11)]">
                   Демо завершено — слово прошло все уровни и ушло в review (3 дня).
@@ -533,7 +533,7 @@ export function Home() {
                   Приоритет: demoMode → problemsMode (повтор проблемных) → коллекция →
                   ничего. Только один бейдж за раз. */}
               <AnimatePresence>
-                {demoMeaningId !== null ? (
+                {demoWordId !== null ? (
                   <motion.div
                     key="demo-mode-badge"
                     initial={{ opacity: 0, height: 0, scaleX: 0.8 }}

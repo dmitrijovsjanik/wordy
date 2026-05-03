@@ -127,10 +127,14 @@ type UnifiedGameState = {
   /** Режим «Проблемные слова» — fetchNext идёт на /api/learning/problems/next.
    *  Включается с экрана /problems, выключается при уходе оттуда. */
   problemsMode: boolean;
-  /** Демо-режим: фиксируем одно слово и проводим его через все уровни.
-   *  Сервер возвращает question=null когда слово достигло review (lock на дни)
-   *  — клиент по этому показывает «Демо завершено». */
-  demoMeaningId: number | null;
+  /** Демо-режим: фиксируем одно СЛОВО и проводим его через все уровни.
+   *  На L1-3 word-level; на L4 production demo переключается на meaning-level
+   *  внутри сервера. Сервер возвращает question=null когда слово достигло
+   *  review (lock на дни) — клиент по этому показывает «Демо завершено». */
+  demoWordId: number | null;
+  /** Word-level ID текущего вопроса (если он word-level). null для L4
+   *  meaning-level или если сервер не вернул wordId (backward compat). */
+  currentWordId: number | null;
   doubleXpTimeLimitMs: number | null;
   doubleXpExpired: boolean;
   questionIndex: number;
@@ -213,7 +217,8 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
   collectionId: undefined,
   generatorMode: 'auto',
   problemsMode: false,
-  demoMeaningId: null,
+  demoWordId: null,
+  currentWordId: null,
   doubleXpTimeLimitMs: null,
   doubleXpExpired: false,
   questionIndex: 0,
@@ -253,16 +258,13 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
     set({ isLoading: true });
     try {
       const res = await learningDemoReset();
-      // Сервер теперь возвращает wordId. Полная миграция демо на word-level
-      // в следующем коммите. Пока кладём wordId в demoMeaningId (имя устарело,
-      // переименуем во второй коммите). lockWordId для /next будет в нём же.
       if (!res.ok || !res.wordId) {
         set({ isLoading: false, error: res.error ?? 'Не удалось запустить демо' });
         return;
       }
       saveQuestion(null);
       set({
-        demoMeaningId: res.wordId,
+        demoWordId: res.wordId,
         problemsMode: false,
         currentQuestion: null,
         feedback: null,
@@ -280,7 +282,7 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
   exitDemo: async () => {
     saveQuestion(null);
     set({
-      demoMeaningId: null,
+      demoWordId: null,
       currentQuestion: null,
       feedback: null,
       recentMeaningIds: [],
@@ -294,14 +296,14 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
     if (get().isLoading) return;
     set({ isLoading: true, error: null });
     try {
-      const { recentMeaningIds, collectionId, generatorMode, recentGenerators, questionIndex, problemsMode, demoMeaningId } = get();
+      const { recentMeaningIds, collectionId, generatorMode, recentGenerators, questionIndex, problemsMode, demoWordId } = get();
       const { recentCorrectCount, recentTotalCount } = get();
 
-      // Демо-режим: фиксируем одно meaning, проходим через все уровни.
+      // Демо-режим: фиксируем одно слово, проходим через все уровни.
       // Сервер вернёт question=null когда слово достигло review (lock на дни)
       // — это сигнал «демо завершено», UI покажет соответствующий экран.
-      if (demoMeaningId !== null) {
-        const res = await learningNext({ lockMeaningId: demoMeaningId, recentGenerators });
+      if (demoWordId !== null) {
+        const res = await learningNext({ lockWordId: demoWordId, recentGenerators });
         const updatedGenerators = res.question
           ? [...recentGenerators, getGeneratorTypeFromQuestion(res.question)].slice(-MAX_RECENT_GENERATORS)
           : recentGenerators;
@@ -310,6 +312,7 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
           currentQuestion: res.question,
           currentQuestionSource: 'learning',
           currentTier: res.tier,
+          currentWordId: res.wordId ?? null,
           recentGenerators: updatedGenerators,
           isLoading: false,
           doubleXpTimeLimitMs: null,
@@ -330,6 +333,7 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
           currentQuestion: res.question,
           currentQuestionSource: 'learning',
           currentTier: res.tier,
+          currentWordId: res.wordId ?? null,
           recentGenerators: updatedGenerators,
           isLoading: false,
           doubleXpTimeLimitMs: null,
@@ -359,6 +363,7 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
           currentQuestion: res.question,
           currentQuestionSource: 'learning',
           currentTier: res.tier,
+          currentWordId: res.wordId ?? null,
           recentGenerators: updatedGenerators,
           isLoading: false,
           doubleXpTimeLimitMs: null,
@@ -415,8 +420,14 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
         // acceptableAnswers и partOfSpeech, чтобы сервер сам перевалидировал
         // через text-normalizer и не доверял слепо клиентскому isCorrect.
         const isFreeInput = currentQuestion.type === 'dictation' || currentQuestion.type === 'free-recall' || currentQuestion.type === 'cloze-input';
-        const isDemo = get().demoMeaningId !== null;
+        const isDemo = get().demoWordId !== null;
+        // Маршрутизация на сервере: если есть wordId в текущем вопросе —
+        // отправляем его, сервер запишет в word-таблицу. Иначе только meaningId.
+        // Backward compat: старый сервер не возвращал wordId → currentWordId=null
+        // → отправляем без wordId → meaning-level path сработает.
+        const currentWordId = get().currentWordId;
         const learnRes = await learningAnswer({
+          wordId: currentWordId ?? undefined,
           meaningId,
           isCorrect: computedIsCorrect,
           questionType: currentQuestion.type ?? 'multiple-choice',
@@ -639,7 +650,8 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
       error: null,
       collectionId: undefined,
       problemsMode: false,
-      demoMeaningId: null,
+      demoWordId: null,
+      currentWordId: null,
       doubleXpTimeLimitMs: null,
       doubleXpExpired: false,
       questionIndex: 0,
