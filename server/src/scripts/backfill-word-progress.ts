@@ -243,15 +243,19 @@ async function run(dryRun: boolean) {
       continue;
     }
 
-    const result = await db
+    // ON CONFLICT … RETURNING id: возвращает строку только если INSERT произошёл
+    // (т.е. конфликт не сработал). Drizzle/postgres-js не предоставляет
+    // надёжного `rowCount` через query builder, поэтому считаем по returning.
+    const inserted_rows = await db
       .insert(userWordProgressWord)
       .values({
         userId,
         wordId,
         ...agg,
       })
-      .onConflictDoNothing();
-    if ((result as unknown as { rowCount?: number }).rowCount && (result as unknown as { rowCount: number }).rowCount > 0) {
+      .onConflictDoNothing()
+      .returning({ id: userWordProgressWord.id });
+    if (inserted_rows.length > 0) {
       inserted++;
     } else {
       skipped++;

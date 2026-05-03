@@ -83,6 +83,7 @@ export async function getProblemMeaningsCount(userId: number): Promise<number> {
       SELECT le.meaning_id
       FROM learning_events le
       JOIN word_meanings wm ON wm.id = le.meaning_id
+      JOIN words w ON w.id = wm.word_id
       WHERE le.user_id = ${userId}
         AND le.event_type IN ('question_answered', 'question_skipped')
         AND le.is_correct = false
@@ -121,6 +122,7 @@ export async function pickNextProblemMeaning(
       uwp.learning_tier AS tier
     FROM learning_events le
     JOIN word_meanings wm ON wm.id = le.meaning_id
+    JOIN words w ON w.id = wm.word_id
     LEFT JOIN user_word_progress uwp
       ON uwp.user_id = le.user_id AND uwp.meaning_id = le.meaning_id
     WHERE le.user_id = ${userId}
