@@ -253,13 +253,16 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
     set({ isLoading: true });
     try {
       const res = await learningDemoReset();
-      if (!res.ok || !res.meaningId) {
+      // Сервер теперь возвращает wordId. Полная миграция демо на word-level
+      // в следующем коммите. Пока кладём wordId в demoMeaningId (имя устарело,
+      // переименуем во второй коммите). lockWordId для /next будет в нём же.
+      if (!res.ok || !res.wordId) {
         set({ isLoading: false, error: res.error ?? 'Не удалось запустить демо' });
         return;
       }
       saveQuestion(null);
       set({
-        demoMeaningId: res.meaningId,
+        demoMeaningId: res.wordId,
         problemsMode: false,
         currentQuestion: null,
         feedback: null,

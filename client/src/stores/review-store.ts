@@ -185,8 +185,10 @@ export const useReviewStore = create<ReviewState>()((set, get) => ({
     }
     // Снимаем серверные записи (паралельно, не ждём).
     // Прокидываем original_action — нужен для аналитики (event review_undo).
+    // Передаём meaningId — сервер сам резолвит wordId через JOIN и удалит
+    // word-level запись (новая архитектура).
     for (const id of last.meaningIds) {
-      learningUndoSwipe(id, last.action).catch((e) => console.error('[review] undo failed:', e));
+      learningUndoSwipe({ meaningId: id }, last.action).catch((e) => console.error('[review] undo failed:', e));
     }
   },
 

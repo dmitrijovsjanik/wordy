@@ -92,16 +92,32 @@ export type DictationApiQuestion = {
   doubleXpTimeLimitMs?: number;
 };
 
+// Информация об одном значении слова — для L1-3 word-level карточек,
+// которые показывают все значения слова списком (encounter, passive-recall,
+// active free-recall).
+export type WordMeaningInfo = {
+  meaningId: number;
+  translation: string;
+  example: { en: string; ru: string } | null;
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+};
+
 // Free Recall question (напиши перевод без вариантов)
 export type FreeRecallApiQuestion = {
   type: 'free-recall';
   meaningId: number;
+  /** Word-level ID — присутствует когда вопрос на L3 active recall (word-level).
+   *  null/undefined для meaning-level (rollback после ошибки на L4). */
+  wordId?: number | null;
   direction: 'en-ru' | 'ru-en';
   prompt: string;
   transcription: string | null;
   audioWord?: string;
   acceptableAnswers: string[];
   partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+  /** Все значения слова (топ-3 по popularity_rank). Заполняется только для
+   *  word-level вопросов; для meaning-level rollback'а пуст или содержит одно. */
+  meanings?: WordMeaningInfo[];
   doubleXpTimeLimitMs?: number;
 };
 
@@ -178,19 +194,33 @@ export type GrammarApiQuestion =
 // Encounter card — пассивный показ слова на первом уровне лестницы.
 // Без проверки. Клиент рендерит карточку и одну кнопку «Понятно»,
 // которая → answer({isCorrect: true}).
+//
+// Word-level: показывает топ-N значений слова списком. translation/example
+// в корне — backward-compat (representative meaning, первое из meanings).
 export type EncounterCardApiQuestion = {
   type: 'encounter';
+  /** Representative meaning ID — для legacy code и meaning-level events. */
   meaningId: number;
+  /** Word-level ID. Присутствует на новых ответах сервера. null если
+   *  сервер не вернул (старая версия) — клиент работает в backward-compat режиме. */
+  wordId?: number | null;
   word: string;
   originalForm: string | null;
+  /** Translation representative meaning'а. Используется как fallback для
+   *  компонентов, которые ещё не умеют рендерить meanings list. */
   translation: string;
   transcription: string | null;
   mnemonic: string | null;
+  /** Пример representative meaning'а (для backward-compat). */
   example: { en: string; ru: string } | null;
   partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
   direction: 'en-ru';
   meaningIndex: number;
   totalMeanings: number;
+  /** Все значения слова (топ-3 по popularity_rank). Заполняется на word-level
+   *  encounter'е. Если undefined — значит ответ от старого сервера, рендерим
+   *  только translation/example как раньше. */
+  meanings?: WordMeaningInfo[];
   doubleXpTimeLimitMs?: number;
 };
 
@@ -209,18 +239,24 @@ export type ClozeInputApiQuestion = {
 };
 
 // Passive recall card — флешкарта с флипом и самооценкой через свайп.
-// Лицо: word + example.en + meaningIndex/totalMeanings.
-// Обратная: translation + example.ru + кнопка «💡» для раскрытия мнемоники.
+// Word-level: показывает все значения слова на обратной стороне.
 // Свайп вправо = isCorrect=true, влево = false.
 export type PassiveRecallApiQuestion = {
   type: 'passive-recall';
+  /** Representative meaning ID. */
   meaningId: number;
+  /** Word-level ID (новый сервер). null/undefined — старый сервер, fallback на one-meaning UI. */
+  wordId?: number | null;
   word: string;
+  /** Translation representative meaning'а (fallback). */
   translation: string;
+  /** Пример representative meaning'а (fallback). */
   example: { en: string; ru: string } | null;
   mnemonic: string | null;
   meaningIndex: number;
   totalMeanings: number;
+  /** Все значения слова (топ-3 по popularity_rank). На word-level — обязательно. */
+  meanings?: WordMeaningInfo[];
   doubleXpTimeLimitMs?: number;
 };
 
@@ -266,6 +302,10 @@ export type ReviewFeedWordsResponse = {
 export type LearningNextResponse = {
   question: QuizQuestion | null;
   tier: LearningTier | null;
+  /** Word-level ID для L1-3 + word-review. null для L4 production / rollback
+   *  / старого сервера (backward compat). Клиент использует это поле для
+   *  маршрутизации /api/learning/answer на word-level vs meaning-level. */
+  wordId?: number | null;
 };
 
 export type LearningAnswerResponse = {

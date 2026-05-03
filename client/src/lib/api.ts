@@ -132,16 +132,20 @@ export function learningNext(opts: {
   return fetchApi<LearningNextResponse>('GET', `/api/learning/next${qs ? '?' + qs : ''}`);
 }
 
-export function learningDemoReset(meaningId?: number) {
-  return fetchApi<{ ok: boolean; meaningId?: number; error?: string }>(
+export function learningDemoReset(wordId?: number) {
+  return fetchApi<{ ok: boolean; wordId?: number; error?: string }>(
     'POST',
     '/api/learning/demo-reset',
-    meaningId !== undefined ? { meaningId } : {},
+    wordId !== undefined ? { wordId } : {},
   );
 }
 
 export function learningAnswer(input: {
-  meaningId: number;
+  /** Если задан — сервер маршрутизирует на word-level recordAnswer (L1-3, review).
+   *  Иначе — на meaning-level (L4, rollback). Backward compat: старый клиент
+   *  отправлял только meaningId, продолжает работать. */
+  wordId?: number | null;
+  meaningId?: number;
   isCorrect: boolean;
   questionType?: string;
   answerTimeMs?: number;
@@ -156,6 +160,10 @@ export function learningAnswer(input: {
 }
 
 export function learningSwipe(input: {
+  /** Word-level ID. Новый flow. */
+  wordId?: number;
+  wordIds?: number[];
+  /** Backward compat: meaning-level. Сервер резолвит wordId через JOIN. */
   meaningId?: number;
   meaningIds?: number[];
   action: 'known' | 'unknown' | 'snooze';
@@ -165,10 +173,10 @@ export function learningSwipe(input: {
 }
 
 export function learningUndoSwipe(
-  meaningId: number,
+  input: { wordId?: number; meaningId?: number },
   originalAction?: 'known' | 'unknown' | 'snooze',
 ) {
-  return fetchApi<{ ok: boolean }>('POST', '/api/learning/undo-swipe', { meaningId, originalAction });
+  return fetchApi<{ ok: boolean }>('POST', '/api/learning/undo-swipe', { ...input, originalAction });
 }
 
 export function learningMnemonicRevealed(meaningId: number) {
