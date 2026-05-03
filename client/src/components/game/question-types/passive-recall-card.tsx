@@ -291,16 +291,22 @@ function BackFace({ fillBg, showFill, meanings }: BackFaceProps) {
 
       <div className="relative flex-1 overflow-y-auto">
         {meanings.length === 1 ? (
-          // Один meaning — крупное центрированное отображение.
+          // Один meaning — крупное центрированное отображение перевода,
+          // снизу — пример с обеими версиями (en на лицевой повторяется
+          // здесь же, чтобы пользователь видел соответствие).
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
             <div className="text-3xl font-bold">{meanings[0]!.translation}</div>
             {meanings[0]!.example && (
-              <div className="mt-2 border-t border-[var(--gray-5)] pt-3 text-sm text-[var(--gray-11)] text-left">
-                {meanings[0]!.example.ru}
+              <div className="mt-2 border-t border-[var(--gray-5)] pt-3 text-left">
+                <div className="text-sm text-[var(--gray-12)]">{meanings[0]!.example.en}</div>
+                <div className="mt-0.5 text-sm text-[var(--gray-11)]">{meanings[0]!.example.ru}</div>
               </div>
             )}
           </div>
         ) : (
+          // Список значений: для каждого — перевод + билингвальный пример.
+          // Английский повторяется с лицевой стороны (для первого meaning),
+          // плюс свой пример у каждого следующего значения.
           <div className="flex flex-col gap-3 text-left">
             {meanings.map((m, idx) => (
               <div
@@ -312,7 +318,10 @@ function BackFace({ fillBg, showFill, meanings }: BackFaceProps) {
                   <span className="text-base font-semibold">{m.translation}</span>
                 </div>
                 {m.example && (
-                  <div className="ml-5 mt-1 text-xs text-[var(--gray-10)]">{m.example.ru}</div>
+                  <div className="ml-5 mt-1">
+                    <div className="text-xs text-[var(--gray-12)]">{m.example.en}</div>
+                    <div className="text-xs text-[var(--gray-10)]">{m.example.ru}</div>
+                  </div>
                 )}
               </div>
             ))}
