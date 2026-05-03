@@ -102,15 +102,19 @@ export default async function learningRoutes(app: FastifyInstance) {
   // ─── GET /api/learning/next ────────────────────────────────────────────
   // Возвращает следующее упражнение по приоритету tier'ов.
 
-  app.get<{ Querystring: { generators?: string; collectionId?: string } }>('/api/learning/next', async (request) => {
+  app.get<{ Querystring: { generators?: string; collectionId?: string; exclude?: string } }>('/api/learning/next', async (request) => {
     const userId = request.user.id;
     const generatorsStr = request.query.generators ?? '';
     const recentGenerators = generatorsStr ? generatorsStr.split(',').filter(Boolean) : [];
     const collectionId = request.query.collectionId ? Number(request.query.collectionId) : undefined;
     const validCollectionId = typeof collectionId === 'number' && !Number.isNaN(collectionId) ? collectionId : undefined;
+    const excludeStr = request.query.exclude ?? '';
+    const excludeMeaningIds = excludeStr
+      ? excludeStr.split(',').map(Number).filter(n => Number.isFinite(n))
+      : [];
 
-    // 1) Пробуем выбрать из текущего прогресса.
-    let pick = await pickNextItem(userId, { collectionId: validCollectionId });
+    // 1) Пробуем выбрать из текущего прогресса (исключая недавно показанные).
+    let pick = await pickNextItem(userId, { collectionId: validCollectionId, excludeMeaningIds });
 
     // 2) Если ничего не готово — вводим новое неизученное слово.
     if (!pick) {

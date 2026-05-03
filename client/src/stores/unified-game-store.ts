@@ -271,7 +271,16 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
       // Разветвление: для auto-режима без коллекции ошибок используем новую лестницу.
       if (shouldUseLearningApi(generatorMode, collectionId)) {
         const numCollectionId = typeof collectionId === 'number' ? collectionId : undefined;
-        const res = await learningNext({ collectionId: numCollectionId, recentGenerators });
+        // excludeMeaningIds — anti-repeat, без него с 0-cooldown'ом сервер
+        // отдавал бы то же слово подряд. Окно специально маленькое (2),
+        // чтобы слово быстро вернулось через 2-3 хода и пользователь видел
+        // прогресс одного слова: encounter A → passive B → passive A → active A.
+        const learningExclude = recentMeaningIds.slice(-2);
+        const res = await learningNext({
+          collectionId: numCollectionId,
+          recentGenerators,
+          excludeMeaningIds: learningExclude,
+        });
         const updatedGenerators = res.question
           ? [...recentGenerators, getGeneratorTypeFromQuestion(res.question)].slice(-MAX_RECENT_GENERATORS)
           : recentGenerators;

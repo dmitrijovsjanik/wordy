@@ -117,10 +117,15 @@ export function quizFinish(sessionId: number) {
 
 // ─── Learning API (новая лестница, фаза 3) ─────────────────────────────────
 
-export function learningNext(opts: { collectionId?: number | string; recentGenerators?: string[] } = {}) {
+export function learningNext(opts: {
+  collectionId?: number | string;
+  recentGenerators?: string[];
+  excludeMeaningIds?: number[];
+} = {}) {
   const params = new URLSearchParams();
   if (opts.recentGenerators?.length) params.set('generators', opts.recentGenerators.join(','));
   if (opts.collectionId !== undefined) params.set('collectionId', String(opts.collectionId));
+  if (opts.excludeMeaningIds?.length) params.set('exclude', opts.excludeMeaningIds.join(','));
   const qs = params.toString();
   return fetchApi<LearningNextResponse>('GET', `/api/learning/next${qs ? '?' + qs : ''}`);
 }

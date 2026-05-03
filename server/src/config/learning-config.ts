@@ -85,11 +85,17 @@ export const learningConfig = {
     encounterToPassiveHours: 0,
     /** Кулдаун после ошибки на passive/active (фаза изучения, без отката). */
     learningCooldownMinutes: 30,
-    /** Интервалы между повторами правильных ответов на passive/active.
-     *  [0]=0 — после первого правильного passive слово остаётся доступным в той же
-     *  сессии (но pickNextItem отдаст приоритет другим словам по ORDER BY).
-     *  [1]=8h — после второго правильного (продвижение active→production) уже spaced. */
-    learningIntervalsHours: [0, 8] as const,
+    /** Интервалы между повторами правильных ответов в фазе изучения.
+     *  [0] — лок при переходе на следующий tier (passive→active, active→production).
+     *  [1] — лок после 1-го правильного на tier'е (когда нужно ещё одно для advance).
+     *
+     *  Оба = 0: нет spaced repetition внутри learning-фазы. Слово остаётся
+     *  доступным в той же сессии, чтобы пользователь мог пройти весь путь
+     *  encounter → passive → active → production → review за один заход.
+     *  Anti-repeat (excludeMeaningIds в pickNextItem) предотвращает показ
+     *  одного и того же слова подряд. SRS включается только в review-фазе
+     *  через reviewIntervalsDays (3д, 7д, 21д, ...). */
+    learningIntervalsHours: [0, 0] as const,
     /** Интервалы review-фазы по `reviewStage` (0..N).
      *  При выходе из active в review reviewStage=0 → первый показ через 3 дня. */
     reviewIntervalsDays: [3, 7, 21, 60, 180] as const,
