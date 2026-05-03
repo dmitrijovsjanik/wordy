@@ -10,7 +10,7 @@ import {
 } from 'framer-motion';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import type { PassiveRecallApiQuestion } from '@/types/api';
+import type { PassiveRecallApiQuestion, WordMeaningInfo } from '@/types/api';
 
 type PassiveRecallCardProps = {
   question: PassiveRecallApiQuestion;
@@ -186,26 +186,23 @@ function FlipCard({ question, flipped, dragEnabled, decision, onTap, onSwipe }: 
         style={{ transformStyle: 'preserve-3d' }}
         className="relative h-full w-full"
       >
-        {/* Лицо */}
-        <FaceCard
-          fillBg={fillBg}
-          showFill={dragEnabled}
-          meaningIndex={question.meaningIndex}
-          totalMeanings={question.totalMeanings}
-          mainText={question.word}
-          exampleText={question.example?.en ?? null}
-          backFace={false}
+        {/* Лицо: слово + пример из первого meaning'а + индикатор «N значений» */}
+        <FrontFace
+          word={question.word}
+          firstExampleEn={question.example?.en ?? null}
+          meaningCount={question.meanings?.length ?? 1}
         />
 
-        {/* Обратная */}
-        <FaceCard
+        {/* Обратная: список всех значений + ripple-заливка для свайпа */}
+        <BackFace
           fillBg={fillBg}
           showFill={dragEnabled}
-          meaningIndex={question.meaningIndex}
-          totalMeanings={question.totalMeanings}
-          mainText={question.translation}
-          exampleText={question.example?.ru ?? null}
-          backFace
+          meanings={question.meanings ?? [{
+            meaningId: question.meaningId,
+            translation: question.translation,
+            example: question.example,
+            partOfSpeech: 'noun',
+          }]}
         />
       </motion.div>
 
@@ -234,35 +231,56 @@ function FlipCard({ question, flipped, dragEnabled, decision, onTap, onSwipe }: 
   );
 }
 
-// ─── FaceCard — один из двух «листов» карточки ──────────────────────────────
-//
-// Структура совпадает с TopCard из WordStack: строка-метка с meaning-index,
-// крупный текст по центру, разделитель + пример снизу. Контент отличается
-// (на лицевой — слово+example.en, на обратной — перевод+example.ru).
+// ─── Front: слово + пример + индикатор «N значений» ─────────────────────────
 
-type FaceCardProps = {
-  fillBg: import('framer-motion').MotionValue<string>;
-  /** Показывать ripple-заливку только когда свайп активен (т.е. на обратной). */
-  showFill: boolean;
-  meaningIndex: number;
-  totalMeanings: number;
-  mainText: string;
-  exampleText: string | null;
-  /** true → этот лист повёрнут на 180° относительно лица. */
-  backFace: boolean;
+type FrontFaceProps = {
+  word: string;
+  firstExampleEn: string | null;
+  meaningCount: number;
 };
 
-function FaceCard({ fillBg, showFill, meaningIndex, totalMeanings, mainText, exampleText, backFace }: FaceCardProps) {
+function FrontFace({ word, firstExampleEn, meaningCount }: FrontFaceProps) {
   return (
     <Card
       className={`absolute inset-0 flex flex-col gap-4 overflow-hidden px-6 py-8 text-center ${CARD_SHADOW}`}
+      style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
+    >
+      <div className="relative flex flex-1 flex-col items-center justify-center gap-2">
+        {meaningCount > 1 && (
+          <div className="text-xs uppercase tracking-wide text-[var(--gray-11)]">
+            {meaningCount} {pluralizeMeanings(meaningCount)}
+          </div>
+        )}
+        <div className="text-3xl font-bold">{word}</div>
+      </div>
+
+      {firstExampleEn && (
+        <div className="relative border-t border-[var(--gray-5)] pt-3 text-left">
+          <div className="text-sm">{firstExampleEn}</div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ─── Back: список всех значений ──────────────────────────────────────────────
+
+type BackFaceProps = {
+  fillBg: import('framer-motion').MotionValue<string>;
+  showFill: boolean;
+  meanings: WordMeaningInfo[];
+};
+
+function BackFace({ fillBg, showFill, meanings }: BackFaceProps) {
+  return (
+    <Card
+      className={`absolute inset-0 flex flex-col gap-3 overflow-hidden px-6 py-8 ${CARD_SHADOW}`}
       style={{
         backfaceVisibility: 'hidden',
         WebkitBackfaceVisibility: 'hidden',
-        ...(backFace ? { transform: 'rotateY(180deg)' } : {}),
+        transform: 'rotateY(180deg)',
       }}
     >
-      {/* Ripple-заливка — только на той стороне, где доступен свайп. */}
       {showFill && (
         <motion.div
           aria-hidden
@@ -271,20 +289,45 @@ function FaceCard({ fillBg, showFill, meaningIndex, totalMeanings, mainText, exa
         />
       )}
 
-      <div className="relative flex flex-1 flex-col items-center justify-center gap-2">
-        {totalMeanings > 1 && (
-          <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-[var(--gray-11)]">
-            <span>{meaningIndex} / {totalMeanings}</span>
+      <div className="relative flex-1 overflow-y-auto">
+        {meanings.length === 1 ? (
+          // Один meaning — крупное центрированное отображение.
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+            <div className="text-3xl font-bold">{meanings[0]!.translation}</div>
+            {meanings[0]!.example && (
+              <div className="mt-2 border-t border-[var(--gray-5)] pt-3 text-sm text-[var(--gray-11)] text-left">
+                {meanings[0]!.example.ru}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3 text-left">
+            {meanings.map((m, idx) => (
+              <div
+                key={m.meaningId}
+                className={idx > 0 ? 'border-t border-[var(--gray-5)] pt-3' : ''}
+              >
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xs text-[var(--gray-10)]">{idx + 1}.</span>
+                  <span className="text-base font-semibold">{m.translation}</span>
+                </div>
+                {m.example && (
+                  <div className="ml-5 mt-1 text-xs text-[var(--gray-10)]">{m.example.ru}</div>
+                )}
+              </div>
+            ))}
           </div>
         )}
-        <div className="text-3xl font-bold">{mainText}</div>
       </div>
-
-      {exampleText && (
-        <div className="relative border-t border-[var(--gray-5)] pt-3 text-left">
-          <div className="text-sm">{exampleText}</div>
-        </div>
-      )}
     </Card>
   );
+}
+
+function pluralizeMeanings(n: number): string {
+  const last2 = n % 100;
+  const lastDigit = n % 10;
+  if (last2 >= 11 && last2 <= 14) return 'значений';
+  if (lastDigit === 1) return 'значение';
+  if (lastDigit >= 2 && lastDigit <= 4) return 'значения';
+  return 'значений';
 }

@@ -11,7 +11,7 @@ import {
   DrawerTitle,
 } from '@/components/ui/drawer';
 import { learningMnemonicRevealed } from '@/lib/api';
-import type { EncounterCardApiQuestion } from '@/types/api';
+import type { EncounterCardApiQuestion, WordMeaningInfo } from '@/types/api';
 
 type EncounterCardProps = {
   question: EncounterCardApiQuestion;
@@ -23,16 +23,14 @@ type EncounterCardProps = {
 const CARD_SHADOW = 'shadow-[0_10px_30px_-5px_rgba(0,0,0,0.18)]';
 
 /**
- * Encounter — карточка-знакомство (L1 в лестнице). Визуал и компоновка
- * совпадают с PassiveRecallCard (L2): флешкарта max-w-sm × h-[60vh] с
- * 3D-флипом по тапу, кнопочный ряд снизу.
+ * Encounter — карточка-знакомство (L1, word-level). Флешкарта max-w-sm × h-[60vh]
+ * с 3D-флипом по тапу.
  *
- *   Лицо:     слово   + transcription + example.en + «N/M»
- *   Обратная: перевод + example.ru + «N/M»
+ *   Лицо:     слово + transcription + индикатор «N значений»
+ *   Обратная: список всех значений со переводами и примерами
  *
- * Свайпа нет (нет самооценки на L1). Снизу: «Подсказка для запоминания»
- * (если есть мнемоника) + «Понятно». Раскрытие мнемоники логируется
- * для аналитики (mnemonic_revealed).
+ * Если сервер не вернул meanings (backward compat — старая версия), рендерим
+ * single-meaning layout: только translation/example representative meaning'а.
  */
 export function EncounterCard({ question, disabled = false, onAnswer }: EncounterCardProps) {
   const [flipped, setFlipped] = useState(false);
@@ -43,7 +41,14 @@ export function EncounterCard({ question, disabled = false, onAnswer }: Encounte
     learningMnemonicRevealed(question.meaningId).catch(() => {});
   };
 
-  const showMeaningIndex = question.totalMeanings > 1;
+  // Word-level: используем meanings[]. Backward compat: если undefined — один meaning.
+  const meanings: WordMeaningInfo[] = question.meanings ?? [{
+    meaningId: question.meaningId,
+    translation: question.translation,
+    example: question.example,
+    partOfSpeech: question.partOfSpeech,
+  }];
+  const meaningCount = meanings.length;
 
   return (
     <div className="mx-auto flex w-full max-w-sm flex-1 flex-col">
@@ -62,33 +67,21 @@ export function EncounterCard({ question, disabled = false, onAnswer }: Encounte
               style={{ transformStyle: 'preserve-3d' }}
               className="relative h-full w-full"
             >
-              {/* Лицо */}
-              <FaceCard
-                meaningIndex={question.meaningIndex}
-                totalMeanings={question.totalMeanings}
-                showMeaningIndex={showMeaningIndex}
-                mainText={question.word}
-                subText={question.transcription ? `[${question.transcription}]` : null}
-                exampleText={question.example?.en ?? null}
-                backFace={false}
+              {/* Лицо: слово + transcription + N значений */}
+              <FrontFace
+                word={question.word}
+                transcription={question.transcription}
+                meaningCount={meaningCount}
               />
 
-              {/* Обратная */}
-              <FaceCard
-                meaningIndex={question.meaningIndex}
-                totalMeanings={question.totalMeanings}
-                showMeaningIndex={showMeaningIndex}
-                mainText={question.translation}
-                subText={null}
-                exampleText={question.example?.ru ?? null}
-                backFace
-              />
+              {/* Обратная: список значений */}
+              <BackFace meanings={meanings} />
             </motion.div>
           </motion.div>
         </div>
       </div>
 
-      {/* Кнопочный ряд — то же место что у L2 (Учить/Знаю). */}
+      {/* Кнопочный ряд снизу. */}
       <div className={`mt-4 grid gap-2 ${question.mnemonic ? 'grid-cols-2' : 'grid-cols-1'}`}>
         {question.mnemonic && (
           <Button
@@ -127,45 +120,92 @@ export function EncounterCard({ question, disabled = false, onAnswer }: Encounte
   );
 }
 
-// ─── FaceCard — один из двух «листов» (идентично PassiveRecallCard) ────────
+// ─── Front: слово + transcription + N значений ──────────────────────────────
 
-type FaceCardProps = {
-  meaningIndex: number;
-  totalMeanings: number;
-  showMeaningIndex: boolean;
-  mainText: string;
-  subText: string | null;
-  exampleText: string | null;
-  backFace: boolean;
+type FrontFaceProps = {
+  word: string;
+  transcription: string | null;
+  meaningCount: number;
 };
 
-function FaceCard({ meaningIndex, totalMeanings, showMeaningIndex, mainText, subText, exampleText, backFace }: FaceCardProps) {
+function FrontFace({ word, transcription, meaningCount }: FrontFaceProps) {
   return (
     <Card
       className={`absolute inset-0 flex flex-col gap-4 overflow-hidden px-6 py-8 text-center ${CARD_SHADOW}`}
+      style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
+    >
+      <div className="flex flex-1 flex-col items-center justify-center gap-2">
+        {meaningCount > 1 && (
+          <div className="text-xs uppercase tracking-wide text-[var(--gray-11)]">
+            {meaningCount} {pluralizeMeanings(meaningCount)}
+          </div>
+        )}
+        <div className="text-3xl font-bold text-[var(--gray-12)]">{word}</div>
+        {transcription && (
+          <div className="text-sm text-[var(--gray-11)]">[{transcription}]</div>
+        )}
+      </div>
+      <div className="text-xs text-[var(--gray-10)]">Тапните, чтобы увидеть переводы</div>
+    </Card>
+  );
+}
+
+// ─── Back: список значений ──────────────────────────────────────────────────
+
+function BackFace({ meanings }: { meanings: WordMeaningInfo[] }) {
+  return (
+    <Card
+      className={`absolute inset-0 flex flex-col gap-3 overflow-hidden px-6 py-8 ${CARD_SHADOW}`}
       style={{
         backfaceVisibility: 'hidden',
         WebkitBackfaceVisibility: 'hidden',
-        ...(backFace ? { transform: 'rotateY(180deg)' } : {}),
+        transform: 'rotateY(180deg)',
       }}
     >
-      <div className="relative flex flex-1 flex-col items-center justify-center gap-2">
-        {showMeaningIndex && (
-          <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-[var(--gray-11)]">
-            <span>{meaningIndex} / {totalMeanings}</span>
+      <div className="flex-1 overflow-y-auto">
+        {meanings.length === 1 ? (
+          // Один meaning — крупное центрированное отображение.
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+            <div className="text-3xl font-bold text-[var(--gray-12)]">{meanings[0]!.translation}</div>
+            {meanings[0]!.example && (
+              <div className="mt-2 text-sm text-[var(--gray-11)]">{meanings[0]!.example.en}</div>
+            )}
+            {meanings[0]!.example && (
+              <div className="text-sm text-[var(--gray-10)]">{meanings[0]!.example.ru}</div>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3 text-left">
+            {meanings.map((m, idx) => (
+              <div
+                key={m.meaningId}
+                className={idx > 0 ? 'border-t border-[var(--gray-5)] pt-3' : ''}
+              >
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xs text-[var(--gray-10)]">{idx + 1}.</span>
+                  <span className="text-base font-semibold text-[var(--gray-12)]">{m.translation}</span>
+                </div>
+                {m.example && (
+                  <div className="mt-1 ml-5 text-sm text-[var(--gray-11)]">{m.example.en}</div>
+                )}
+                {m.example && (
+                  <div className="ml-5 text-xs text-[var(--gray-10)]">{m.example.ru}</div>
+                )}
+              </div>
+            ))}
           </div>
         )}
-        <div className="text-3xl font-bold">{mainText}</div>
-        {subText && (
-          <div className="text-sm text-[var(--gray-11)]">{subText}</div>
-        )}
       </div>
-
-      {exampleText && (
-        <div className="relative border-t border-[var(--gray-5)] pt-3 text-left">
-          <div className="text-sm">{exampleText}</div>
-        </div>
-      )}
     </Card>
   );
+}
+
+function pluralizeMeanings(n: number): string {
+  // Русская плюрализация: 1 значение, 2-4 значения, 5+ значений
+  const last2 = n % 100;
+  const lastDigit = n % 10;
+  if (last2 >= 11 && last2 <= 14) return 'значений';
+  if (lastDigit === 1) return 'значение';
+  if (lastDigit >= 2 && lastDigit <= 4) return 'значения';
+  return 'значений';
 }

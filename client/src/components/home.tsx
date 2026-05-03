@@ -749,10 +749,10 @@ export function Home() {
                     </div>
                   ) : currentQuestion.type === 'free-recall' ? (
                     <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center pb-8">
-                      {/* Free Recall: до ответа — стимул (русское слово); после
-                          ответа — корректный английский перевод, окрашенный по
-                          результату валидации (зелёный = верно, красный = нет). */}
-                      <div className="relative">
+                      {/* Free Recall (L3 active): word-level — все переводы списком как стимул.
+                          Backward compat (meanings undefined): один prompt как раньше.
+                          После ответа — корректный английский, окрашенный по результату. */}
+                      <div className="relative w-full">
                         {answerFeedback ? (
                           <div
                             className={cn(
@@ -761,6 +761,21 @@ export function Home() {
                             )}
                           >
                             {currentQuestion.acceptableAnswers[0] ?? ''}
+                          </div>
+                        ) : currentQuestion.meanings && currentQuestion.meanings.length > 1 && currentQuestion.direction === 'ru-en' ? (
+                          // Word-level: список всех русских переводов слова как стимул.
+                          <div className="flex flex-col items-center gap-2 text-center">
+                            {currentQuestion.meanings.map((m, idx) => (
+                              <div
+                                key={m.meaningId}
+                                className="font-[Unbounded] text-2xl font-bold text-[var(--gray-12)] leading-tight"
+                              >
+                                {m.translation}
+                                {idx < currentQuestion.meanings!.length - 1 && (
+                                  <span className="ml-1 text-[var(--gray-9)]">,</span>
+                                )}
+                              </div>
+                            ))}
                           </div>
                         ) : (
                           <WordDisplay
