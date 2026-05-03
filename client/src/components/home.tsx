@@ -769,13 +769,10 @@ export function Home() {
                       )}
                     </div>
                   ) : currentQuestion.type === 'cloze-input' ? (
-                    /* Cloze-input: предложение со стимулом рендерится внутри
-                       ClozeInput. Здесь — только заголовок и контейнер для
-                       reward feedback. */
-                    <div className="relative flex flex-col items-center justify-center pb-4 pt-2">
-                      <h2 className="font-[Unbounded] text-base font-semibold text-[var(--gray-12)]">
-                        Заполните пропуск
-                      </h2>
+                    /* Cloze-input: дизайн перенесён из CollocationQuiz —
+                       весь контент (предложение, перевод, инпут) в ClozeInput.
+                       Здесь только контейнер для reward feedback. */
+                    <div className="relative flex justify-center pb-2 pt-2">
                       {rewardDisplay && (
                         <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
                           <RewardFeedback reward={rewardDisplay} />

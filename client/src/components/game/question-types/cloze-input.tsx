@@ -4,7 +4,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { Tick01Icon } from '@hugeicons/core-free-icons';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { BlankSentence } from '@/components/game/blank-sentence';
 import { cn } from '@/lib/utils';
 import { checkAnswer, type AnswerResult } from '@/lib/answer-check';
 
@@ -15,8 +15,11 @@ type ClozeInputFeedback = {
 
 type ClozeInputProps = {
   questionKey: string | number;
-  sentence: string;        // "I need to _____ a decision"
+  /** Английское предложение с _____ */
+  sentence: string;
+  /** Русский перевод полного предложения (показывается после ответа). */
   sentenceRu: string;
+  /** Допустимые варианты для проверки. */
   acceptableAnswers: string[];
   feedback: ClozeInputFeedback | null;
   disabled?: boolean;
@@ -28,10 +31,15 @@ type ClozeInputProps = {
 };
 
 /**
- * Cloze-input: предложение с пропуском, без вариантов.
- * Production-tier — контекстный recall. Стимул: английское предложение
- * с _____ + русский перевод как подсказка. Пользователь печатает
- * пропущенное слово.
+ * Cloze-input — production-tier (L4) на главной.
+ *
+ * Дизайн взят из CollocationQuiz: предложение с пропуском крупным
+ * Unbounded-шрифтом + русский перевод снизу как фидбек. Отличие — вместо
+ * 2×2 сетки вариантов используется инпут.
+ *
+ * После сабмита: пропуск заполняется правильным ответом (зелёным если
+ * пользователь был прав, красным — если ошибся), появляется перевод,
+ * через ~1.2с (через стор) — следующий вопрос.
  */
 export function ClozeInput({
   questionKey,
@@ -78,37 +86,64 @@ export function ClozeInput({
     }
   }
 
-  const inputBorderClass = showResult
-    ? activeFeedback.result === 'exact'
-      ? 'border-[var(--green-9)]'
-      : activeFeedback.result === 'close'
-        ? 'border-[var(--amber-9)]'
-        : 'border-[var(--red-9)]'
-    : '';
+  // Состояние пропуска: пустой → синий, после ответа → зелёный/красный.
+  const blankState = !showResult
+    ? 'empty'
+    : activeFeedback.result === 'wrong'
+      ? 'wrong'
+      : 'correct';
+
+  // После ответа в пропуск подставляем правильный ответ (как в collocation-quiz),
+  // чтобы пользователь сразу видел нужное слово в контексте.
+  const filledValues = showResult ? [activeFeedback.correctAnswer] : undefined;
 
   return (
-    <div className="flex w-full flex-col gap-3">
-      {/* Английское предложение с пропуском (стимул). */}
-      <Card className="flex flex-col gap-2 px-4 py-4">
-        <div className="text-base text-[var(--gray-12)]">{sentence}</div>
-        <div className="text-sm text-[var(--gray-11)]">{sentenceRu}</div>
-      </Card>
+    <div className="flex flex-1 flex-col">
+      {/* Предложение с пропуском — крупный шрифт по центру (как collocation). */}
+      <div className="mb-6 text-center text-2xl font-[Unbounded] font-bold leading-tight">
+        <BlankSentence
+          text={sentence}
+          filledValues={filledValues}
+          blankState={blankState}
+        />
+      </div>
 
-      {/* Инпут + подтверждение. */}
+      {/* Русский перевод появляется после ответа (как в collocation-quiz). */}
+      <AnimatePresence>
+        {showResult && (
+          <motion.div
+            key="translation"
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="mb-4 text-center text-sm text-[var(--gray-11)]"
+          >
+            {sentenceRu}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Инпут + сабмит вместо 2×2 сетки опций. */}
       <div className="flex gap-2">
         <Input
           ref={inputRef}
           key={`input-${questionKey}`}
-          value={inputValue}
+          value={showResult ? activeFeedback.correctAnswer : inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type the missing word..."
+          placeholder="Введите слово..."
           disabled={showResult || disabled}
           autoComplete="off"
           autoCapitalize="off"
           autoCorrect="off"
           spellCheck={false}
-          className={cn('flex-1 border transition-colors', inputBorderClass)}
+          className={cn(
+            'flex-1 border transition-colors',
+            showResult && activeFeedback.result === 'exact' && 'border-[var(--green-9)]',
+            showResult && activeFeedback.result === 'close' && 'border-[var(--amber-9)]',
+            showResult && activeFeedback.result === 'wrong' && 'border-[var(--red-9)]',
+          )}
         />
         <Button
           onClick={handleSubmit}
@@ -120,40 +155,13 @@ export function ClozeInput({
         </Button>
       </div>
 
-      <AnimatePresence mode="wait">
-        {showResult && (
-          <motion.div
-            key={`feedback-${questionKey}`}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className={cn(
-              'rounded-xl px-4 py-3 text-center text-sm font-medium',
-              activeFeedback.result === 'exact' && 'bg-[var(--green-3)] text-[var(--green-11)]',
-              activeFeedback.result === 'close' && 'bg-[var(--amber-3)] text-[var(--amber-11)]',
-              activeFeedback.result === 'wrong' && 'bg-[var(--red-3)] text-[var(--red-11)]',
-            )}
-          >
-            {activeFeedback.result === 'exact' && 'Верно!'}
-            {activeFeedback.result === 'close' && 'Почти! Засчитано.'}
-            {activeFeedback.result === 'wrong' && (
-              <>
-                <div>Неверно</div>
-                <div className="mt-1 text-base font-bold">{activeFeedback.correctAnswer}</div>
-              </>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {showSkip && onSkip && (
         <Button
           variant="link"
           size="sm"
           disabled={showResult || disabled}
           onClick={onSkip}
-          className={cn('w-full', (showResult || disabled) && 'opacity-40')}
+          className={cn('mt-3 w-full', (showResult || disabled) && 'opacity-40')}
         >
           Не знаю
         </Button>
