@@ -1,5 +1,6 @@
 import type { PooledMeaning, FreeRecallQuestion } from '../types.js';
 import { getAllTranslations } from './multiple-choice.js';
+import { loadWordMeaningsList } from './word-meanings-list.js';
 
 // ─── Generation ──────────────────────────────────────────────────────────────
 
@@ -18,13 +19,22 @@ export function canGenerateFreeRecall(_meaning: PooledMeaning): boolean {
  * Направление по умолчанию случайное 50/50; вызывающий код может зафиксировать
  * направление через opts.direction (используется в learning-flow, где формат
  * единственный — ru→en).
+ *
+ * Word-level (opts.includeMeanings=true): подгружает топ-3 значений слова
+ * → клиент рендерит все русские переводы списком как стимул L3 active recall.
+ * Meaning-level rollback: meanings не подгружается, prompt = одно значение.
  */
-export function generateFreeRecallFromMeaning(
+export async function generateFreeRecallFromMeaning(
   correct: PooledMeaning,
-  opts?: { direction?: 'en-ru' | 'ru-en' },
-): FreeRecallQuestion {
+  opts?: { direction?: 'en-ru' | 'ru-en'; includeMeanings?: boolean },
+): Promise<FreeRecallQuestion> {
   const direction = opts?.direction ?? (Math.random() < 0.5 ? 'en-ru' : 'ru-en');
   const englishWord = correct.word.lemma ?? correct.word.text;
+
+  // Подгружаем список значений для word-level (L3 active).
+  const meanings = opts?.includeMeanings
+    ? await loadWordMeaningsList(correct.wordId, 3)
+    : undefined;
 
   if (direction === 'en-ru') {
     // Показываем английское слово → пользователь пишет перевод
@@ -35,12 +45,14 @@ export function generateFreeRecallFromMeaning(
     return {
       type: 'free-recall',
       meaningId: correct.id,
+      wordId: correct.wordId,
       direction: 'en-ru',
       prompt: englishWord,
       transcription: correct.word.transcription,
       audioWord: englishWord,
       acceptableAnswers,
       partOfSpeech: correct.partOfSpeech,
+      meanings,
     };
   } else {
     // Показываем русский перевод → пользователь пишет английское слово
@@ -55,12 +67,14 @@ export function generateFreeRecallFromMeaning(
     return {
       type: 'free-recall',
       meaningId: correct.id,
+      wordId: correct.wordId,
       direction: 'ru-en',
       prompt: correct.translation,
       transcription: null,
       audioWord: englishWord,
       acceptableAnswers: unique,
       partOfSpeech: correct.partOfSpeech,
+      meanings,
     };
   }
 }

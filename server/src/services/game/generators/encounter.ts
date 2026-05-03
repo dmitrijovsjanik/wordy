@@ -3,6 +3,7 @@ import { db } from '../../../db/index.js';
 import { wordMeanings } from '../../../db/schema.js';
 import { getAiMnemonic, getAiExamples } from '../../ai-content-service.js';
 import type { PooledMeaning, EncounterCardQuestion } from '../types.js';
+import { loadWordMeaningsList } from './word-meanings-list.js';
 
 /**
  * Генерирует encounter-карточку для первого знакомства со словом.
@@ -38,9 +39,13 @@ export async function generateEncounterCard(meaning: PooledMeaning): Promise<Enc
   const meaningIndex = idx === -1 ? 1 : idx + 1;
   const totalMeanings = allMeanings.length;
 
+  // Список топ-3 значений слова — для word-level UI на L1.
+  const meanings = await loadWordMeaningsList(meaning.wordId, 3);
+
   return {
     type: 'encounter',
     meaningId: meaning.id,
+    wordId: meaning.wordId,
     word: meaning.word.text,
     originalForm: null,
     translation: meaning.translation,
@@ -51,5 +56,6 @@ export async function generateEncounterCard(meaning: PooledMeaning): Promise<Enc
     direction: 'en-ru',
     meaningIndex,
     totalMeanings,
+    meanings,
   };
 }

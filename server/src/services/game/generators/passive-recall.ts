@@ -3,6 +3,7 @@ import { db } from '../../../db/index.js';
 import { wordMeanings } from '../../../db/schema.js';
 import { getAiExamples, getAiMnemonic } from '../../ai-content-service.js';
 import type { PooledMeaning, PassiveRecallCardQuestion } from '../types.js';
+import { loadWordMeaningsList } from './word-meanings-list.js';
 
 /**
  * Генерирует passive-recall карточку — флешкарту с флипом для самооценки.
@@ -38,14 +39,19 @@ export async function generatePassiveRecallFromMeaning(
   const aiMnemonic = await getAiMnemonic(meaning.id);
   const mnemonic = aiMnemonic?.association ?? null;
 
+  // Топ-3 значения слова — для рендера на обратной стороне карточки.
+  const meaningsList = await loadWordMeaningsList(meaning.wordId, 3);
+
   return {
     type: 'passive-recall',
     meaningId: meaning.id,
+    wordId: meaning.wordId,
     word: meaning.word.text,
     translation: meaning.translation,
     example,
     mnemonic,
     meaningIndex: idx + 1,
     totalMeanings: allMeanings.length,
+    meanings: meaningsList,
   };
 }

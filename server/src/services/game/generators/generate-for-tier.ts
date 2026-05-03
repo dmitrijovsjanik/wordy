@@ -81,9 +81,12 @@ async function tryGenerate(
     }
     if (exercise === 'free-recall') {
       // В learning-flow free-recall всегда ru→en (единственный формат на
-      // active/production/review). Случайное направление было только в legacy
-      // /api/quiz; там фикс не нужен.
-      return generateFreeRecallFromMeaning(meaning, { direction: 'ru-en' });
+      // active/production/review). includeMeanings=true → клиент рендерит
+      // все переводы списком как стимул на L3 active recall (word-level).
+      return generateFreeRecallFromMeaning(meaning, {
+        direction: 'ru-en',
+        includeMeanings: true,
+      });
     }
     if (exercise === 'listening') {
       return await generateListeningFromMeaning(meaning);

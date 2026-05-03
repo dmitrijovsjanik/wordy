@@ -90,19 +90,31 @@ export type GeneratorType = 'en-ru' | 'ru-en' | 'spelling' | 'match-pairs' | 'cl
 
 // Encounter card — пассивный показ слова на первом уровне лестницы.
 // Без проверки: пользователь нажимает «Понятно» → recordAnswer({isCorrect: true}) → tier=passive.
+// Информация об одном значении слова — для L1-3 word-level карточек.
+export type WordMeaningInfo = {
+  meaningId: number;
+  translation: string;
+  example: { en: string; ru: string } | null;
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+};
+
 export type EncounterCardQuestion = {
   type: 'encounter';
   meaningId: number;
-  word: string;                                // англ. слово
+  /** Word-level ID. Заполняется на word-level вопросах (L1-3). */
+  wordId?: number | null;
+  word: string;
   originalForm: string | null;
-  translation: string;                          // рус. перевод
+  translation: string;                          // representative meaning (fallback)
   transcription: string | null;
   mnemonic: string | null;                      // AI-mnemonic, если есть
-  example: { en: string; ru: string } | null;   // AI-example или Yandex-example
+  example: { en: string; ru: string } | null;   // representative meaning (fallback)
   partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
   direction: 'en-ru';
   meaningIndex: number;
   totalMeanings: number;
+  /** Топ-3 значения слова для UI. */
+  meanings?: WordMeaningInfo[];
 };
 
 // Passive recall card — второй уровень лестницы. Флешкарта с флипом и
@@ -113,12 +125,15 @@ export type EncounterCardQuestion = {
 export type PassiveRecallCardQuestion = {
   type: 'passive-recall';
   meaningId: number;
+  wordId?: number | null;
   word: string;
-  translation: string;
-  example: { en: string; ru: string } | null;
-  mnemonic: string | null;          // null = мнемоники нет; кнопку «💡» не показывать
-  meaningIndex: number;              // 1-based позиция значения в порядке popularity_rank
-  totalMeanings: number;             // всего значений у слова
+  translation: string;               // representative meaning (fallback)
+  example: { en: string; ru: string } | null;  // representative meaning (fallback)
+  mnemonic: string | null;
+  meaningIndex: number;
+  totalMeanings: number;
+  /** Топ-3 значения слова. На обратной стороне карточки рендерим списком. */
+  meanings?: WordMeaningInfo[];
 };
 
 // Match-pairs question (соединение пар)
@@ -182,12 +197,16 @@ export type DictationQuestion = {
 export type FreeRecallQuestion = {
   type: 'free-recall';
   meaningId: number;
+  wordId?: number | null;
   direction: 'en-ru' | 'ru-en';
   prompt: string;              // слово/перевод для показа
   transcription: string | null; // только для en→ru
   audioWord?: string;          // для TTS (en слово)
   acceptableAnswers: string[]; // все допустимые ответы
   partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+  /** На L3 word-level: все значения для отображения списка переводов как
+   *  стимула. На meaning-level rollback'е может быть undefined / 1 элемент. */
+  meanings?: WordMeaningInfo[];
   doubleXpTimeLimitMs?: number;
 };
 

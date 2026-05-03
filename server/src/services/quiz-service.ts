@@ -306,7 +306,7 @@ async function generateQuestionFromPoolInternal(
   }
 
   if (generator === 'free-recall') {
-    const result = generateFreeRecallFromMeaning(correct);
+    const result = await generateFreeRecallFromMeaning(correct);
     if (result) return result;
   }
 
