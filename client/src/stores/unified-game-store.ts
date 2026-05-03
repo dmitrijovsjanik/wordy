@@ -410,12 +410,14 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
         // acceptableAnswers и partOfSpeech, чтобы сервер сам перевалидировал
         // через text-normalizer и не доверял слепо клиентскому isCorrect.
         const isFreeInput = currentQuestion.type === 'dictation' || currentQuestion.type === 'free-recall';
+        const isDemo = get().demoMeaningId !== null;
         const learnRes = await learningAnswer({
           meaningId,
           isCorrect: computedIsCorrect,
           questionType: currentQuestion.type ?? 'multiple-choice',
           streak: get().streak,
           skip: isSkip,
+          demo: isDemo || undefined,
           userAnswer,
           ...(isFreeInput ? {
             acceptableAnswers: currentQuestion.acceptableAnswers,

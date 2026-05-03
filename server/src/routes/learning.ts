@@ -185,6 +185,9 @@ export default async function learningRoutes(app: FastifyInstance) {
       answerTimeMs?: number;
       streak?: number;
       skip?: boolean;
+      /** Демо-режим: после recordAnswer форсированно продвигает tier на
+       *  следующий, независимо от tcc и правильности. 1 показ на уровень. */
+      demo?: boolean;
       // Свободный ввод: если userAnswer + acceptableAnswers заданы, сервер
       // перепроверяет через text-normalizer (с леммой и Левенштейном),
       // переопределяя isCorrect клиента.
@@ -200,6 +203,7 @@ export default async function learningRoutes(app: FastifyInstance) {
       answerTimeMs,
       streak = 0,
       skip = false,
+      demo = false,
       userAnswer,
       acceptableAnswers,
       partOfSpeech,
@@ -224,6 +228,42 @@ export default async function learningRoutes(app: FastifyInstance) {
       answerTimeMs,
       skip,
     });
+
+    // 1.5) Демо-режим: форсированно продвигаем на следующий tier.
+    // Игнорируем correctToAdvance/intervals — 1 показ на уровень.
+    // На review tier'е после ответа переводим в state='known_from_review',
+    // чтобы lockMeaningId-запрос вернул question=null → UI «демо завершено».
+    if (demo) {
+      const nextTier = (() => {
+        switch (tierResult.tierBefore) {
+          case 'encounter': return 'passive';
+          case 'passive': return 'active';
+          case 'active': return 'production';
+          case 'production': return 'review';
+          case 'review': return null; // финиш демо
+          default: return null;
+        }
+      })();
+      if (nextTier !== null) {
+        await db.update(userWordProgress).set({
+          learningTier: nextTier,
+          tierCorrectCount: 0,
+          nextReviewAt: new Date(),
+          hasPenalty: false,
+        }).where(and(
+          eq(userWordProgress.userId, userId),
+          eq(userWordProgress.meaningId, meaningId),
+        ));
+      } else {
+        // Был review → демо завершено.
+        await db.update(userWordProgress).set({
+          state: 'known_from_review',
+        }).where(and(
+          eq(userWordProgress.userId, userId),
+          eq(userWordProgress.meaningId, meaningId),
+        ));
+      }
+    }
 
     // 2) Награды и жизни (без gems за streak/daily milestones — TODO в фазе 5).
     let xpEarned = 0;

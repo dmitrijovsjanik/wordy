@@ -40,9 +40,17 @@ import { LivesExhaustedDrawer } from '@/components/game/lives-exhausted-drawer';
 import { FavouriteIcon } from '@hugeicons/core-free-icons';
 import type { RewardDisplay, AnswerFeedback } from '@/types/game';
 
-function getQuizContainerKey(q: import('@/types/api').QuizQuestion): string | number {
-  if (q.type === 'match-pairs') return q.pairs[0]?.meaningId ?? 0;
-  return (q as { meaningId: number }).meaningId;
+function getQuizContainerKey(
+  q: import('@/types/api').QuizQuestion,
+  questionIndex: number,
+): string {
+  // Включаем questionIndex чтобы тот же meaningId, показанный дважды
+  // подряд (демо-режим, маленькое окно anti-repeat), приводил к
+  // размонтированию компонента вопроса. Иначе локальный state (например,
+  // localFeedback в FreeRecall) переносится на следующий вопрос и
+  // блокирует ввод.
+  const meaningId = q.type === 'match-pairs' ? q.pairs[0]?.meaningId ?? 0 : (q as { meaningId: number }).meaningId;
+  return `${meaningId}-${questionIndex}`;
 }
 
 export function Home() {
@@ -76,6 +84,7 @@ export function Home() {
     demoMeaningId,
     startDemo,
     exitDemo,
+    questionIndex,
     expireDoubleXp,
     setLastUserAnswer,
     clearHistory,
@@ -590,7 +599,7 @@ export function Home() {
               </AnimatePresence>
             </div>
 
-            <QuizContainer questionKey={getQuizContainerKey(currentQuestion!)}>
+            <QuizContainer questionKey={getQuizContainerKey(currentQuestion!, questionIndex)}>
               {currentQuestion && currentQuestion.type === 'encounter' ? (
                 <div className="flex min-h-0 flex-1 flex-col justify-center px-2">
                   {/* 3-сигнальный прогресс: encounter = «Новое» */}

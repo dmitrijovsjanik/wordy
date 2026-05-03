@@ -147,6 +147,7 @@ export function learningAnswer(input: {
   answerTimeMs?: number;
   streak?: number;
   skip?: boolean;
+  demo?: boolean;
   userAnswer?: string;
   acceptableAnswers?: string[];
   partOfSpeech?: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
