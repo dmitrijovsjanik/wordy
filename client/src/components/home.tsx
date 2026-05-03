@@ -73,6 +73,9 @@ export function Home() {
     currentTier,
     problemsMode,
     setProblemsMode,
+    demoMeaningId,
+    startDemo,
+    exitDemo,
     expireDoubleXp,
     setLastUserAnswer,
     clearHistory,
@@ -359,6 +362,19 @@ export function Home() {
         <div className="flex flex-1 justify-center">
           <GemsIndicator gems={user.gems} freezes={user.streakFreezes} onClick={() => navigate('/shop')} />
         </div>
+        {/* Кнопка демо-режима: сбрасывает одно слово на encounter и проводит
+            его через все уровни лестницы подряд (для тестирования). */}
+        {demoMeaningId === null && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => startDemo()}
+            disabled={isLoading}
+            className="text-xs"
+          >
+            Демо
+          </Button>
+        )}
         <Button variant="secondary" size="icon" onClick={() => setHistoryDrawerOpen(true)}>
           <HugeiconsIcon icon={CheckListIcon} size={24} className="text-[var(--gray-11)]" />
         </Button>
@@ -416,12 +432,25 @@ export function Home() {
         {/* Empty state */}
         {!currentQuestion && !feedback && !isLoading && !error && (
           <div className="flex flex-1 flex-col items-center justify-center gap-4">
-            <p className="text-center text-[var(--gray-11)]">
-              Нет доступных слов. Добавьте коллекцию!
-            </p>
-            <Button variant="secondary" onClick={() => navigate('/collections')}>
-              Перейти к коллекциям
-            </Button>
+            {demoMeaningId !== null ? (
+              <>
+                <p className="text-center text-[var(--gray-11)]">
+                  Демо завершено — слово прошло все уровни и ушло в review (3 дня).
+                </p>
+                <Button variant="secondary" onClick={() => exitDemo()}>
+                  Выйти из демо
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-center text-[var(--gray-11)]">
+                  Нет доступных слов. Добавьте коллекцию!
+                </p>
+                <Button variant="secondary" onClick={() => navigate('/collections')}>
+                  Перейти к коллекциям
+                </Button>
+              </>
+            )}
           </div>
         )}
 
@@ -488,10 +517,28 @@ export function Home() {
               </div>
 
               {/* Бейджи режима фокусировки.
-                  Приоритет: problemsMode (повтор проблемных) → коллекция →
+                  Приоритет: demoMode → problemsMode (повтор проблемных) → коллекция →
                   ничего. Только один бейдж за раз. */}
               <AnimatePresence>
-                {problemsMode ? (
+                {demoMeaningId !== null ? (
+                  <motion.div
+                    key="demo-mode-badge"
+                    initial={{ opacity: 0, height: 0, scaleX: 0.8 }}
+                    animate={{ opacity: 1, height: 'auto', scaleX: 1 }}
+                    exit={{ opacity: 0, height: 0, scaleX: 0.8 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                    className="mt-2 flex justify-center"
+                  >
+                    <Badge variant="secondary" className="h-8 max-w-[calc(100vw-2rem)] gap-1.5 pr-1.5 text-xs">
+                      <span className="truncate">
+                        Демо: уровень {currentTier === 'encounter' ? '1' : currentTier === 'passive' ? '2' : currentTier === 'active' ? '3' : currentTier === 'production' ? '4' : currentTier === 'review' ? '5' : '?'} / 5
+                      </span>
+                      <button onClick={() => exitDemo()} className="rounded-full p-0.5 hover:bg-black/10 transition-colors">
+                        <HugeiconsIcon icon={Cancel01Icon} size={14} className="text-[var(--gray-11)]" />
+                      </button>
+                    </Badge>
+                  </motion.div>
+                ) : problemsMode ? (
                   <motion.div
                     key="problems-mode-badge"
                     initial={{ opacity: 0, height: 0, scaleX: 0.8 }}

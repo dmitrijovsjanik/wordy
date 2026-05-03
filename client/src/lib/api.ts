@@ -121,13 +121,23 @@ export function learningNext(opts: {
   collectionId?: number | string;
   recentGenerators?: string[];
   excludeMeaningIds?: number[];
+  lockMeaningId?: number;
 } = {}) {
   const params = new URLSearchParams();
   if (opts.recentGenerators?.length) params.set('generators', opts.recentGenerators.join(','));
   if (opts.collectionId !== undefined) params.set('collectionId', String(opts.collectionId));
   if (opts.excludeMeaningIds?.length) params.set('exclude', opts.excludeMeaningIds.join(','));
+  if (opts.lockMeaningId !== undefined) params.set('lockMeaningId', String(opts.lockMeaningId));
   const qs = params.toString();
   return fetchApi<LearningNextResponse>('GET', `/api/learning/next${qs ? '?' + qs : ''}`);
+}
+
+export function learningDemoReset(meaningId?: number) {
+  return fetchApi<{ ok: boolean; meaningId?: number; error?: string }>(
+    'POST',
+    '/api/learning/demo-reset',
+    meaningId !== undefined ? { meaningId } : {},
+  );
 }
 
 export function learningAnswer(input: {

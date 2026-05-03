@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { QuizQuestion, InfiniteAnswerResponse, LearningTier, LearningAnswerResponse } from '@/types/api';
 import type { AnswerHistoryEntry } from '@/types/game';
-import { quizNext, quizAnswerInfinite, quizAnswerMatchPairs, refillLives, learningNext, learningAnswer, learningProblemsNext } from '@/lib/api';
+import { quizNext, quizAnswerInfinite, quizAnswerMatchPairs, refillLives, learningNext, learningAnswer, learningProblemsNext, learningDemoReset } from '@/lib/api';
 import { useLeagueStore } from './league-store';
 
 const MAX_RECENT = 20;
@@ -125,6 +125,10 @@ type UnifiedGameState = {
   /** Режим «Проблемные слова» — fetchNext идёт на /api/learning/problems/next.
    *  Включается с экрана /problems, выключается при уходе оттуда. */
   problemsMode: boolean;
+  /** Демо-режим: фиксируем одно слово и проводим его через все уровни.
+   *  Сервер возвращает question=null когда слово достигло review (lock на дни)
+   *  — клиент по этому показывает «Демо завершено». */
+  demoMeaningId: number | null;
   doubleXpTimeLimitMs: number | null;
   doubleXpExpired: boolean;
   questionIndex: number;
@@ -141,6 +145,8 @@ type UnifiedGameState = {
   setCollectionId: (id: number | undefined) => void;
   setGeneratorMode: (mode: QuestionGeneratorMode) => void;
   setProblemsMode: (on: boolean) => void;
+  startDemo: () => Promise<void>;
+  exitDemo: () => Promise<void>;
   fetchNext: () => Promise<void>;
   submitAnswer: (selectedMeaningId: number | null, userAnswer?: string, skip?: boolean) => Promise<void>;
   submitEncounter: () => Promise<void>;
@@ -205,6 +211,7 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
   collectionId: undefined,
   generatorMode: 'auto',
   problemsMode: false,
+  demoMeaningId: null,
   doubleXpTimeLimitMs: null,
   doubleXpExpired: false,
   questionIndex: 0,
@@ -240,13 +247,71 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
     });
   },
 
+  startDemo: async () => {
+    set({ isLoading: true });
+    try {
+      const res = await learningDemoReset();
+      if (!res.ok || !res.meaningId) {
+        set({ isLoading: false, error: res.error ?? 'Не удалось запустить демо' });
+        return;
+      }
+      saveQuestion(null);
+      set({
+        demoMeaningId: res.meaningId,
+        problemsMode: false,
+        currentQuestion: null,
+        feedback: null,
+        recentMeaningIds: [],
+        recentGenerators: [],
+        isLoading: false,
+        error: null,
+      });
+      await get().fetchNext();
+    } catch {
+      set({ isLoading: false, error: 'Не удалось запустить демо' });
+    }
+  },
+
+  exitDemo: async () => {
+    saveQuestion(null);
+    set({
+      demoMeaningId: null,
+      currentQuestion: null,
+      feedback: null,
+      recentMeaningIds: [],
+      recentGenerators: [],
+    });
+    await get().fetchNext();
+  },
+
   fetchNext: async () => {
     // Предотвращаем параллельные запросы (важно для React StrictMode)
     if (get().isLoading) return;
     set({ isLoading: true, error: null });
     try {
-      const { recentMeaningIds, collectionId, generatorMode, recentGenerators, questionIndex, problemsMode } = get();
+      const { recentMeaningIds, collectionId, generatorMode, recentGenerators, questionIndex, problemsMode, demoMeaningId } = get();
       const { recentCorrectCount, recentTotalCount } = get();
+
+      // Демо-режим: фиксируем одно meaning, проходим через все уровни.
+      // Сервер вернёт question=null когда слово достигло review (lock на дни)
+      // — это сигнал «демо завершено», UI покажет соответствующий экран.
+      if (demoMeaningId !== null) {
+        const res = await learningNext({ lockMeaningId: demoMeaningId, recentGenerators });
+        const updatedGenerators = res.question
+          ? [...recentGenerators, getGeneratorTypeFromQuestion(res.question)].slice(-MAX_RECENT_GENERATORS)
+          : recentGenerators;
+        saveQuestion(res.question);
+        set({
+          currentQuestion: res.question,
+          currentQuestionSource: 'learning',
+          currentTier: res.tier,
+          recentGenerators: updatedGenerators,
+          isLoading: false,
+          doubleXpTimeLimitMs: null,
+          doubleXpExpired: false,
+        });
+        return;
+      }
 
       // Режим «Проблемные слова»: своя выборка через learning_events,
       // тот же learning-API для submit'а ответа.
@@ -560,6 +625,7 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
       error: null,
       collectionId: undefined,
       problemsMode: false,
+      demoMeaningId: null,
       doubleXpTimeLimitMs: null,
       doubleXpExpired: false,
       questionIndex: 0,

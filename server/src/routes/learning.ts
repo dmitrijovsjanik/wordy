@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { eq, sql } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { wordMeanings, userWordProgress } from '../db/schema.js';
 import { pickNextItem, recordAnswer, applySwipe, undoSwipe } from '../services/learning-service.js';
@@ -102,7 +102,7 @@ export default async function learningRoutes(app: FastifyInstance) {
   // ─── GET /api/learning/next ────────────────────────────────────────────
   // Возвращает следующее упражнение по приоритету tier'ов.
 
-  app.get<{ Querystring: { generators?: string; collectionId?: string; exclude?: string } }>('/api/learning/next', async (request) => {
+  app.get<{ Querystring: { generators?: string; collectionId?: string; exclude?: string; lockMeaningId?: string } }>('/api/learning/next', async (request) => {
     const userId = request.user.id;
     const generatorsStr = request.query.generators ?? '';
     const recentGenerators = generatorsStr ? generatorsStr.split(',').filter(Boolean) : [];
@@ -112,15 +112,38 @@ export default async function learningRoutes(app: FastifyInstance) {
     const excludeMeaningIds = excludeStr
       ? excludeStr.split(',').map(Number).filter(n => Number.isFinite(n))
       : [];
+    const lockMeaningId = request.query.lockMeaningId ? Number(request.query.lockMeaningId) : null;
 
-    // 1) Пробуем выбрать из текущего прогресса (исключая недавно показанные).
-    let pick = await pickNextItem(userId, { collectionId: validCollectionId, excludeMeaningIds });
+    let pick: { meaningId: number; tier: 'encounter' | 'passive' | 'active' | 'production' | 'review' } | null = null;
 
-    // 2) Если ничего не готово — вводим новое неизученное слово.
-    if (!pick) {
-      const newMeaningId = await introduceUnseenMeaning(userId, validCollectionId);
-      if (newMeaningId !== null) {
-        pick = { meaningId: newMeaningId, tier: 'encounter' };
+    if (lockMeaningId !== null && Number.isFinite(lockMeaningId)) {
+      // Демо-режим: фиксируем одно конкретное слово, не вводим другие.
+      // Возвращаем его на текущем tier'е независимо от nextReviewAt — чтобы
+      // пройти лестницу encounter→passive→active→production→review подряд.
+      const row = await db.query.userWordProgress.findFirst({
+        where: and(
+          eq(userWordProgress.userId, userId),
+          eq(userWordProgress.meaningId, lockMeaningId),
+        ),
+        columns: { learningTier: true, state: true },
+      });
+      if (!row) return { question: null, tier: null };
+      // В review-фазе reviewStage > 0 = «отложено на дни» — для демо считаем
+      // это завершением сценария.
+      if (row.state !== 'learning' && row.state !== 'snoozed') {
+        return { question: null, tier: null };
+      }
+      pick = { meaningId: lockMeaningId, tier: row.learningTier };
+    } else {
+      // 1) Пробуем выбрать из текущего прогресса (исключая недавно показанные).
+      pick = await pickNextItem(userId, { collectionId: validCollectionId, excludeMeaningIds });
+
+      // 2) Если ничего не готово — вводим новое неизученное слово.
+      if (!pick) {
+        const newMeaningId = await introduceUnseenMeaning(userId, validCollectionId);
+        if (newMeaningId !== null) {
+          pick = { meaningId: newMeaningId, tier: 'encounter' };
+        }
       }
     }
 
@@ -280,6 +303,55 @@ export default async function learningRoutes(app: FastifyInstance) {
       await applySwipe({ userId, meaningId: id, action, snoozeDays });
     }
     return { ok: true };
+  });
+
+  // ─── POST /api/learning/demo-reset ─────────────────────────────────────
+  // Сбрасывает прогресс одного meaning'а на encounter+tcc=0+lock=0, чтобы
+  // его можно было пройти через все уровни лестницы за одну сессию.
+  // Если meaningId не передан — берёт первое доступное слово из активных
+  // коллекций (по тем же фильтрам, что и introduceUnseenMeaning).
+
+  app.post<{ Body: { meaningId?: number } }>('/api/learning/demo-reset', async (request) => {
+    const userId = request.user.id;
+    let meaningId = request.body.meaningId;
+
+    if (typeof meaningId !== 'number' || !Number.isFinite(meaningId)) {
+      const result = await db.execute(sql`
+        SELECT wm.id
+        FROM word_meanings wm
+        JOIN words w ON w.id = wm.word_id
+        WHERE wm.id IN (
+          SELECT cw.meaning_id FROM collection_words cw
+          JOIN user_collections uc ON uc.collection_id = cw.collection_id
+          WHERE uc.user_id = ${userId} AND uc.is_active = true
+        )
+        AND (wm.popularity_rank IS NULL OR wm.popularity_rank <= 3)
+        AND (wm.frequency IS NULL OR wm.frequency >= 5)
+        AND wm.translation ~ '[а-яА-ЯёЁ]'
+        ORDER BY w.frequency_rank NULLS LAST
+        LIMIT 1
+      `);
+      const row = (result as unknown as { rows: Array<{ id: number }> }).rows[0];
+      if (!row) return { ok: false, error: 'Нет доступных слов в активных коллекциях' };
+      meaningId = Number(row.id);
+    }
+
+    // Удаляем прогресс и создаём заново на encounter, lock=0.
+    await db.delete(userWordProgress).where(and(
+      eq(userWordProgress.userId, userId),
+      eq(userWordProgress.meaningId, meaningId),
+    ));
+    await db.insert(userWordProgress).values({
+      userId,
+      meaningId,
+      state: 'learning',
+      learningTier: 'encounter',
+      tierCorrectCount: 0,
+      nextReviewAt: new Date(),
+      lastSeenAt: new Date(),
+    });
+
+    return { ok: true, meaningId };
   });
 
   // ─── POST /api/learning/mnemonic-revealed ──────────────────────────────
