@@ -15,14 +15,15 @@ export function canGenerateFreeRecall(_meaning: PooledMeaning): boolean {
 
 /**
  * Генерирует free-recall вопрос из meaning.
- * Направление выбирается случайно 50/50:
- * - en→ru: показываем английское слово, ожидаем русский перевод
- * - ru→en: показываем русский перевод, ожидаем английское слово
+ * Направление по умолчанию случайное 50/50; вызывающий код может зафиксировать
+ * направление через opts.direction (используется в learning-flow, где формат
+ * единственный — ru→en).
  */
 export function generateFreeRecallFromMeaning(
   correct: PooledMeaning,
+  opts?: { direction?: 'en-ru' | 'ru-en' },
 ): FreeRecallQuestion {
-  const direction = Math.random() < 0.5 ? 'en-ru' : 'ru-en';
+  const direction = opts?.direction ?? (Math.random() < 0.5 ? 'en-ru' : 'ru-en');
   const englishWord = correct.word.lemma ?? correct.word.text;
 
   if (direction === 'en-ru') {

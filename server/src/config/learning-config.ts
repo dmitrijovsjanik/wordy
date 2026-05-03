@@ -55,25 +55,27 @@ export const learningConfig = {
       enabled: true,
     },
     active: {
-      // Active recall — свободный ввод (free-recall, dictation).
+      // Active recall — свободный ввод (только free-recall ru→en).
+      // На главной экране ровно один формат «русский стимул → английский ввод»;
+      // dictation/multiple-choice не используются (см. требование «без квизов»).
       correctToAdvance: 2,
-      allowedExerciseTypes: ['free-recall', 'dictation'] as const,
+      allowedExerciseTypes: ['free-recall'] as const,
       enabled: true,
     },
     production: {
-      // Production — слово в предложении (cloze). Включён после фазы 6:
-      // 2037 meanings получили AI-examples + grammar + common_errors через
-      // OpenAI Batch API (см. scripts/generate-ai-content.ts). Cloze-генератор
-      // работает только для meanings с examples в word_ai_content.
+      // Production — тот же free-recall ru→en, что и active. Cloze отключён,
+      // т.к. имеет варианты ответа и подпадает под «никаких квизов на главной».
+      // По мере определения отдельной механики для production tier'а — заменить.
       correctToAdvance: 3,
-      allowedExerciseTypes: ['cloze'] as const,
+      allowedExerciseTypes: ['free-recall'] as const,
       enabled: true,
     },
     review: {
-      // Review — после освоения. Используется для интервальных повторений.
-      // correctToAdvance не имеет смысла на review (его не «проходят»).
+      // Review — после освоения. Только free-recall ru→en, чтобы интервальное
+      // повторение шло в том же формате, что и active. multiple-choice/cloze
+      // убраны (квизы запрещены на главной).
       correctToAdvance: 0,
-      allowedExerciseTypes: ['multiple-choice', 'free-recall', 'cloze'] as const,
+      allowedExerciseTypes: ['free-recall'] as const,
       enabled: true,
     },
   },

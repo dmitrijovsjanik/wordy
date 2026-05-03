@@ -76,7 +76,10 @@ async function tryGenerate(
       return await generateFromMeaning(meaning);
     }
     if (exercise === 'free-recall') {
-      return generateFreeRecallFromMeaning(meaning);
+      // В learning-flow free-recall всегда ru→en (единственный формат на
+      // active/production/review). Случайное направление было только в legacy
+      // /api/quiz; там фикс не нужен.
+      return generateFreeRecallFromMeaning(meaning, { direction: 'ru-en' });
     }
     if (exercise === 'listening') {
       return await generateListeningFromMeaning(meaning);
@@ -131,7 +134,8 @@ export async function generateForTier(
     if (q) return { question: q, generatorType: exerciseToGeneratorType(ex) };
   }
 
-  // Финальный fallback — multiple-choice (надёжный, всегда работает на квиз-валидном meaning).
-  const fallback = await tryGenerate('multiple-choice', meaning);
-  return fallback ? { question: fallback, generatorType: 'en-ru' } : null;
+  // Без fallback'а на multiple-choice — на главной экране НЕ должно быть
+  // квиз-форматов (по требованию). Если все разрешённые типы для tier'а
+  // не сгенерились (что не должно случаться для free-recall) — вернуть null.
+  return null;
 }
