@@ -1,9 +1,16 @@
+import { eq, asc } from 'drizzle-orm';
+import { db } from '../../../db/index.js';
+import { wordMeanings } from '../../../db/schema.js';
 import { getAiMnemonic, getAiExamples } from '../../ai-content-service.js';
 import type { PooledMeaning, EncounterCardQuestion } from '../types.js';
 
 /**
  * Генерирует encounter-карточку для первого знакомства со словом.
  * Без проверки: только показ слова + перевод + AI-контекст (если есть).
+ *
+ * meaningIndex/totalMeanings рассчитываются по всем значениям слова в порядке
+ * popularity_rank (тот же порядок что в passive-recall) — нужны для
+ * консистентного UI флешкарты «N/M».
  */
 export async function generateEncounterCard(meaning: PooledMeaning): Promise<EncounterCardQuestion> {
   // AI-mnemonic (если есть в word_ai_content)
@@ -21,6 +28,16 @@ export async function generateEncounterCard(meaning: PooledMeaning): Promise<Enc
     example = { en: ex.text, ru: ex.translation };
   }
 
+  // Позиция значения среди всех значений слова (popularity_rank order).
+  const allMeanings = await db
+    .select({ id: wordMeanings.id })
+    .from(wordMeanings)
+    .where(eq(wordMeanings.wordId, meaning.wordId))
+    .orderBy(asc(wordMeanings.popularityRank));
+  const idx = allMeanings.findIndex(m => m.id === meaning.id);
+  const meaningIndex = idx === -1 ? 1 : idx + 1;
+  const totalMeanings = allMeanings.length;
+
   return {
     type: 'encounter',
     meaningId: meaning.id,
@@ -32,5 +49,7 @@ export async function generateEncounterCard(meaning: PooledMeaning): Promise<Enc
     example,
     partOfSpeech: meaning.partOfSpeech,
     direction: 'en-ru',
+    meaningIndex,
+    totalMeanings,
   };
 }

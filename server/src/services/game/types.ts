@@ -101,6 +101,8 @@ export type EncounterCardQuestion = {
   example: { en: string; ru: string } | null;   // AI-example или Yandex-example
   partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
   direction: 'en-ru';
+  meaningIndex: number;
+  totalMeanings: number;
 };
 
 // Passive recall card — второй уровень лестницы. Флешкарта с флипом и

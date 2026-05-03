@@ -189,6 +189,8 @@ export type EncounterCardApiQuestion = {
   example: { en: string; ru: string } | null;
   partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
   direction: 'en-ru';
+  meaningIndex: number;
+  totalMeanings: number;
   doubleXpTimeLimitMs?: number;
 };
 

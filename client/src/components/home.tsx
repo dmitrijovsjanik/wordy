@@ -605,19 +605,15 @@ export function Home() {
 
             <QuizContainer questionKey={getQuizContainerKey(currentQuestion!, questionIndex)}>
               {currentQuestion && currentQuestion.type === 'encounter' ? (
-                <div className="flex min-h-0 flex-1 flex-col justify-center px-2">
-                  {/* 3-сигнальный прогресс: encounter = «Новое» */}
-                  {currentTier === 'encounter' && (
-                    <div className="mb-3 flex justify-center">
-                      <Badge variant="secondary">Новое слово</Badge>
-                    </div>
-                  )}
-                  <EncounterCard
-                    question={currentQuestion}
-                    disabled={isLoading || feedback !== null}
-                    onAnswer={() => submitEncounter()}
-                  />
-                </div>
+                /* L1 encounter — флешкарта в той же стилистике что L2
+                   passive-recall (max-w-sm × h-[60vh], флип по тапу).
+                   Без бейджа «Новое слово» — для визуальной консистентности
+                   с L2/L3/L4, где tier-меток тоже нет. */
+                <EncounterCard
+                  question={currentQuestion}
+                  disabled={isLoading || feedback !== null}
+                  onAnswer={() => submitEncounter()}
+                />
               ) : currentQuestion && currentQuestion.type === 'passive-recall' ? (
                 /* Passive recall — флешкарта с флипом и свайпом. Окружение
                    и визуал — 1-в-1 review-page (карточка max-w-sm h-[60vh],
