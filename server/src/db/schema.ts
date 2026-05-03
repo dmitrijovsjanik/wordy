@@ -429,6 +429,53 @@ export const userWordProgress = pgTable(
   ],
 );
 
+// ─── User Word Progress (Word-level, для L1-L3) ────────────────────────────
+//
+// Отдельная таблица для прогресса на уровне Word (а не WordSense).
+// На L1 (encounter), L2 (passive), L3 (active) единица обучения = слово.
+// Все значения слова тренируются как одна сущность.
+//
+// L4 (production) и per-meaning rollback после ошибки на review остаются
+// в `user_word_progress` (выше), привязанной к meaning_id.
+//
+// Аналогична `user_word_progress` по полям, но:
+//   - key = word_id (а не meaning_id)
+//   - убран legacy `srs_stage` — для нового кода не нужен
+
+export const userWordProgressWord = pgTable(
+  'user_word_progress_word',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    wordId: integer('word_id')
+      .references(() => words.id, { onDelete: 'cascade' })
+      .notNull(),
+    correctCount: integer('correct_count').default(0).notNull(),
+    incorrectCount: integer('incorrect_count').default(0).notNull(),
+    hasPenalty: boolean('has_penalty').default(false).notNull(),
+    reviewStage: integer('review_stage').default(0).notNull(),
+    nextReviewAt: timestamp('next_review_at'),
+    masteredAt: timestamp('mastered_at'),
+    fromPlacement: boolean('from_placement').default(false).notNull(),
+    lastSeenAt: timestamp('last_seen_at').defaultNow().notNull(),
+    learningTier: learningTierEnum('learning_tier').default('encounter').notNull(),
+    tierCorrectCount: integer('tier_correct_count').default(0).notNull(),
+    state: learningStateEnum('state').default('learning').notNull(),
+    snoozedUntil: timestamp('snoozed_until'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('user_word_progress_word_uniq').on(table.userId, table.wordId),
+    index('user_word_progress_word_user_idx').on(table.userId),
+    index('user_word_progress_word_review_idx').on(table.userId, table.nextReviewAt),
+    index('user_word_progress_word_state_idx').on(table.userId, table.state),
+    index('user_word_progress_word_snoozed_idx').on(table.userId, table.snoozedUntil),
+  ],
+);
+
 // ─── User Custom Words ──────────────────────────────────────────────────────
 
 export const userCustomWords = pgTable(
@@ -724,6 +771,11 @@ export const userCollectionsRelations = relations(userCollections, ({ one }) => 
 export const userWordProgressRelations = relations(userWordProgress, ({ one }) => ({
   user: one(users, { fields: [userWordProgress.userId], references: [users.id] }),
   meaning: one(wordMeanings, { fields: [userWordProgress.meaningId], references: [wordMeanings.id] }),
+}));
+
+export const userWordProgressWordRelations = relations(userWordProgressWord, ({ one }) => ({
+  user: one(users, { fields: [userWordProgressWord.userId], references: [users.id] }),
+  word: one(words, { fields: [userWordProgressWord.wordId], references: [words.id] }),
 }));
 
 export const userCustomWordsRelations = relations(userCustomWords, ({ one, many }) => ({
