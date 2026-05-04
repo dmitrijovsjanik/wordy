@@ -65,6 +65,7 @@ export async function upsertUser(data: TelegramUserData) {
       avatarUrl: data.photo_url ?? null,
       premiumUntil: new Date(Date.now() + REVERSE_TRIAL_MS),
       premiumPlan: 'trial',
+      estimatedCefr: 'a2',
     })
     .returning();
   return created!;
@@ -85,6 +86,7 @@ export async function getOrCreateDevUser() {
       telegramId: devTelegramId,
       firstName: 'Dev User',
       username: 'dev_user',
+      estimatedCefr: 'a2',
     })
     .returning();
   return created!;

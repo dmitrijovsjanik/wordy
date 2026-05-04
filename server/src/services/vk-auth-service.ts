@@ -125,6 +125,7 @@ export async function upsertVkUser(data: VkUserData) {
       vkId: data.vkId,
       firstName: data.firstName,
       avatarUrl: data.avatarUrl ?? null,
+      estimatedCefr: 'a2',
     })
     .returning();
   return created!;

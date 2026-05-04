@@ -105,6 +105,15 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    key: 'set-default-cefr-a2',
+    description: 'Дефолт estimated_cefr=a2 для пользователей с null (после удаления Onboarding/Placement)',
+    run: async () => {
+      await db.execute(sql`
+        UPDATE users SET estimated_cefr = 'a2' WHERE estimated_cefr IS NULL
+      `);
+    },
+  },
 ];
 
 export async function runStartupMigrations(): Promise<void> {
