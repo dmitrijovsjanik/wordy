@@ -61,12 +61,17 @@ export async function hasAvailableForReview(
   cefr: string | null = null,
 ): Promise<boolean> {
   const cefrLevels = getCefrRange(cefr);
+  // Должен совпадать с фильтром в getReviewFeedNext, иначе расхождение:
+  // hasAvailableForReview=true но getReviewFeedNext вернёт пустой массив →
+  // юзер увидит embedded_review с пустым фидом.
   const result = await db.execute(sql`
     SELECT 1
     FROM word_meanings wm
     JOIN words w ON w.id = wm.word_id
     LEFT JOIN user_word_progress uwp
       ON uwp.meaning_id = wm.id AND uwp.user_id = ${userId}
+    LEFT JOIN user_word_progress_word uwpw
+      ON uwpw.word_id = w.id AND uwpw.user_id = ${userId}
     WHERE
       wm.cefr = ANY(ARRAY[${sql.join(cefrLevels.map(l => sql`${l}::cefr_level`), sql`, `)}])
       AND (wm.popularity_rank IS NULL OR wm.popularity_rank <= 3)
@@ -76,6 +81,10 @@ export async function hasAvailableForReview(
       AND (
         uwp.id IS NULL
         OR (uwp.state = 'snoozed' AND uwp.snoozed_until IS NOT NULL AND uwp.snoozed_until <= NOW())
+      )
+      AND (
+        uwpw.id IS NULL
+        OR (uwpw.state = 'snoozed' AND uwpw.snoozed_until IS NOT NULL AND uwpw.snoozed_until <= NOW())
       )
     LIMIT 1
   `);
@@ -97,6 +106,13 @@ export async function getReviewFeedNext(
   const cefrLevels = getCefrRange(opts.cefr ?? null);
   const excluded = opts.excludeWordIds ?? [];
 
+  // Двухуровневый фильтр прогресса:
+  //   - meaning-level (uwp): отбрасывает строку конкретного meaning'а если
+  //     для него уже есть активная запись (legacy для production / review).
+  //   - word-level (uwpw): отбрасывает слово целиком если по нему сделан
+  //     любой активный свайп (learning / pending_pool / known_from_review),
+  //     либо snoozed ещё не истёк. Без этого после рефреша свайпнутые слова
+  //     возвращались бы в фид (свайп пишет word-level, фильтр был meaning-level).
   const result = await db.execute(sql`
     SELECT
       w.id AS word_id,
@@ -117,6 +133,8 @@ export async function getReviewFeedNext(
     JOIN words w ON w.id = wm.word_id
     LEFT JOIN user_word_progress uwp
       ON uwp.meaning_id = wm.id AND uwp.user_id = ${userId}
+    LEFT JOIN user_word_progress_word uwpw
+      ON uwpw.word_id = w.id AND uwpw.user_id = ${userId}
     LEFT JOIN word_ai_content ex_content
       ON ex_content.meaning_id = wm.id AND ex_content.content_type = 'examples'
     WHERE
@@ -128,6 +146,10 @@ export async function getReviewFeedNext(
       AND (
         uwp.id IS NULL
         OR (uwp.state = 'snoozed' AND uwp.snoozed_until IS NOT NULL AND uwp.snoozed_until <= NOW())
+      )
+      AND (
+        uwpw.id IS NULL
+        OR (uwpw.state = 'snoozed' AND uwpw.snoozed_until IS NOT NULL AND uwpw.snoozed_until <= NOW())
       )
       ${excluded.length > 0 ? sql`AND w.id NOT IN (${sql.join(excluded.map(id => sql`${id}`), sql`, `)})` : sql``}
     GROUP BY w.id, w.text, w.transcription, w.frequency_rank

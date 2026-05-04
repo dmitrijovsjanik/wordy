@@ -118,7 +118,11 @@ function TopCard({ word, onSwipe, onUndo }: TopCardProps) {
   };
 
   const translations = word.meanings.map((m) => m.translation).join('; ');
-  const firstWithExample = word.meanings.find((m) => m.exampleEn && m.exampleRu);
+  // Сервер заполняет example только у первого meaning по popularity_rank ASC.
+  // Если у первого meaning примера нет — на карточке примера тоже не будет.
+  const first = word.meanings[0];
+  const exampleEn = first?.exampleEn;
+  const exampleRu = first?.exampleRu;
 
   return (
     <motion.div
@@ -154,10 +158,10 @@ function TopCard({ word, onSwipe, onUndo }: TopCardProps) {
           </div>
         </div>
 
-        {firstWithExample && (
+        {exampleEn && exampleRu && (
           <div className="relative border-t border-[var(--gray-5)] pt-3 text-left">
-            <div className="text-sm">{firstWithExample.exampleEn}</div>
-            <div className="text-sm text-[var(--gray-11)]">{firstWithExample.exampleRu}</div>
+            <div className="text-sm">{exampleEn}</div>
+            <div className="text-sm text-[var(--gray-11)]">{exampleRu}</div>
           </div>
         )}
       </Card>
