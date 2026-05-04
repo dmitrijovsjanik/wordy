@@ -26,7 +26,6 @@ export async function getProfile(userId: number) {
       repeatMastered: true,
       ttsVoice: true,
       estimatedCefr: true,
-      onboardingCompletedAt: true,
       premiumUntil: true,
       premiumPlan: true,
       autoRenew: true,

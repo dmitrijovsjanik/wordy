@@ -85,17 +85,6 @@ const migrations: Migration[] = [
     },
   },
   {
-    key: 'backfill-onboarding-completed',
-    description: 'Помечаем существующих пользователей с подписками как прошедших онбординг',
-    run: async () => {
-      await db.execute(sql`
-        UPDATE users SET onboarding_completed_at = created_at
-        WHERE id IN (SELECT DISTINCT user_id FROM user_collections)
-        AND onboarding_completed_at IS NULL
-      `);
-    },
-  },
-  {
     key: 'add-platform-id-check-constraint',
     description: 'CHECK constraint: у пользователя должен быть хотя бы один platform ID (telegram_id или vk_id)',
     run: async () => {
@@ -112,6 +101,22 @@ const migrations: Migration[] = [
       await db.execute(sql`
         UPDATE users SET estimated_cefr = 'a2' WHERE estimated_cefr IS NULL
       `);
+    },
+  },
+  {
+    key: 'drop-onboarding-completed-at',
+    description: 'Удаление колонки users.onboarding_completed_at (после удаления Onboarding/Placement)',
+    run: async () => {
+      await db.execute(sql`
+        ALTER TABLE users DROP COLUMN IF EXISTS onboarding_completed_at
+      `);
+    },
+  },
+  {
+    key: 'drop-placement-results',
+    description: 'Удаление таблицы placement_results (после удаления Onboarding/Placement)',
+    run: async () => {
+      await db.execute(sql`DROP TABLE IF EXISTS placement_results`);
     },
   },
 ];
