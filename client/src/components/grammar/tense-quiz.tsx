@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { getNextTenseExercise, submitTenseAnswer } from '@/lib/api';
-import { useGrammarStore } from '@/stores/grammar-store';
 import { splitAnswer } from '@/components/game/blank-sentence';
 import { TENSE_REFERENCE_DATA, type FormulaPartRole } from './tense-reference-data';
 import type { TenseExercise, TenseAnswerResponse } from '@/types/grammar';
@@ -45,12 +44,12 @@ const DIFFICULTY_LABELS: Record<number, string> = {
 
 type TenseQuizProps = {
   difficulty?: 1 | 2 | 3;
+  onSwitchView?: () => void;
 };
 
 type QuizState = 'loading' | 'question' | 'feedback' | 'error';
 
-export function TenseQuiz({ difficulty }: TenseQuizProps) {
-  const setTenseView = useGrammarStore((s) => s.setTenseView);
+export function TenseQuiz({ difficulty, onSwitchView }: TenseQuizProps) {
   const [state, setState] = useState<QuizState>('loading');
   const [exercise, setExercise] = useState<TenseExercise | null>(null);
   const [exerciseIndex, setExerciseIndex] = useState(0);
@@ -120,15 +119,17 @@ export function TenseQuiz({ difficulty }: TenseQuizProps) {
         <Badge variant="secondary">
           {DIFFICULTY_LABELS[exercise.difficulty] ?? `Уровень ${exercise.difficulty}`}
         </Badge>
-        <Button
-          variant="ghost"
-          size="compact"
-          onClick={() => setTenseView('reference')}
-          className="gap-1.5 text-[var(--brand-11)]"
-        >
-          <HugeiconsIcon icon={BookOpen02Icon} size={16} />
-          Справочник
-        </Button>
+        {onSwitchView && (
+          <Button
+            variant="ghost"
+            size="compact"
+            onClick={onSwitchView}
+            className="gap-1.5 text-[var(--brand-11)]"
+          >
+            <HugeiconsIcon icon={BookOpen02Icon} size={16} />
+            Справочник
+          </Button>
+        )}
       </div>
 
       {/* Sentence — vertically centered like main quiz */}

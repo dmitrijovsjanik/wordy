@@ -4,7 +4,6 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { BookOpen02Icon } from '@hugeicons/core-free-icons';
 import { Button } from '@/components/ui/button';
 import { BlankSentence } from '@/components/game/blank-sentence';
-import { useGrammarStore } from '@/stores/grammar-store';
 import { cn } from '@/lib/utils';
 import { getNextArticleExercise, submitArticleAnswer } from '@/lib/api';
 import type { ArticleExercise, ArticleAnswer } from '@/types/grammar';
@@ -19,10 +18,10 @@ type FeedbackState = {
 
 type ArticleQuizProps = {
   difficulty?: 1 | 2 | 3;
+  onSwitchView?: () => void;
 };
 
-export function ArticleQuiz({ difficulty }: ArticleQuizProps) {
-  const setArticleView = useGrammarStore((s) => s.setArticleView);
+export function ArticleQuiz({ difficulty, onSwitchView }: ArticleQuizProps) {
   const [exercise, setExercise] = useState<ArticleExercise | null>(null);
   const [exerciseIndex, setExerciseIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
@@ -111,15 +110,17 @@ export function ArticleQuiz({ difficulty }: ArticleQuizProps) {
         <span className="rounded-full bg-[var(--gray-3)] px-3 py-1 text-xs text-[var(--gray-11)]">
           {exercise.rule}
         </span>
-        <Button
-          variant="ghost"
-          size="compact"
-          onClick={() => setArticleView('reference')}
-          className="gap-1.5 text-[var(--brand-11)]"
-        >
-          <HugeiconsIcon icon={BookOpen02Icon} size={16} />
-          Справочник
-        </Button>
+        {onSwitchView && (
+          <Button
+            variant="ghost"
+            size="compact"
+            onClick={onSwitchView}
+            className="gap-1.5 text-[var(--brand-11)]"
+          >
+            <HugeiconsIcon icon={BookOpen02Icon} size={16} />
+            Справочник
+          </Button>
+        )}
       </div>
 
       {/* Sentence with blank */}

@@ -27,6 +27,8 @@ const FriendsPage = lazyWithRetry(() => import('@/components/friends').then((m) 
 const Settings = lazyWithRetry(() => import('@/components/settings').then((m) => ({ default: m.Settings })));
 const AllWords = lazyWithRetry(() => import('@/components/all-words').then((m) => ({ default: m.AllWords })));
 const GrammarPage = lazyWithRetry(() => import('@/components/grammar/grammar-page').then((m) => ({ default: m.GrammarPage })));
+const ArticlesPage = lazyWithRetry(() => import('@/components/grammar/articles-page').then((m) => ({ default: m.ArticlesPage })));
+const TensesPage = lazyWithRetry(() => import('@/components/grammar/tenses-page').then((m) => ({ default: m.TensesPage })));
 const ReadingPage = lazyWithRetry(() => import('@/components/reading/reading-page').then((m) => ({ default: m.ReadingPage })));
 const ReviewPage = lazyWithRetry(() => import('@/components/review/review-page').then((m) => ({ default: m.ReviewPage })));
 const SpellingPage = lazyWithRetry(() => import('@/components/spelling-page').then((m) => ({ default: m.SpellingPage })));
@@ -106,6 +108,8 @@ export function App() {
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/words" element={<AllWords />} />
                   <Route path="/grammar" element={<GrammarPage />} />
+                  <Route path="/grammar/articles" element={<ArticlesPage />} />
+                  <Route path="/grammar/tenses" element={<TensesPage />} />
                   <Route path="/reading" element={<ReadingPage />} />
                   <Route path="/review" element={<ReviewPage />} />
                   <Route path="/spelling" element={<SpellingPage />} />

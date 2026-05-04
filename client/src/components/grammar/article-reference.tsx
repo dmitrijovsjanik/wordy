@@ -4,7 +4,6 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { ArrowDown01Icon, BookOpen02Icon } from '@hugeicons/core-free-icons';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { useGrammarStore } from '@/stores/grammar-store';
 import { cn } from '@/lib/utils';
 import {
   ARTICLE_REFERENCE_DATA,
@@ -62,8 +61,11 @@ const GROUP_LABELS: { value: GroupFilter; label: string }[] = [
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function ArticleReference() {
-  const setArticleView = useGrammarStore((s) => s.setArticleView);
+type ArticleReferenceProps = {
+  onSwitchView?: () => void;
+};
+
+export function ArticleReference({ onSwitchView }: ArticleReferenceProps = {}) {
   const [groupFilter, setGroupFilter] = useState<GroupFilter>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -83,14 +85,16 @@ export function ArticleReference() {
           <HugeiconsIcon icon={BookOpen02Icon} size={20} className="text-[var(--brand-9)]" />
           <span className="text-base font-bold text-[var(--gray-12)]">Справочник по артиклям</span>
         </div>
-        <Button
-          variant="ghost"
-          size="compact"
-          onClick={() => setArticleView('quiz')}
-          className="text-[var(--brand-11)]"
-        >
-          Квиз
-        </Button>
+        {onSwitchView && (
+          <Button
+            variant="ghost"
+            size="compact"
+            onClick={onSwitchView}
+            className="text-[var(--brand-11)]"
+          >
+            Квиз
+          </Button>
+        )}
       </div>
 
       {/* Legend */}
