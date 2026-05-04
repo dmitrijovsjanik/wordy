@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { QuizQuestion, InfiniteAnswerResponse, LearningTier, LearningAnswerResponse } from '@/types/api';
 import type { AnswerHistoryEntry } from '@/types/game';
-import { quizNext, quizAnswerInfinite, quizAnswerMatchPairs, refillLives, learningNext, learningAnswer, learningProblemsNext } from '@/lib/api';
+import { quizAnswerMatchPairs, refillLives, learningNext, learningAnswer, learningProblemsNext } from '@/lib/api';
 import { useLeagueStore } from './league-store';
 
 const MAX_RECENT = 20;
@@ -189,14 +189,6 @@ function adaptLearningResponse(
   };
 }
 
-/** Использовать learning-API только для auto-режима без выбранной коллекции.
- *  Для en-ru/ru-en/match-pairs или конкретной коллекции — старый /api/quiz. */
-function shouldUseLearningApi(generatorMode: QuestionGeneratorMode, collectionId: number | undefined): boolean {
-  if (generatorMode !== 'auto') return false;
-  if (collectionId !== undefined) return false;
-  return true;
-}
-
 export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
   currentQuestion: loadQuestion(),
   currentQuestionSource: null,
@@ -251,8 +243,7 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
     if (get().isLoading) return;
     set({ isLoading: true, error: null });
     try {
-      const { recentMeaningIds, collectionId, generatorMode, recentGenerators, questionIndex, problemsMode } = get();
-      const { recentCorrectCount, recentTotalCount } = get();
+      const { recentMeaningIds, collectionId, recentGenerators, problemsMode } = get();
 
       // Режим «Проблемные слова»: своя выборка через learning_events,
       // тот же learning-API для submit'а ответа.
@@ -275,54 +266,33 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
         return;
       }
 
-      // Разветвление: для auto-режима без коллекции ошибок используем новую лестницу.
-      if (shouldUseLearningApi(generatorMode, collectionId)) {
-        const numCollectionId = typeof collectionId === 'number' ? collectionId : undefined;
-        // excludeMeaningIds — anti-repeat, без него с 0-cooldown'ом сервер
-        // отдавал бы то же слово подряд. Окно специально маленькое (2),
-        // чтобы слово быстро вернулось через 2-3 хода и пользователь видел
-        // прогресс одного слова: encounter A → passive B → passive A → active A.
-        const learningExclude = recentMeaningIds.slice(-2);
-        const res = await learningNext({
-          collectionId: numCollectionId,
-          recentGenerators,
-          excludeMeaningIds: learningExclude,
-        });
-        const updatedGenerators = res.question
-          ? [...recentGenerators, getGeneratorTypeFromQuestion(res.question)].slice(-MAX_RECENT_GENERATORS)
-          : recentGenerators;
-        saveQuestion(res.question);
-        set({
-          currentQuestion: res.question,
-          currentQuestionSource: 'learning',
-          currentTier: res.tier,
-          currentWordId: res.wordId ?? null,
-          recentGenerators: updatedGenerators,
-          isLoading: false,
-          doubleXpTimeLimitMs: null,
-          doubleXpExpired: false,
-        });
-        return;
-      }
-
-      // Старый путь: en-ru/ru-en/match-pairs формат-выбор или конкретная коллекция.
-      const res = await quizNext(recentMeaningIds, collectionId, generatorMode, recentGenerators, recentCorrectCount, recentTotalCount, questionIndex);
-
-      // Трекаем тип генератора для авто-ротации
-
+      // Лестница: всегда learning-API. Legacy /api/quiz/next больше не
+      // используется этим store'ом — legacy-квиз на /modes сейчас заглушка
+      // без рабочего потока. Переключатели формата (generatorMode) сохраняются
+      // как UI-настройки, но на лестницу не влияют.
+      const numCollectionId = typeof collectionId === 'number' ? collectionId : undefined;
+      // excludeMeaningIds — anti-repeat, без него с 0-cooldown'ом сервер
+      // отдавал бы то же слово подряд. Окно специально маленькое (2),
+      // чтобы слово быстро вернулось через 2-3 хода и пользователь видел
+      // прогресс одного слова: encounter A → passive B → passive A → active A.
+      const learningExclude = recentMeaningIds.slice(-2);
+      const res = await learningNext({
+        collectionId: numCollectionId,
+        recentGenerators,
+        excludeMeaningIds: learningExclude,
+      });
       const updatedGenerators = res.question
         ? [...recentGenerators, getGeneratorTypeFromQuestion(res.question)].slice(-MAX_RECENT_GENERATORS)
         : recentGenerators;
-
       saveQuestion(res.question);
-      const doubleXpTimeLimitMs = (res.question && 'doubleXpTimeLimitMs' in res.question) ? res.question.doubleXpTimeLimitMs ?? null : null;
       set({
         currentQuestion: res.question,
-        currentQuestionSource: 'quiz',
-        currentTier: null,
+        currentQuestionSource: 'learning',
+        currentTier: res.tier,
+        currentWordId: res.wordId ?? null,
         recentGenerators: updatedGenerators,
         isLoading: false,
-        doubleXpTimeLimitMs,
+        doubleXpTimeLimitMs: null,
         doubleXpExpired: false,
       });
     } catch {
@@ -331,7 +301,7 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
   },
 
   submitAnswer: async (selectedMeaningId, userAnswer?, isSkip?) => {
-    const { currentQuestion, currentQuestionSource, recentMeaningIds, lastUserAnswer } = get();
+    const { currentQuestion, recentMeaningIds, lastUserAnswer } = get();
     if (!currentQuestion || currentQuestion.type === 'match-pairs') return;
 
     // После guard'а тип сужен до вопросов с meaningId
@@ -342,46 +312,36 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
 
     set({ isLoading: true });
     try {
-      const { doubleXpTimeLimitMs, doubleXpExpired } = get();
-      const doubleXpClaimed = !!doubleXpTimeLimitMs && !doubleXpExpired;
-
-      let res: InfiniteAnswerResponse & { meaningId?: number };
-
-      if (currentQuestionSource === 'learning') {
-        // Новый flow: /api/learning/answer.
-        // Для свободного ввода (dictation/free-recall) — прокидываем
-        // acceptableAnswers и partOfSpeech, чтобы сервер сам перевалидировал
-        // через text-normalizer и не доверял слепо клиентскому isCorrect.
-        const isFreeInput = currentQuestion.type === 'dictation' || currentQuestion.type === 'free-recall' || currentQuestion.type === 'cloze-input';
-        // Маршрутизация на сервере: если есть wordId в текущем вопросе —
-        // отправляем его, сервер запишет в word-таблицу. Иначе только meaningId.
-        // Backward compat: старый сервер не возвращал wordId → currentWordId=null
-        // → отправляем без wordId → meaning-level path сработает.
-        const currentWordId = get().currentWordId;
-        const learnRes = await learningAnswer({
-          wordId: currentWordId ?? undefined,
-          meaningId,
-          isCorrect: computedIsCorrect,
-          questionType: currentQuestion.type ?? 'multiple-choice',
-          streak: get().streak,
-          skip: isSkip,
-          userAnswer,
-          ...(isFreeInput ? {
-            acceptableAnswers: currentQuestion.acceptableAnswers,
-            partOfSpeech: currentQuestion.partOfSpeech,
-          } : {}),
-        });
-        // Адаптер → совместимый InfiniteAnswerResponse для feedback panel.
-        const correctTranslation = currentQuestion.type === 'encounter'
-          ? currentQuestion.translation
-          : ((currentQuestion as { correctTranslation?: string }).correctTranslation
-            ?? (currentQuestion as { correctAnswer?: string }).correctAnswer
-            ?? '');
-        res = adaptLearningResponse(learnRes, meaningId, correctTranslation);
-      } else {
-        // Старый flow: /api/quiz/answer-infinite.
-        res = await quizAnswerInfinite(meaningId, selectedMeaningId, get().streak, doubleXpClaimed, isSkip);
-      }
+      // Лестница: всегда /api/learning/answer.
+      // Для свободного ввода (dictation/free-recall/cloze-input) — прокидываем
+      // acceptableAnswers и partOfSpeech, чтобы сервер сам перевалидировал
+      // через text-normalizer и не доверял слепо клиентскому isCorrect.
+      const isFreeInput = currentQuestion.type === 'dictation' || currentQuestion.type === 'free-recall' || currentQuestion.type === 'cloze-input';
+      // Маршрутизация на сервере: если есть wordId в текущем вопросе —
+      // отправляем его, сервер запишет в word-таблицу. Иначе только meaningId.
+      // Backward compat: старый сервер не возвращал wordId → currentWordId=null
+      // → отправляем без wordId → meaning-level path сработает.
+      const currentWordId = get().currentWordId;
+      const learnRes = await learningAnswer({
+        wordId: currentWordId ?? undefined,
+        meaningId,
+        isCorrect: computedIsCorrect,
+        questionType: currentQuestion.type ?? 'multiple-choice',
+        streak: get().streak,
+        skip: isSkip,
+        userAnswer,
+        ...(isFreeInput ? {
+          acceptableAnswers: currentQuestion.acceptableAnswers,
+          partOfSpeech: currentQuestion.partOfSpeech,
+        } : {}),
+      });
+      // Адаптер → совместимый InfiniteAnswerResponse для feedback panel.
+      const correctTranslation = currentQuestion.type === 'encounter'
+        ? currentQuestion.translation
+        : ((currentQuestion as { correctTranslation?: string }).correctTranslation
+          ?? (currentQuestion as { correctAnswer?: string }).correctAnswer
+          ?? '');
+      const res: InfiniteAnswerResponse & { meaningId?: number } = adaptLearningResponse(learnRes, meaningId, correctTranslation);
 
       const updatedRecent = [...recentMeaningIds, meaningId].slice(-MAX_RECENT);
       const newStreak = res.isCorrect ? get().streak + 1 : 0;
