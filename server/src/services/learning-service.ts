@@ -411,16 +411,16 @@ export async function recordAnswer(input: RecordAnswerInput): Promise<RecordAnsw
   }
 
   // K-cooldown на word-level (затрагивает оба пула — pickNextWord и pickNextItem
-  // через резолв meaning→word). Правила:
-  //   - tierBefore='production' → cooldown=2 на ЛЮБОЙ ответ. Декомпозиция
-  //     одного слова в N meanings без cooldown выглядит для юзера как
-  //     цикл одного слова (will: воля→непременно→хотеть→...).
+  // через резолв meaning→word). Правила (ошибка > правильный, единообразно):
+  //   - tierBefore='production' AND correct → 2; AND error → 4. Декомпозиция
+  //     одного слова в N meanings без cooldown выглядит для юзера как цикл
+  //     одного слова (will: воля→непременно→хотеть→...).
   //   - tierBefore in (encounter/passive/active) AND wasAdvanced (≠review) → 2.
   //   - tierBefore in (passive/active) AND error → 4.
   //   - review не трогаем (там SRS через nextReviewAt).
   let cooldownK: number | null = null;
   if (tierBefore === 'production') {
-    cooldownK = COOLDOWN_ON_ADVANCE;
+    cooldownK = isCorrect ? COOLDOWN_ON_ADVANCE : COOLDOWN_ON_ERROR;
   } else if (tierBefore !== 'review') {
     if (transition.wasAdvanced && transition.tier !== 'review') {
       cooldownK = COOLDOWN_ON_ADVANCE;
