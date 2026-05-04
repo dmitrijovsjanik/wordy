@@ -119,6 +119,13 @@ const migrations: Migration[] = [
       await db.execute(sql`DROP TABLE IF EXISTS placement_results`);
     },
   },
+  {
+    key: 'add-pending-pool-state',
+    description: "Добавление значения 'pending_pool' в enum learning_state (буфер свайпов «не знаю» из обзора)",
+    run: async () => {
+      await db.execute(sql`ALTER TYPE learning_state ADD VALUE IF NOT EXISTS 'pending_pool'`);
+    },
+  },
 ];
 
 export async function runStartupMigrations(): Promise<void> {

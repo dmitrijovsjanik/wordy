@@ -89,10 +89,12 @@ export const learningTierEnum = pgEnum('learning_tier', [
 // `learning` — слово в очереди обучения, идёт по лестнице.
 // `known_from_review` — отмечено «знаю» в обзоре или через bulk-mark из плейсмента; не учим.
 // `snoozed` — отложено в обзоре, вернётся после snoozed_until.
+// `pending_pool` — свайп «не знаю» из обзора; ждёт забора в активную колоду через drawFromPool.
 export const learningStateEnum = pgEnum('learning_state', [
   'learning',
   'known_from_review',
   'snoozed',
+  'pending_pool',
 ]);
 
 // Append-only лог обучающих событий. Источник правды для retention/funnel-аналитики.

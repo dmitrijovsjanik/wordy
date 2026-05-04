@@ -927,14 +927,14 @@ export async function applyWordSwipe(input: { userId: number; wordId: number; ac
     if (existing) {
       await db.update(userWordProgressWord)
         .set({
-          state: 'learning', learningTier: 'encounter', tierCorrectCount: 0,
+          state: 'pending_pool', learningTier: 'encounter', tierCorrectCount: 0,
           reviewStage: 0, hasPenalty: false, nextReviewAt: now, fromPlacement: false,
           snoozedUntil: null, lastSeenAt: now, updatedAt: now,
         })
         .where(eq(userWordProgressWord.id, existing.id));
     } else {
       await db.insert(userWordProgressWord).values({
-        userId, wordId, state: 'learning', learningTier: 'encounter',
+        userId, wordId, state: 'pending_pool', learningTier: 'encounter',
         tierCorrectCount: 0, nextReviewAt: now, lastSeenAt: now,
       });
     }
