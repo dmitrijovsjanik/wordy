@@ -36,7 +36,6 @@ import { GemsIndicator } from '@/components/ui/gems-indicator';
 import { Avatar } from '@/components/ui/avatar';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Cancel01Icon, Clock01Icon, CheckListIcon, AlertCircleIcon } from '@hugeicons/core-free-icons';
-import { learningProblemsCount } from '@/lib/api';
 import { LIVES_ENABLED } from '@/lib/feature-flags';
 import { xpForLevel } from '@/lib/progression-config';
 import { AnswerHistoryDrawer } from '@/components/answer-history-drawer';
@@ -152,17 +151,6 @@ export function VocabularyScreen() {
 
   // Answer history drawer
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
-
-  // Счётчик проблемных слов (бейдж над квизом).
-  // Обновляется при mount и после каждого ответа (через feedback dependency).
-  const [problemsCount, setProblemsCount] = useState<number | null>(null);
-  useEffect(() => {
-    let alive = true;
-    learningProblemsCount()
-      .then((res) => alive && setProblemsCount(res.count))
-      .catch(() => alive && setProblemsCount(null));
-    return () => { alive = false; };
-  }, [feedback]);
 
   const handleExitProblemsMode = useCallback(() => {
     setProblemsMode(false);
@@ -575,21 +563,6 @@ export function VocabularyScreen() {
                       </button>
                     </Badge>
                   </motion.div>
-                ) : problemsCount && problemsCount > 0 ? (
-                  <motion.button
-                    key="problems-count-badge"
-                    onClick={() => navigate('/problems')}
-                    initial={{ opacity: 0, height: 0, scaleX: 0.8 }}
-                    animate={{ opacity: 1, height: 'auto', scaleX: 1 }}
-                    exit={{ opacity: 0, height: 0, scaleX: 0.8 }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                    className="mt-2 flex justify-center"
-                  >
-                    <Badge variant="error" className="h-8 gap-1.5 text-xs">
-                      <HugeiconsIcon icon={AlertCircleIcon} size={14} className="text-white" />
-                      <span>{problemsCount} проблемных слов</span>
-                    </Badge>
-                  </motion.button>
                 ) : null}
               </AnimatePresence>
             </div>
