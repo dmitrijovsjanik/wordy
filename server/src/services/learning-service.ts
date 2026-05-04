@@ -23,6 +23,12 @@ import { userWordProgress, userWordProgressWord, collectionWords, wordMeanings, 
 import { learningConfig, type ExerciseType } from '../config/learning-config.js';
 import { recordEvent, type LearningTier } from './analytics-service.js';
 import { FUNCTIONAL_POS, FUNCTIONAL_ENGLISH_WORDS } from '../db/word-filters.js';
+import { setCooldown } from './cooldown-service.js';
+
+/** Сколько fetchNext пропустить после повышения tier (encounter→passive→active→production). */
+const COOLDOWN_ON_ADVANCE = 2;
+/** Сколько fetchNext пропустить после ошибки на passive/active. */
+const COOLDOWN_ON_ERROR = 4;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -315,6 +321,15 @@ export async function recordAnswer(input: RecordAnswerInput): Promise<RecordAnsw
     isCorrect,
   }, now);
 
+  // Override 30-минутного nextReviewAt для ошибок на passive/active/production:
+  // в новой архитектуре word-level cooldown заменён K-cooldown через cooldown-service,
+  // а на meaning-level (production) пока без замены — пилот наблюдает.
+  // Review-rollback с reviewWrongCooldownDays оставляем.
+  let effectiveNextReviewAt = transition.nextReviewAt;
+  if (!isCorrect && (tierBefore === 'passive' || tierBefore === 'active' || tierBefore === 'production')) {
+    effectiveNextReviewAt = now;
+  }
+
   // Persist.
   if (existing) {
     await db
@@ -323,7 +338,7 @@ export async function recordAnswer(input: RecordAnswerInput): Promise<RecordAnsw
         learningTier: transition.tier,
         tierCorrectCount: transition.tierCorrectCount,
         reviewStage: transition.reviewStage,
-        nextReviewAt: transition.nextReviewAt,
+        nextReviewAt: effectiveNextReviewAt,
         hasPenalty: transition.hasPenalty,
         masteredAt: transition.becameLearned ? now : existing.masteredAt,
         correctCount: isCorrect
@@ -346,7 +361,7 @@ export async function recordAnswer(input: RecordAnswerInput): Promise<RecordAnsw
       learningTier: transition.tier,
       tierCorrectCount: transition.tierCorrectCount,
       reviewStage: transition.reviewStage,
-      nextReviewAt: transition.nextReviewAt,
+      nextReviewAt: effectiveNextReviewAt,
       hasPenalty: transition.hasPenalty,
       masteredAt: transition.becameLearned ? now : null,
       correctCount: isCorrect ? 1 : 0,
@@ -400,7 +415,7 @@ export async function recordAnswer(input: RecordAnswerInput): Promise<RecordAnsw
     tierAfter: transition.tier,
     becameLearned: transition.becameLearned,
     wasReset: transition.wasReset,
-    nextReviewAt: transition.nextReviewAt,
+    nextReviewAt: effectiveNextReviewAt,
   };
 }
 
@@ -799,6 +814,15 @@ export async function recordWordAnswer(input: RecordWordAnswerInput): Promise<Re
     isCorrect,
   }, now);
 
+  // Override 30-минутного nextReviewAt для ошибок на passive/active:
+  // вместо +30мин ставим now (запись доступна сразу), но cooldown-service
+  // исключает слово на COOLDOWN_ON_ERROR fetchNext. Review-rollback оставляем
+  // как есть (там reviewWrongCooldownDays — отдельная семантика).
+  let effectiveNextReviewAt = transition.nextReviewAt;
+  if (!isCorrect && (tierBefore === 'passive' || tierBefore === 'active')) {
+    effectiveNextReviewAt = now;
+  }
+
   // Persist word-level row.
   if (existing) {
     await db
@@ -807,7 +831,7 @@ export async function recordWordAnswer(input: RecordWordAnswerInput): Promise<Re
         learningTier: transition.tier,
         tierCorrectCount: transition.tierCorrectCount,
         reviewStage: transition.reviewStage,
-        nextReviewAt: transition.nextReviewAt,
+        nextReviewAt: effectiveNextReviewAt,
         hasPenalty: transition.hasPenalty,
         masteredAt: transition.becameLearned ? now : existing.masteredAt,
         correctCount: isCorrect ? sql`${userWordProgressWord.correctCount} + 1` : userWordProgressWord.correctCount,
@@ -825,13 +849,22 @@ export async function recordWordAnswer(input: RecordWordAnswerInput): Promise<Re
       learningTier: transition.tier,
       tierCorrectCount: transition.tierCorrectCount,
       reviewStage: transition.reviewStage,
-      nextReviewAt: transition.nextReviewAt,
+      nextReviewAt: effectiveNextReviewAt,
       hasPenalty: transition.hasPenalty,
       masteredAt: transition.becameLearned ? now : null,
       correctCount: isCorrect ? 1 : 0,
       incorrectCount: isCorrect ? 0 : 1,
       lastSeenAt: now,
     });
+  }
+
+  // K-cooldown: исключение слова на N следующих fetchNext.
+  // Случаи взаимоисключающие (advance бывает только при isCorrect=true).
+  // Review исключаем — там SRS через nextReviewAt.
+  if (transition.wasAdvanced && transition.tier !== 'review') {
+    setCooldown(userId, wordId, COOLDOWN_ON_ADVANCE);
+  } else if (!isCorrect && (tierBefore === 'passive' || tierBefore === 'active')) {
+    setCooldown(userId, wordId, COOLDOWN_ON_ERROR);
   }
 
   // L3 → L4: создать meaning-записи на production.
@@ -889,7 +922,7 @@ export async function recordWordAnswer(input: RecordWordAnswerInput): Promise<Re
     tierAfter: transition.tier,
     becameLearned: transition.becameLearned,
     wasReset: transition.wasReset,
-    nextReviewAt: transition.nextReviewAt,
+    nextReviewAt: effectiveNextReviewAt,
     enteredProduction,
   };
 }

@@ -17,6 +17,10 @@ import {
 } from '../services/learning-service.js';
 import { hasAvailableForReview } from '../services/review-feed-service.js';
 import {
+  decrementOnFetch as cooldownDecrementOnFetch,
+  getExcludedWordIds as cooldownGetExcludedWordIds,
+} from '../services/cooldown-service.js';
+import {
   getProblemMeanings,
   getProblemMeaningsCount,
   pickNextProblemMeaning,
@@ -114,25 +118,56 @@ export default async function learningRoutes(app: FastifyInstance) {
       await drawFromPool(userId, learningConfig.activeDeck.target, activeBefore);
     }
 
+    // Шаг 2: cooldown. Один decrement на запрос; объединяем с client-side
+    // recentWordIds (anti-repeat 2 последних). pickNextWord исключит оба.
+    cooldownDecrementOnFetch(userId);
+    const cooldownExcluded = cooldownGetExcludedWordIds(userId);
+    const combinedExcludeWordIds = cooldownExcluded.length > 0
+      ? [...new Set([...excludeWordIds, ...cooldownExcluded])]
+      : excludeWordIds;
+
     type Pick =
       | { kind: 'word'; wordId: number; meaningId: number; tier: 'encounter' | 'passive' | 'active' | 'production' | 'review' }
       | { kind: 'meaning'; meaningId: number; tier: 'encounter' | 'passive' | 'active' | 'production' | 'review' };
 
     let pick: Pick | null = null;
 
+    const toPick = (combined: Awaited<ReturnType<typeof pickNextItemCombined>>): Pick | null => {
+      if (combined?.kind === 'word') return null; // resolve meaning ниже
+      if (combined?.kind === 'meaning') return { kind: 'meaning', meaningId: combined.meaningId, tier: combined.tier };
+      return null;
+    };
+
+    const resolveWordPick = async (combined: Awaited<ReturnType<typeof pickNextItemCombined>>): Promise<Pick | null> => {
+      if (combined?.kind === 'word') {
+        const meaningId = await pickRepresentativeMeaning(combined.wordId);
+        if (meaningId !== null) {
+          return { kind: 'word', wordId: combined.wordId, meaningId, tier: combined.tier };
+        }
+      }
+      return toPick(combined);
+    };
+
     const combined = await pickNextItemCombined(userId, {
       collectionId: validCollectionId,
-      excludeWordIds,
+      excludeWordIds: combinedExcludeWordIds,
       excludeMeaningIds,
     });
+    pick = await resolveWordPick(combined);
 
-    if (combined?.kind === 'word') {
-      const meaningId = await pickRepresentativeMeaning(combined.wordId);
-      if (meaningId !== null) {
-        pick = { kind: 'word', wordId: combined.wordId, meaningId, tier: combined.tier };
+    // Fallback: cooldown — мягкое исключение. Если ничего не нашли, но в
+    // активной колоде что-то есть — повторяем без cooldown excluded
+    // (только client-side recent). Лучше показать «недавнее» чем ничего.
+    if (!pick && cooldownExcluded.length > 0) {
+      const activeNow = await getActiveDeckSize(userId, validCollectionId);
+      if (activeNow > 0) {
+        const retry = await pickNextItemCombined(userId, {
+          collectionId: validCollectionId,
+          excludeWordIds,
+          excludeMeaningIds,
+        });
+        pick = await resolveWordPick(retry);
       }
-    } else if (combined?.kind === 'meaning') {
-      pick = { kind: 'meaning', meaningId: combined.meaningId, tier: combined.tier };
     }
 
     // Шаг 2: ничего не готово И активная колода пуста — встроенный обзор.
