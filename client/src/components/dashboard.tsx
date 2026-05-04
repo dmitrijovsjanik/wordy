@@ -10,7 +10,6 @@ import { StreakDaysIndicator } from '@/components/ui/streak-days-indicator';
 import { StreakInfoSheet } from '@/components/ui/streak-info-sheet';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { learningProblemsCount } from '@/lib/api';
 
 type SectionStatus = 'active' | 'in-progress' | 'soon';
 
@@ -109,10 +108,9 @@ const OTHER_SECTIONS: OtherSection[] = [
 type SectionCardProps = {
   section: CoreSection;
   isFirstTime: boolean;
-  problemsCount: number | null;
 };
 
-function SectionCard({ section, isFirstTime, problemsCount }: SectionCardProps) {
+function SectionCard({ section, isFirstTime }: SectionCardProps) {
   const navigate = useNavigate();
   const isVocabulary = section.key === 'vocabulary';
   const isInProgress = section.status === 'in-progress';
@@ -127,9 +125,6 @@ function SectionCard({ section, isFirstTime, problemsCount }: SectionCardProps) 
     }
     if (section.navigateTo) navigate(section.navigateTo);
   };
-
-  const showProblemsBadge =
-    isVocabulary && !isFirstTime && problemsCount !== null && problemsCount > 0;
 
   return (
     <button
@@ -161,11 +156,6 @@ function SectionCard({ section, isFirstTime, problemsCount }: SectionCardProps) 
           ? 'Выберите коллекцию для старта'
           : section.description}
       </span>
-      {showProblemsBadge && (
-        <Badge variant="error" className="self-start text-[10px]">
-          {problemsCount} проблемных слов
-        </Badge>
-      )}
       {section.status === 'active' && !(isFirstTime && isVocabulary) && (
         <span className="text-[10px] text-[var(--gray-10)]">Уровень будет здесь</span>
       )}
@@ -180,7 +170,6 @@ export function Dashboard() {
   const fetchLibrary = useCollectionStore((s) => s.fetchLibrary);
   const progress = useLeagueStore((s) => s.progress);
   const fetchStatus = useLeagueStore((s) => s.fetchStatus);
-  const [problemsCount, setProblemsCount] = useState<number | null>(null);
   const [streakSheetOpen, setStreakSheetOpen] = useState(false);
 
   useEffect(() => {
@@ -190,16 +179,6 @@ export function Dashboard() {
   useEffect(() => {
     fetchStatus();
   }, [fetchStatus]);
-
-  useEffect(() => {
-    let alive = true;
-    learningProblemsCount()
-      .then((res) => alive && setProblemsCount(res.count))
-      .catch(() => alive && setProblemsCount(null));
-    return () => {
-      alive = false;
-    };
-  }, []);
 
   if (!user) return null;
 
@@ -240,7 +219,6 @@ export function Dashboard() {
               key={s.key}
               section={s}
               isFirstTime={s.key === 'vocabulary' ? isFirstTimeVocab : false}
-              problemsCount={problemsCount}
             />
           ))}
         </div>
@@ -255,7 +233,6 @@ export function Dashboard() {
               key={s.key}
               section={s}
               isFirstTime={false}
-              problemsCount={null}
             />
           ))}
         </div>
