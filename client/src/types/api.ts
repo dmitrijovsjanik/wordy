@@ -20,7 +20,6 @@ export type User = {
   lastActivityAt: string | null;
   createdAt: string;
   estimatedCefr: CefrLevel | null;
-  onboardingCompletedAt: string | null;
   lives: number;
   livesRestoredAt: string | null;
   xpBoostUntil: string | null;
@@ -102,6 +101,19 @@ export type WordMeaningInfo = {
   partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
 };
 
+// Грамматическая форма слова и её роль (для подсказок и подсветки в примерах).
+// Сервер: server/src/services/word-forms-service.ts.
+export type WordFormInfo = {
+  text: string;
+  label: string;
+};
+
+export type WordFormsInfo = {
+  base: string;
+  partOfSpeech: 'verb' | 'noun' | 'adjective' | 'modal' | 'pronoun' | 'other';
+  forms: WordFormInfo[];
+};
+
 // Free Recall question (напиши перевод без вариантов)
 export type FreeRecallApiQuestion = {
   type: 'free-recall';
@@ -118,6 +130,8 @@ export type FreeRecallApiQuestion = {
   /** Все значения слова (топ-3 по popularity_rank). Заполняется только для
    *  word-level вопросов; для meaning-level rollback'а пуст или содержит одно. */
   meanings?: WordMeaningInfo[];
+  /** Грамматические формы слова (L3 word-level). */
+  forms?: WordFormsInfo | null;
   doubleXpTimeLimitMs?: number;
 };
 
@@ -221,6 +235,8 @@ export type EncounterCardApiQuestion = {
    *  encounter'е. Если undefined — значит ответ от старого сервера, рендерим
    *  только translation/example как раньше. */
   meanings?: WordMeaningInfo[];
+  /** Грамматические формы слова (L1 word-level). */
+  forms?: WordFormsInfo | null;
   doubleXpTimeLimitMs?: number;
 };
 
@@ -257,6 +273,8 @@ export type PassiveRecallApiQuestion = {
   totalMeanings: number;
   /** Все значения слова (топ-3 по popularity_rank). На word-level — обязательно. */
   meanings?: WordMeaningInfo[];
+  /** Грамматические формы слова (L2 word-level). */
+  forms?: WordFormsInfo | null;
   doubleXpTimeLimitMs?: number;
 };
 
@@ -725,37 +743,4 @@ export type FriendRequestInfo = {
     level: number;
   };
   createdAt: string;
-};
-
-// ─── Placement Test ─────────────────────────────────────────────────────────
-
-export type PlacementQuestion = {
-  meaningId: number;
-  word: string;
-  originalForm: string | null;
-  transcription: string | null;
-  correctTranslation: string;
-  options: string[];
-  direction: string;
-};
-
-export type PlacementStartResponse = {
-  question: PlacementQuestion;
-  questionNumber: number;
-  totalQuestions: number;
-};
-
-export type PlacementAnswerResponse = {
-  isCorrect: boolean;
-  questionNumber: number;
-  totalQuestions: number;
-  nextQuestion: PlacementQuestion | null;
-  isFinished: boolean;
-};
-
-export type PlacementCompleteResponse = {
-  cefr: CefrLevel;
-  estimatedVocabulary: number;
-  percentile: number;
-  subscribedCollections: string[];
 };

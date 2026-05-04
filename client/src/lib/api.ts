@@ -26,9 +26,6 @@ import type {
   FriendRequestInfo,
   StreakCalendarResponse,
   CefrProgressResponse,
-  PlacementStartResponse,
-  PlacementAnswerResponse,
-  PlacementCompleteResponse,
   LearningNextResponse,
   LearningAnswerResponse,
   ReviewFeedResponse,
@@ -611,25 +608,4 @@ export function getNextReadingPassage(level?: string) {
 
 export function submitReadingAnswer(data: ReadingAnswerRequest) {
   return fetchApi<ReadingAnswerResponse>('POST', '/api/reading/answer', data);
-}
-
-// Placement Test
-export function placementStart(selfAssessment?: string) {
-  return fetchApi<PlacementStartResponse>('POST', '/api/placement/start', selfAssessment ? { selfAssessment } : {});
-}
-
-export function placementAnswer(meaningId: number, selectedOption: string, answerTimeMs: number) {
-  return fetchApi<PlacementAnswerResponse>('POST', '/api/placement/answer', { meaningId, selectedOption, answerTimeMs });
-}
-
-export function placementComplete() {
-  return fetchApi<PlacementCompleteResponse>('POST', '/api/placement/complete');
-}
-
-export function placementFinalize(mode: 'all' | 'current-only') {
-  return fetchApi<{ success: boolean }>('POST', '/api/placement/finalize', { mode });
-}
-
-export function placementSkip(selectedCefr: string) {
-  return fetchApi<{ success: boolean }>('POST', '/api/placement/skip', { selectedCefr });
 }

@@ -24,6 +24,7 @@ import { Dictation } from '@/components/game/question-types/dictation';
 import { FreeRecall } from '@/components/game/question-types/free-recall';
 import { ClozeInput } from '@/components/game/question-types/cloze-input';
 import { BlankSentence } from '@/components/game/blank-sentence';
+import { WordFormsList } from '@/components/game/word-forms-display';
 import { cn } from '@/lib/utils';
 import { ExampleSentences } from '@/components/game/example-sentences';
 import { MnemonicCard } from '@/components/game/mnemonic-card';
@@ -168,20 +169,10 @@ export function Home() {
     fetchNext();
   }, [setProblemsMode, fetchNext]);
 
-  // Onboarding redirect — new users go to /onboarding
   const library = useCollectionStore((s) => s.library);
-  const isLoadingLibrary = useCollectionStore((s) => s.isLoadingLibrary);
   const fetchLibrary = useCollectionStore((s) => s.fetchLibrary);
-  const hasSystemCollection = library.some((c) => c.type === 'system');
 
   useEffect(() => { fetchLibrary(); }, [fetchLibrary]);
-
-  useEffect(() => {
-    if (!user || isLoadingLibrary) return;
-    if (!user.onboardingCompletedAt && !hasSystemCollection) {
-      navigate('/onboarding', { replace: true });
-    }
-  }, [user, isLoadingLibrary, hasSystemCollection, navigate]);
 
   // Название коллекции для бейджа фокусировки.
   const focusCollectionName = collectionId
@@ -754,13 +745,20 @@ export function Home() {
                           После ответа — корректный английский, окрашенный по результату. */}
                       <div className="relative w-full">
                         {answerFeedback ? (
-                          <div
-                            className={cn(
-                              'text-center font-[Unbounded] text-3xl font-bold leading-tight',
-                              answerFeedback.isCorrect ? 'text-[var(--green-11)]' : 'text-[var(--red-11)]',
+                          <div className="flex flex-col items-center gap-3">
+                            <div
+                              className={cn(
+                                'text-center font-[Unbounded] text-3xl font-bold leading-tight',
+                                answerFeedback.isCorrect ? 'text-[var(--green-11)]' : 'text-[var(--red-11)]',
+                              )}
+                            >
+                              {currentQuestion.acceptableAnswers[0] ?? ''}
+                            </div>
+                            {currentQuestion.forms && currentQuestion.forms.forms.length > 1 && (
+                              <div className="max-w-full px-2">
+                                <WordFormsList forms={currentQuestion.forms} hideBase />
+                              </div>
                             )}
-                          >
-                            {currentQuestion.acceptableAnswers[0] ?? ''}
                           </div>
                         ) : currentQuestion.meanings && currentQuestion.meanings.length > 1 && currentQuestion.direction === 'ru-en' ? (
                           // Word-level: список всех русских переводов слова как стимул.
