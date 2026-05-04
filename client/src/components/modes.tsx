@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Sword01Icon, Tick01Icon, BookOpen02Icon, Book02Icon, ArrowRight01Icon, EyeIcon, KeyboardIcon } from '@hugeicons/core-free-icons';
+import { Tick01Icon } from '@hugeicons/core-free-icons';
+import { BackButton } from '@/components/ui/back-button';
 import { useUnifiedGameStore, type QuestionGeneratorMode } from '@/stores/unified-game-store';
 import { cn } from '@/lib/utils';
 
@@ -11,122 +12,29 @@ const GENERATOR_MODES: { value: QuestionGeneratorMode; title: string; descriptio
   { value: 'match-pairs', title: 'Пары', description: 'Соедините слово с переводом' },
 ];
 
+/**
+ * Quiz (legacy) — страница-заглушка.
+ *
+ * Точка входа — карточка «Квиз (legacy)» в блоке «Другое» на дашборде.
+ * Здесь оставлены переключатели формата (модификаторы legacy-квиза). Сам
+ * legacy-квиз как рабочий поток будет проработан после пилота.
+ */
 export function Modes() {
   const navigate = useNavigate();
   const generatorMode = useUnifiedGameStore((s) => s.generatorMode);
   const setGeneratorMode = useUnifiedGameStore((s) => s.setGeneratorMode);
 
   return (
-    <div className="flex flex-col gap-5 px-4 pt-6 pb-4">
-      <h1 className="text-xl font-bold">Режимы</h1>
+    <div className="flex flex-col gap-5 px-4 pt-4 pb-4">
+      <BackButton onClick={() => navigate('/')} variant="ghost" />
 
-      {/* Дуэль */}
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-[var(--gray-11)]">Мультиплеер</h2>
-        <div className="relative">
-          <div
-            className="pointer-events-none absolute -bottom-3 left-[10%] right-[10%] h-8 rounded-[50%] opacity-50 blur-xl"
-            style={{ background: 'radial-gradient(ellipse at center, rgba(255,100,20,0.6), rgba(255,60,0,0.3) 50%, transparent 80%)' }}
-          />
-          <button
-            onClick={() => navigate('/duel/create')}
-            className="duel-card relative flex w-full items-center gap-3 overflow-hidden rounded-2xl px-4 py-4 text-left text-white"
-          >
-            <svg className="absolute" width="0" height="0" aria-hidden="true">
-              <defs>
-                <filter id="duel-goo">
-                  <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" />
-                  <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7" result="goo" />
-                  <feBlend in="SourceGraphic" in2="goo" />
-                </filter>
-              </defs>
-            </svg>
-            <div className="pointer-events-none absolute inset-[-10px] overflow-hidden duel-lava-wrap">
-              <div className="duel-lava-goo">
-                <div className="duel-blob duel-blob--1" />
-                <div className="duel-blob duel-blob--2" />
-                <div className="duel-blob duel-blob--3" />
-                <div className="duel-blob duel-blob--4" />
-              </div>
-            </div>
-            <div className="pointer-events-none absolute inset-0 rounded-2xl duel-glow-border" />
-            <HugeiconsIcon strokeWidth={2} icon={Sword01Icon} size={22} className="relative z-10" />
-            <div className="relative z-10 flex flex-1 flex-col">
-              <h3 className="text-sm font-semibold">Дуэль</h3>
-              <span className="text-xs opacity-80">Сразись с другом в реальном времени</span>
-            </div>
-            <span className="relative z-10 inline-flex shrink-0 items-center justify-center rounded-xl bg-white/20 px-3 py-1.5 text-xs font-medium text-white">
-              Бросить вызов
-            </span>
-          </button>
-        </div>
-      </section>
+      <div className="flex flex-col gap-1">
+        <h1 className="text-xl font-bold">Квиз (legacy)</h1>
+        <p className="text-sm text-[var(--gray-11)]">
+          Старый формат квиза. Будет проработан после пилота.
+        </p>
+      </div>
 
-      {/* Обзор слов */}
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-[var(--gray-11)]">Обзор</h2>
-        <button
-          onClick={() => navigate('/review')}
-          className="flex w-full items-center gap-3 rounded-2xl bg-[var(--gray-2)] px-4 py-3 text-left transition-colors active:bg-[var(--gray-3)]"
-        >
-          <HugeiconsIcon strokeWidth={2} icon={EyeIcon} size={20} className="text-[var(--brand-9)]" />
-          <div className="flex flex-1 flex-col">
-            <span className="text-sm font-semibold">Листай слова</span>
-            <span className="text-xs text-[var(--gray-11)]">Свайп вправо — знаю, влево — учить, вниз — отложить</span>
-          </div>
-          <HugeiconsIcon icon={ArrowRight01Icon} size={16} strokeWidth={2} className="text-[var(--gray-11)]" />
-        </button>
-      </section>
-
-      {/* Грамматика */}
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-[var(--gray-11)]">Грамматика</h2>
-        <button
-          onClick={() => navigate('/grammar')}
-          className="flex w-full items-center gap-3 rounded-2xl bg-[var(--gray-2)] px-4 py-3 text-left transition-colors active:bg-[var(--gray-3)]"
-        >
-          <HugeiconsIcon strokeWidth={2} icon={BookOpen02Icon} size={20} className="text-[var(--brand-9)]" />
-          <div className="flex flex-1 flex-col">
-            <span className="text-sm font-semibold">Артикли и времена</span>
-            <span className="text-xs text-[var(--gray-11)]">Практика грамматики английского</span>
-          </div>
-          <HugeiconsIcon icon={ArrowRight01Icon} size={16} strokeWidth={2} className="text-[var(--gray-11)]" />
-        </button>
-      </section>
-
-      {/* Чтение */}
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-[var(--gray-11)]">Чтение</h2>
-        <button
-          onClick={() => navigate('/reading')}
-          className="flex w-full items-center gap-3 rounded-2xl bg-[var(--gray-2)] px-4 py-3 text-left transition-colors active:bg-[var(--gray-3)]"
-        >
-          <HugeiconsIcon strokeWidth={2} icon={Book02Icon} size={20} className="text-[var(--brand-9)]" />
-          <div className="flex flex-1 flex-col">
-            <span className="text-sm font-semibold">Мини-тексты</span>
-            <span className="text-xs text-[var(--gray-11)]">Читай и отвечай на вопросы</span>
-          </div>
-          <HugeiconsIcon icon={ArrowRight01Icon} size={16} strokeWidth={2} className="text-[var(--gray-11)]" />
-        </button>
-      </section>
-
-      {/* Спеллинг — отдельный режим, не интегрирован в лестницу. */}
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-[var(--gray-11)]">Правописание</h2>
-        <button
-          onClick={() => navigate('/spelling')}
-          className="flex w-full items-center gap-3 rounded-2xl bg-[var(--gray-2)] px-4 py-3 text-left transition-colors active:bg-[var(--gray-3)]"
-        >
-          <HugeiconsIcon strokeWidth={2} icon={KeyboardIcon} size={20} className="text-[var(--brand-9)]" />
-          <div className="flex flex-1 flex-col">
-            <span className="text-sm font-semibold">Спеллинг</span>
-            <span className="text-xs text-[var(--gray-11)]">Выбери правильное написание</span>
-          </div>
-          <HugeiconsIcon icon={ArrowRight01Icon} size={16} strokeWidth={2} className="text-[var(--gray-11)]" />
-        </button>
-      </section>
-
-      {/* Формат квиза */}
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-[var(--gray-11)]">Формат квиза</h2>
         <div className="flex flex-col gap-2">
