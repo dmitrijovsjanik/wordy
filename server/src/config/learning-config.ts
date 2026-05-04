@@ -119,6 +119,17 @@ export const learningConfig = {
     feedQueueSize: 30,
   },
 
+  activeDeck: {
+    /** Целевой размер активной колоды (state='learning' AND tier IN encounter/passive/active).
+     *  При просадке ≤ threshold drawFromPool добирает до этого числа из pending_pool. */
+    target: 7,
+    /** Порог, при котором запускается добор из pending_pool. */
+    threshold: 3,
+    /** Размер pending_pool, при котором встроенный обзор завершается и
+     *  пользователь возвращается к карточке изучения. */
+    poolMinForResume: 4,
+  },
+
   errors: {
     /** Слово попадает в «проблемные», если за окно было ≥N ошибок. */
     thresholdCount: 3,

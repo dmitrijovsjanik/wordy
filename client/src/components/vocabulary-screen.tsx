@@ -16,6 +16,7 @@ import { WordDisplay } from '@/components/game/word-display';
 import { MultipleChoice } from '@/components/game/question-types/multiple-choice';
 import { EncounterCard } from '@/components/game/question-types/encounter-card';
 import { PassiveRecallCard } from '@/components/game/question-types/passive-recall-card';
+import { EmbeddedReview } from '@/components/game/embedded-review';
 import { RewardFeedback } from '@/components/game/reward-feedback';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QuizContainer } from '@/components/game/quiz-container';
@@ -91,6 +92,7 @@ export function VocabularyScreen() {
     clearHistory,
     restoreLives,
     onLivesTimerExpired,
+    mode,
   } = useUnifiedGameStore();
 
   const { progress, stats, season, isLoading: isLeagueLoading, fetchStatus } = useLeagueStore();
@@ -333,6 +335,12 @@ export function VocabularyScreen() {
   } : null;
 
   if (!user) return null;
+
+  // Встроенный обзор — заменяет учебный UI целиком, со своим header'ом.
+  // Условие после всех hooks выше, чтобы не нарушать правила React.
+  if (mode === 'embedded_review' || mode === 'embedded_review_empty') {
+    return <EmbeddedReview />;
+  }
 
   return (
     <>

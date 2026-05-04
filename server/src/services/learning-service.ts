@@ -961,7 +961,13 @@ export async function applyWordSwipe(input: { userId: number; wordId: number; ac
 }
 
 /**
- * Откат свайпа на word-level. Удаляет word-progress запись.
+ * Откат свайпа на word-level.
+ *
+ * State-гард: DELETE только если запись в одном из «обзорных» состояний
+ * (pending_pool / snoozed / known_from_review). Если слово уже в активной
+ * колоде (state='learning' с накопленным прогрессом — drawFromPool забрал
+ * из пула, потом юзер начал учить), undo молча no-op — не стираем
+ * накопленные tierCorrectCount / reviewStage / события ответов.
  */
 export async function undoWordSwipe(
   userId: number,
@@ -970,7 +976,11 @@ export async function undoWordSwipe(
 ): Promise<void> {
   await db
     .delete(userWordProgressWord)
-    .where(and(eq(userWordProgressWord.userId, userId), eq(userWordProgressWord.wordId, wordId)));
+    .where(and(
+      eq(userWordProgressWord.userId, userId),
+      eq(userWordProgressWord.wordId, wordId),
+      inArray(userWordProgressWord.state, ['pending_pool', 'snoozed', 'known_from_review']),
+    ));
   await recordEvent({
     userId,
     eventType: 'review_undo',
@@ -1108,4 +1118,120 @@ function addDays(d: Date, n: number): Date {
  */
 export async function promoteWordToReview(userId: number, wordId: number): Promise<void> {
   await promoteWordToReviewIfReady(userId, wordId, new Date());
+}
+
+// ─── Pool-based supply (заменяет introduceUnseenWord) ───────────────────────
+//
+// Новый источник новых слов: пользователь свайпает «не знаю» в обзоре →
+// слово ложится в state='pending_pool'. drawFromPool забирает из пула в
+// активную колоду по мере необходимости (когда L1-3 ≤ activeDeck.threshold).
+
+/**
+ * Размер активной колоды: записи в state='learning' на L1-L3 (encounter/passive/active).
+ * Production и review не считаются — это другой класс задач (повторение, не новизна).
+ */
+export async function getActiveDeckSize(userId: number, collectionId?: number): Promise<number> {
+  let collectionFilter: ReturnType<typeof inArray> | null = null;
+  if (typeof collectionId === 'number') {
+    const meaningIds = await db
+      .select({ meaningId: collectionWords.meaningId })
+      .from(collectionWords)
+      .where(eq(collectionWords.collectionId, collectionId));
+    if (meaningIds.length === 0) return 0;
+    const wordIds = await db
+      .select({ wordId: wordMeanings.wordId })
+      .from(wordMeanings)
+      .where(inArray(wordMeanings.id, meaningIds.map(r => r.meaningId)));
+    if (wordIds.length === 0) return 0;
+    const uniqueWordIds = [...new Set(wordIds.map(r => r.wordId))];
+    collectionFilter = inArray(userWordProgressWord.wordId, uniqueWordIds);
+  }
+
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(userWordProgressWord)
+    .where(and(
+      eq(userWordProgressWord.userId, userId),
+      eq(userWordProgressWord.state, 'learning'),
+      inArray(userWordProgressWord.learningTier, ['encounter', 'passive', 'active']),
+      ...(collectionFilter ? [collectionFilter] : []),
+    ));
+  return row?.count ?? 0;
+}
+
+/** Размер pending_pool: записи, ждущие забора в активную колоду. */
+export async function getPoolSize(userId: number, collectionId?: number): Promise<number> {
+  let collectionFilter: ReturnType<typeof inArray> | null = null;
+  if (typeof collectionId === 'number') {
+    const meaningIds = await db
+      .select({ meaningId: collectionWords.meaningId })
+      .from(collectionWords)
+      .where(eq(collectionWords.collectionId, collectionId));
+    if (meaningIds.length === 0) return 0;
+    const wordIds = await db
+      .select({ wordId: wordMeanings.wordId })
+      .from(wordMeanings)
+      .where(inArray(wordMeanings.id, meaningIds.map(r => r.meaningId)));
+    if (wordIds.length === 0) return 0;
+    const uniqueWordIds = [...new Set(wordIds.map(r => r.wordId))];
+    collectionFilter = inArray(userWordProgressWord.wordId, uniqueWordIds);
+  }
+
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(userWordProgressWord)
+    .where(and(
+      eq(userWordProgressWord.userId, userId),
+      eq(userWordProgressWord.state, 'pending_pool'),
+      ...(collectionFilter ? [collectionFilter] : []),
+    ));
+  return row?.count ?? 0;
+}
+
+/**
+ * Перевести слова из pending_pool в active learning (state='learning', tier='encounter').
+ *
+ * Транзакция: SELECT FOR UPDATE SKIP LOCKED + UPDATE RETURNING. Параллельные
+ * запросы того же юзера не блокируют друг друга — каждый разбирает свои
+ * строки. Возможный пере-добор (active deck > target после двух параллельных
+ * вызовов) считается приемлемым по спеке.
+ *
+ * Возвращает фактическое число переведённых записей.
+ */
+export async function drawFromPool(
+  userId: number,
+  targetCount: number,
+  currentSize: number,
+): Promise<number> {
+  const need = targetCount - currentSize;
+  if (need <= 0) return 0;
+
+  return await db.transaction(async (tx) => {
+    const selected = await tx.execute(sql`
+      SELECT id FROM user_word_progress_word
+      WHERE user_id = ${userId} AND state = 'pending_pool'
+      ORDER BY last_seen_at ASC, id ASC
+      LIMIT ${need}
+      FOR UPDATE SKIP LOCKED
+    `);
+    const ids = (selected as unknown as { rows: Array<{ id: number }> }).rows.map((r) => Number(r.id));
+    if (ids.length === 0) return 0;
+
+    // next_review_at = NULL: pickNextWord обрабатывает NULL через
+    // `OR isNull(nextReviewAt)` как «доступно немедленно». Это обходит
+    // существующий баг pg-driver с JS Date × timestamp without timezone
+    // (запись с конкретным временем может оказаться «в будущем» при
+    // TZ-сдвиге). Семантически NULL корректен: только что взятое из пула
+    // слово ещё не имеет своего расписания SRS, оно eligible сразу.
+    await tx.execute(sql`
+      UPDATE user_word_progress_word
+      SET state = 'learning',
+          learning_tier = 'encounter',
+          tier_correct_count = 0,
+          next_review_at = NULL,
+          updated_at = NOW()
+      WHERE id IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})
+    `);
+    return ids.length;
+  });
 }

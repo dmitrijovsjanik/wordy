@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { QuizQuestion, InfiniteAnswerResponse, LearningTier, LearningAnswerResponse } from '@/types/api';
 import type { AnswerHistoryEntry } from '@/types/game';
-import { quizAnswerMatchPairs, refillLives, learningNext, learningAnswer, learningProblemsNext } from '@/lib/api';
+import { quizAnswerMatchPairs, refillLives, learningNext, learningAnswer, learningProblemsNext, learningSwipe } from '@/lib/api';
 import { useLeagueStore } from './league-store';
 
 const MAX_RECENT = 20;
@@ -117,6 +117,10 @@ type UnifiedGameState = {
   /** Текущий tier из learning-API, если источник = 'learning'. Используется для 3-сигнального индикатора прогресса. */
   currentTier: LearningTier | null;
   recentMeaningIds: number[];
+  /** Anti-repeat по word_id для word-level пула в /api/learning/next.
+   *  Параллелен recentMeaningIds; нужен потому что pickNextWord фильтрует
+   *  по wordId, а pickNextItem — по meaningId. */
+  recentWordIds: number[];
   recentGenerators: string[];
   feedback: (InfiniteAnswerResponse & { meaningId: number }) | null;
   isLoading: boolean;
@@ -127,6 +131,14 @@ type UnifiedGameState = {
   /** Режим «Проблемные слова» — fetchNext идёт на /api/learning/problems/next.
    *  Включается с экрана /problems, выключается при уходе оттуда. */
   problemsMode: boolean;
+  /** Режим экрана. 'normal' — обычное обучение; 'embedded_review' — встроенный
+   *  обзор для пополнения pending_pool (активная колода пуста, пул мал);
+   *  'embedded_review_empty' — стена «исчерпан CEFR-пул». */
+  mode: 'normal' | 'embedded_review' | 'embedded_review_empty';
+  /** Текущий размер pending_pool (присылается сервером в embedded_review init и swipe). */
+  embeddedPoolSize: number;
+  /** Порог для выхода из embedded_review (присылается сервером). */
+  embeddedPoolMinForResume: number;
   /** Word-level ID текущего вопроса (если он word-level). null для L4
    *  meaning-level или если сервер не вернул wordId (backward compat). */
   currentWordId: number | null;
@@ -151,6 +163,10 @@ type UnifiedGameState = {
   submitEncounter: () => Promise<void>;
   submitPassiveRecall: (knew: boolean) => Promise<void>;
   submitMatchPairsResults: (results: Array<{ meaningId: number; isCorrect: boolean }>) => Promise<void>;
+  /** Свайп во встроенном обзоре. После применения проверяет poolSize в
+   *  ответе сервера: если ≥ embeddedPoolMinForResume — выходит из embedded
+   *  и вызывает fetchNext (который неявно сделает drawFromPool). */
+  embeddedReviewSwipe: (wordId: number, action: 'known' | 'unknown' | 'snooze') => Promise<void>;
   skip: () => Promise<void>;
   reset: () => void;
   expireDoubleXp: () => void;
@@ -194,6 +210,7 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
   currentQuestionSource: null,
   currentTier: null,
   recentMeaningIds: [],
+  recentWordIds: [],
   recentGenerators: [],
   feedback: null,
   isLoading: false,
@@ -202,6 +219,9 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
   collectionId: undefined,
   generatorMode: 'auto',
   problemsMode: false,
+  mode: 'normal',
+  embeddedPoolSize: 0,
+  embeddedPoolMinForResume: 4,
   currentWordId: null,
   doubleXpTimeLimitMs: null,
   doubleXpExpired: false,
@@ -224,7 +244,15 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
 
   setCollectionId: (id) => {
     saveQuestion(null);
-    set({ collectionId: id, recentMeaningIds: [], recentGenerators: [], currentQuestion: null, feedback: null });
+    set({
+      collectionId: id,
+      recentMeaningIds: [],
+      recentWordIds: [],
+      recentGenerators: [],
+      currentQuestion: null,
+      feedback: null,
+      mode: 'normal',
+    });
   },
   setGeneratorMode: (mode) => set({ generatorMode: mode }),
   setProblemsMode: (on) => {
@@ -232,9 +260,11 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
     set({
       problemsMode: on,
       recentMeaningIds: [],
+      recentWordIds: [],
       recentGenerators: [],
       currentQuestion: null,
       feedback: null,
+      mode: 'normal',
     });
   },
 
@@ -243,12 +273,18 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
     if (get().isLoading) return;
     set({ isLoading: true, error: null });
     try {
-      const { recentMeaningIds, collectionId, recentGenerators, problemsMode } = get();
+      const { recentMeaningIds, recentWordIds, collectionId, recentGenerators, problemsMode } = get();
 
       // Режим «Проблемные слова»: своя выборка через learning_events,
-      // тот же learning-API для submit'а ответа.
+      // тот же learning-API для submit'а ответа. Endpoint /problems/next
+      // встроенный обзор не возвращает (mode-вариант невозможен), но тип
+      // общий → защищаем guard'ом.
       if (problemsMode) {
         const res = await learningProblemsNext({ recentGenerators, excludeMeaningIds: recentMeaningIds });
+        if ('mode' in res && res.mode) {
+          set({ isLoading: false, error: 'Не удалось загрузить вопрос' });
+          return;
+        }
         const updatedGenerators = res.question
           ? [...recentGenerators, getGeneratorTypeFromQuestion(res.question)].slice(-MAX_RECENT_GENERATORS)
           : recentGenerators;
@@ -271,21 +307,55 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
       // без рабочего потока. Переключатели формата (generatorMode) сохраняются
       // как UI-настройки, но на лестницу не влияют.
       const numCollectionId = typeof collectionId === 'number' ? collectionId : undefined;
-      // excludeMeaningIds — anti-repeat, без него с 0-cooldown'ом сервер
-      // отдавал бы то же слово подряд. Окно специально маленькое (2),
-      // чтобы слово быстро вернулось через 2-3 хода и пользователь видел
-      // прогресс одного слова: encounter A → passive B → passive A → active A.
-      const learningExclude = recentMeaningIds.slice(-2);
+      // excludeMeaningIds/excludeWordIds — anti-repeat. Окно 2: даём слову
+      // вернуться через 2-3 хода чтобы видеть прогресс одного слова:
+      // encounter A → passive B → passive A → active A. Раздельные параметры —
+      // pickNextWord фильтрует по wordId, pickNextItem по meaningId, ID-
+      // пространства разные.
       const res = await learningNext({
         collectionId: numCollectionId,
         recentGenerators,
-        excludeMeaningIds: learningExclude,
+        excludeMeaningIds: recentMeaningIds.slice(-2),
+        excludeWordIds: recentWordIds.slice(-2),
       });
+
+      // Discriminated union: 'mode' = embedded review.
+      if ('mode' in res && res.mode === 'embedded_review') {
+        saveQuestion(null);
+        set({
+          mode: 'embedded_review',
+          embeddedPoolSize: res.poolSize,
+          embeddedPoolMinForResume: res.poolMinForResume,
+          currentQuestion: null,
+          currentQuestionSource: null,
+          currentTier: null,
+          currentWordId: null,
+          feedback: null,
+          isLoading: false,
+        });
+        return;
+      }
+      if ('mode' in res && res.mode === 'embedded_review_empty') {
+        saveQuestion(null);
+        set({
+          mode: 'embedded_review_empty',
+          currentQuestion: null,
+          currentQuestionSource: null,
+          currentTier: null,
+          currentWordId: null,
+          feedback: null,
+          isLoading: false,
+        });
+        return;
+      }
+
+      // Обычный вариант — карточка изучения.
       const updatedGenerators = res.question
         ? [...recentGenerators, getGeneratorTypeFromQuestion(res.question)].slice(-MAX_RECENT_GENERATORS)
         : recentGenerators;
       saveQuestion(res.question);
       set({
+        mode: 'normal',
         currentQuestion: res.question,
         currentQuestionSource: 'learning',
         currentTier: res.tier,
@@ -301,7 +371,7 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
   },
 
   submitAnswer: async (selectedMeaningId, userAnswer?, isSkip?) => {
-    const { currentQuestion, recentMeaningIds, lastUserAnswer } = get();
+    const { currentQuestion, recentMeaningIds, recentWordIds, lastUserAnswer, currentWordId: capturedWordId } = get();
     if (!currentQuestion || currentQuestion.type === 'match-pairs') return;
 
     // После guard'а тип сужен до вопросов с meaningId
@@ -344,6 +414,9 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
       const res: InfiniteAnswerResponse & { meaningId?: number } = adaptLearningResponse(learnRes, meaningId, correctTranslation);
 
       const updatedRecent = [...recentMeaningIds, meaningId].slice(-MAX_RECENT);
+      const updatedRecentWords = capturedWordId !== null
+        ? [...recentWordIds, capturedWordId].slice(-MAX_RECENT)
+        : recentWordIds;
       const newStreak = res.isCorrect ? get().streak + 1 : 0;
       saveStreak(newStreak);
 
@@ -394,6 +467,7 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
           currentTier: null,
         }),
         recentMeaningIds: updatedRecent,
+        recentWordIds: updatedRecentWords,
         isLoading: false,
         streak: newStreak,
         questionIndex: get().questionIndex + 1,
@@ -498,6 +572,23 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
     }
   },
 
+  embeddedReviewSwipe: async (wordId, action) => {
+    try {
+      const res = await learningSwipe({ wordId, action });
+      // Обновляем размер пула. Если достигли порога — выходим из обзора и
+      // сразу подгружаем карточку изучения (fetchNext неявно вызовет drawFromPool).
+      const minForResume = get().embeddedPoolMinForResume;
+      if (res.poolSize >= minForResume) {
+        set({ mode: 'normal', embeddedPoolSize: res.poolSize });
+        await get().fetchNext();
+      } else {
+        set({ embeddedPoolSize: res.poolSize });
+      }
+    } catch {
+      set({ error: 'Не удалось сохранить свайп' });
+    }
+  },
+
   skip: async () => {
     const { currentQuestion } = get();
     if (!currentQuestion) return;
@@ -535,12 +626,15 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
     set({
       currentQuestion: null,
       recentMeaningIds: [],
+      recentWordIds: [],
       recentGenerators: [],
       feedback: null,
       isLoading: false,
       error: null,
       collectionId: undefined,
       problemsMode: false,
+      mode: 'normal',
+      embeddedPoolSize: 0,
       currentWordId: null,
       doubleXpTimeLimitMs: null,
       doubleXpExpired: false,

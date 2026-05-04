@@ -1,8 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { eq, and, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { wordMeanings, userWordProgress, userWordProgressWord } from '../db/schema.js';
+import { wordMeanings, userWordProgress, userWordProgressWord, users } from '../db/schema.js';
 import { NON_FUNCTIONAL_SQL } from '../db/word-filters.js';
+import { learningConfig } from '../config/learning-config.js';
 import {
   recordAnswer,
   pickNextItemCombined,
@@ -10,7 +11,11 @@ import {
   applyWordSwipe,
   undoWordSwipe,
   promoteWordToReview,
+  getActiveDeckSize,
+  getPoolSize,
+  drawFromPool,
 } from '../services/learning-service.js';
+import { hasAvailableForReview } from '../services/review-feed-service.js';
 import {
   getProblemMeanings,
   getProblemMeaningsCount,
@@ -34,60 +39,6 @@ import { normalizeAndCompare } from '../services/text-normalizer.js';
  * переключается на эти маршруты постепенно: home.tsx идёт сюда, остальные
  * экраны (grammar/reading/duels/match-pairs) остаются на старом quiz API.
  */
-
-/**
- * Найти неизученное слово в активных коллекциях пользователя и создать
- * для него word-level encounter-запись. Возвращает word_id или null.
- *
- * Учётная единица — Word, не WordSense. Слова, у которых пользователь
- * прошёл хотя бы одно meaning через старую систему, уже забекфилены в
- * user_word_progress_word — они тут не появятся.
- */
-async function introduceUnseenWord(userId: number, collectionId?: number): Promise<number | null> {
-  const collectionFilter = typeof collectionId === 'number'
-    ? sql`wm.id IN (SELECT cw.meaning_id FROM collection_words cw WHERE cw.collection_id = ${collectionId})`
-    : sql`wm.id IN (
-        SELECT cw.meaning_id FROM collection_words cw
-        JOIN user_collections uc ON uc.collection_id = cw.collection_id
-        WHERE uc.user_id = ${userId} AND uc.is_active = true
-      )`;
-
-  const result = await db.execute(sql`
-    SELECT w.id AS word_id
-    FROM word_meanings wm
-    JOIN words w ON w.id = wm.word_id
-    WHERE ${collectionFilter}
-      AND w.id NOT IN (
-        SELECT word_id FROM user_word_progress_word WHERE user_id = ${userId}
-      )
-      AND (wm.popularity_rank IS NULL OR wm.popularity_rank <= 3)
-      AND (wm.frequency IS NULL OR wm.frequency >= 5)
-      AND wm.translation ~ '[а-яА-ЯёЁ]'
-      AND ${NON_FUNCTIONAL_SQL}
-    GROUP BY w.id, w.frequency_rank
-    ORDER BY w.frequency_rank NULLS LAST
-    LIMIT 1
-  `);
-  const row = (result as unknown as { rows: Array<{ word_id: number }> }).rows[0];
-  if (!row) return null;
-
-  const wordId = Number(row.word_id);
-
-  await db
-    .insert(userWordProgressWord)
-    .values({
-      userId,
-      wordId,
-      state: 'learning',
-      learningTier: 'encounter',
-      tierCorrectCount: 0,
-      nextReviewAt: new Date(),
-      lastSeenAt: new Date(),
-    })
-    .onConflictDoNothing();
-
-  return wordId;
-}
 
 /**
  * Подобрать репрезентативный meaning слова для генерации L1-3 вопроса.
@@ -137,56 +88,81 @@ export default async function learningRoutes(app: FastifyInstance) {
   // ─── GET /api/learning/next ────────────────────────────────────────────
   // Возвращает следующее упражнение по приоритету tier'ов.
 
-  app.get<{ Querystring: { generators?: string; collectionId?: string; exclude?: string } }>('/api/learning/next', async (request) => {
+  app.get<{
+    Querystring: {
+      generators?: string;
+      collectionId?: string;
+      excludeWordIds?: string;
+      excludeMeaningIds?: string;
+    };
+  }>('/api/learning/next', async (request) => {
     const userId = request.user.id;
     const generatorsStr = request.query.generators ?? '';
     const recentGenerators = generatorsStr ? generatorsStr.split(',').filter(Boolean) : [];
     const collectionId = request.query.collectionId ? Number(request.query.collectionId) : undefined;
     const validCollectionId = typeof collectionId === 'number' && !Number.isNaN(collectionId) ? collectionId : undefined;
-    const excludeStr = request.query.exclude ?? '';
-    const excludeIds = excludeStr
-      ? excludeStr.split(',').map(Number).filter(n => Number.isFinite(n))
-      : [];
+    const parseIds = (s: string | undefined): number[] =>
+      s ? s.split(',').map(Number).filter((n) => Number.isFinite(n)) : [];
+    const excludeWordIds = parseIds(request.query.excludeWordIds);
+    const excludeMeaningIds = parseIds(request.query.excludeMeaningIds);
 
-    // Возвращаемая структура: либо word-level (kind='word'), либо meaning-level (kind='meaning').
-    // Клиент использует wordId/meaningId из ответа для последующего /answer.
+    // Шаг 1: при низкой активной колоде — добор из pending_pool.
+    // Считаем только L1-L3 (encounter/passive/active). Production/review
+    // не считаются — они про повторение, а не про темп новых слов.
+    const activeBefore = await getActiveDeckSize(userId, validCollectionId);
+    if (activeBefore <= learningConfig.activeDeck.threshold) {
+      await drawFromPool(userId, learningConfig.activeDeck.target, activeBefore);
+    }
+
     type Pick =
       | { kind: 'word'; wordId: number; meaningId: number; tier: 'encounter' | 'passive' | 'active' | 'production' | 'review' }
       | { kind: 'meaning'; meaningId: number; tier: 'encounter' | 'passive' | 'active' | 'production' | 'review' };
 
     let pick: Pick | null = null;
 
-    {
-      // excludeIds могут быть word_id (с word-level next) ИЛИ meaning_id.
-      // Для безопасности передаём их и туда и туда.
-      const combined = await pickNextItemCombined(userId, {
-        collectionId: validCollectionId,
-        excludeWordIds: excludeIds,
-        excludeMeaningIds: excludeIds,
-      });
+    const combined = await pickNextItemCombined(userId, {
+      collectionId: validCollectionId,
+      excludeWordIds,
+      excludeMeaningIds,
+    });
 
-      if (combined?.kind === 'word') {
-        const meaningId = await pickRepresentativeMeaning(combined.wordId);
-        if (meaningId !== null) {
-          pick = { kind: 'word', wordId: combined.wordId, meaningId, tier: combined.tier };
-        }
-      } else if (combined?.kind === 'meaning') {
-        pick = { kind: 'meaning', meaningId: combined.meaningId, tier: combined.tier };
+    if (combined?.kind === 'word') {
+      const meaningId = await pickRepresentativeMeaning(combined.wordId);
+      if (meaningId !== null) {
+        pick = { kind: 'word', wordId: combined.wordId, meaningId, tier: combined.tier };
       }
-
-      // Если ничего не готово — вводим новое слово (word-level encounter).
-      if (!pick) {
-        const newWordId = await introduceUnseenWord(userId, validCollectionId);
-        if (newWordId !== null) {
-          const meaningId = await pickRepresentativeMeaning(newWordId);
-          if (meaningId !== null) {
-            pick = { kind: 'word', wordId: newWordId, meaningId, tier: 'encounter' };
-          }
-        }
-      }
+    } else if (combined?.kind === 'meaning') {
+      pick = { kind: 'meaning', meaningId: combined.meaningId, tier: combined.tier };
     }
 
+    // Шаг 2: ничего не готово И активная колода пуста — встроенный обзор.
+    // Активная колода может быть >0, но pickNextItemCombined вернёт null
+    // если у всех записей nextReviewAt в будущем (review-кулдаун) — в этом
+    // случае мы НЕ переключаемся в обзор, ждём пока подойдёт время.
     if (!pick) {
+      const activeAfter = await getActiveDeckSize(userId, validCollectionId);
+      if (activeAfter === 0) {
+        const poolSize = await getPoolSize(userId, validCollectionId);
+        if (poolSize < learningConfig.activeDeck.poolMinForResume) {
+          // Пул мал → нужен встроенный обзор. Но если в общей базе нет
+          // доступных для обзора слов — показать стену.
+          const userRow = await db
+            .select({ cefr: users.estimatedCefr })
+            .from(users)
+            .where(eq(users.id, userId))
+            .limit(1);
+          const userCefr = userRow[0]?.cefr ?? null;
+          const available = await hasAvailableForReview(userId, userCefr);
+          if (!available) {
+            return { mode: 'embedded_review_empty' as const };
+          }
+          return {
+            mode: 'embedded_review' as const,
+            poolSize,
+            poolMinForResume: learningConfig.activeDeck.poolMinForResume,
+          };
+        }
+      }
       return { question: null, tier: null };
     }
 
@@ -211,8 +187,6 @@ export default async function learningRoutes(app: FastifyInstance) {
       questionType: generated.generatorType,
     });
 
-    // Обогащаем ответ wordId на верхнем уровне (для word-level pick'а).
-    // Клиент использует его при /answer для маршрутизации в word vs meaning.
     return {
       question: generated.question,
       tier: pick.tier,
@@ -524,12 +498,20 @@ export default async function learningRoutes(app: FastifyInstance) {
       resolvedWordIds = [...new Set([...resolvedWordIds, ...fromMeanings])];
     }
 
-    if (resolvedWordIds.length === 0) return { ok: false };
+    if (resolvedWordIds.length === 0) {
+      return { ok: false, poolSize: 0, activeDeckSize: 0 };
+    }
 
     for (const id of resolvedWordIds) {
       await applyWordSwipe({ userId, wordId: id, action, snoozeDays });
     }
-    return { ok: true };
+    // Размеры — после применения всех свайпов из батча. Клиент использует
+    // poolSize чтобы решить, выйти ли из embedded review (poolMinForResume).
+    const [poolSize, activeDeckSize] = await Promise.all([
+      getPoolSize(userId),
+      getActiveDeckSize(userId),
+    ]);
+    return { ok: true, poolSize, activeDeckSize };
   });
 
   // ─── POST /api/learning/mnemonic-revealed ──────────────────────────────

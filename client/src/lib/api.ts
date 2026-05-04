@@ -28,6 +28,7 @@ import type {
   CefrProgressResponse,
   LearningNextResponse,
   LearningAnswerResponse,
+  LearningSwipeResponse,
   ReviewFeedResponse,
   ReviewFeedWordsResponse,
 } from '@/types/api';
@@ -117,12 +118,16 @@ export function quizFinish(sessionId: number) {
 export function learningNext(opts: {
   collectionId?: number | string;
   recentGenerators?: string[];
+  /** Anti-repeat по meaning_id — последние N показанных. */
   excludeMeaningIds?: number[];
+  /** Anti-repeat по word_id — последние N показанных (для word-level пула). */
+  excludeWordIds?: number[];
 } = {}) {
   const params = new URLSearchParams();
   if (opts.recentGenerators?.length) params.set('generators', opts.recentGenerators.join(','));
   if (opts.collectionId !== undefined) params.set('collectionId', String(opts.collectionId));
-  if (opts.excludeMeaningIds?.length) params.set('exclude', opts.excludeMeaningIds.join(','));
+  if (opts.excludeMeaningIds?.length) params.set('excludeMeaningIds', opts.excludeMeaningIds.join(','));
+  if (opts.excludeWordIds?.length) params.set('excludeWordIds', opts.excludeWordIds.join(','));
   const qs = params.toString();
   return fetchApi<LearningNextResponse>('GET', `/api/learning/next${qs ? '?' + qs : ''}`);
 }
@@ -155,7 +160,7 @@ export function learningSwipe(input: {
   action: 'known' | 'unknown' | 'snooze';
   snoozeDays?: number;
 }) {
-  return fetchApi<{ ok: boolean }>('POST', '/api/learning/swipe', input);
+  return fetchApi<LearningSwipeResponse>('POST', '/api/learning/swipe', input);
 }
 
 export function learningUndoSwipe(

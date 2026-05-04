@@ -61,6 +61,40 @@ function getCefrRange(userCefr: string | null): string[] {
   return CEFR_ORDER.slice(from, to + 1);
 }
 
+/**
+ * Лёгкий EXISTS-запрос: есть ли в общей базе хотя бы одно слово, доступное
+ * для обзора этому юзеру (теми же фильтрами что getReviewFeed).
+ *
+ * Используется в /api/learning/next чтобы отличить «пул пуст, но обзор
+ * можно набирать дальше» (embedded_review) от «исчерпан CEFR-пул»
+ * (embedded_review_empty).
+ */
+export async function hasAvailableForReview(
+  userId: number,
+  cefr: string | null = null,
+): Promise<boolean> {
+  const cefrLevels = getCefrRange(cefr);
+  const result = await db.execute(sql`
+    SELECT 1
+    FROM word_meanings wm
+    JOIN words w ON w.id = wm.word_id
+    LEFT JOIN user_word_progress uwp
+      ON uwp.meaning_id = wm.id AND uwp.user_id = ${userId}
+    WHERE
+      wm.cefr = ANY(ARRAY[${sql.join(cefrLevels.map(l => sql`${l}::cefr_level`), sql`, `)}])
+      AND (wm.popularity_rank IS NULL OR wm.popularity_rank <= 3)
+      AND (wm.frequency IS NULL OR wm.frequency >= 5)
+      AND wm.translation ~ '[а-яА-ЯёЁ]'
+      AND ${NON_FUNCTIONAL_SQL}
+      AND (
+        uwp.id IS NULL
+        OR (uwp.state = 'snoozed' AND uwp.snoozed_until IS NOT NULL AND uwp.snoozed_until <= NOW())
+      )
+    LIMIT 1
+  `);
+  return (result as unknown as { rows: unknown[] }).rows.length > 0;
+}
+
 export async function getReviewFeed(
   userId: number,
   opts: { limit?: number; cefr?: string | null } = {},

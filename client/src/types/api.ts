@@ -317,13 +317,36 @@ export type ReviewFeedWordsResponse = {
   words: ReviewFeedWord[];
 };
 
-export type LearningNextResponse = {
-  question: QuizQuestion | null;
-  tier: LearningTier | null;
-  /** Word-level ID для L1-3 + word-review. null для L4 production / rollback
-   *  / старого сервера (backward compat). Клиент использует это поле для
-   *  маршрутизации /api/learning/answer на word-level vs meaning-level. */
-  wordId?: number | null;
+export type LearningNextResponse =
+  | {
+      mode?: undefined;
+      question: QuizQuestion | null;
+      tier: LearningTier | null;
+      /** Word-level ID для L1-3 + word-review. null для L4 production / rollback
+       *  / старого сервера (backward compat). Клиент использует это поле для
+       *  маршрутизации /api/learning/answer на word-level vs meaning-level. */
+      wordId?: number | null;
+    }
+  | {
+      /** Активная колода пуста и pending_pool < poolMinForResume —
+       *  переключиться на встроенный обзор для пополнения пула. */
+      mode: 'embedded_review';
+      poolSize: number;
+      poolMinForResume: number;
+    }
+  | {
+      /** Активная колода пуста, пул пуст, и в общей базе нет доступных
+       *  слов для обзора (исчерпан CEFR-диапазон). Стена. */
+      mode: 'embedded_review_empty';
+    };
+
+export type LearningSwipeResponse = {
+  ok: boolean;
+  /** Размер pending_pool после применения батча. Клиент сравнивает с
+   *  poolMinForResume чтобы выйти из встроенного обзора. */
+  poolSize: number;
+  /** Размер активной колоды (state='learning' AND tier IN encounter/passive/active). */
+  activeDeckSize: number;
 };
 
 export type LearningAnswerResponse = {
