@@ -86,6 +86,7 @@ export function App() {
                 <Routes>
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/vocabulary" element={<VocabularyScreen />} />
+                  <Route path="/vocabulary/learn" element={<VocabularyScreen />} />
                   <Route path="/collections" element={<Collections />} />
                   <Route path="/collections/create" element={<CollectionCreate />} />
                   <Route path="/collections/:id" element={<CollectionDetail />} />

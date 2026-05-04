@@ -8,6 +8,7 @@ import { useTelegram } from '@/hooks/use-telegram';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { BackButton } from '@/components/ui/back-button';
 import { LEAGUE_ICONS } from '@/components/ui/league-icons';
 
 // Новые модульные компоненты
@@ -343,17 +344,18 @@ export function VocabularyScreen() {
       </AnimatePresence>
 
     <div className="relative z-[2] flex h-full flex-col overflow-hidden px-4 pt-4 pb-4">
-      {/* Row 1: Avatar | Gems (center) | Notifications */}
+      {/* Row 1: Back | Gems (center) | History | Avatar */}
       <div className="mb-2 flex items-center gap-3">
-        <button onClick={() => navigate('/profile')} className="shrink-0">
-          <Avatar src={user.avatarUrl} fallback={user.firstName} size={56} />
-        </button>
+        <BackButton onClick={() => navigate('/')} variant="ghost" />
         <div className="flex flex-1 justify-center">
           <GemsIndicator gems={user.gems} freezes={user.streakFreezes} onClick={() => navigate('/shop')} />
         </div>
         <Button variant="secondary" size="icon" onClick={() => setHistoryDrawerOpen(true)}>
           <HugeiconsIcon icon={CheckListIcon} size={24} className="text-[var(--gray-11)]" />
         </Button>
+        <button onClick={() => navigate('/profile')} className="shrink-0">
+          <Avatar src={user.avatarUrl} fallback={user.firstName} size={48} />
+        </button>
       </div>
 
       {/* Lives indicator — скрыт когда система жизней отключена. */}
