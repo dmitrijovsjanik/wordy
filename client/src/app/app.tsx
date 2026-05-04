@@ -11,6 +11,8 @@ import { lazyWithRetry } from '@/lib/lazy-retry';
 const Dashboard = lazyWithRetry(() => import('@/components/dashboard').then((m) => ({ default: m.Dashboard })));
 const VocabularySection = lazyWithRetry(() => import('@/components/vocabulary-section').then((m) => ({ default: m.VocabularySection })));
 const VocabularyScreen = lazyWithRetry(() => import('@/components/vocabulary-screen').then((m) => ({ default: m.VocabularyScreen })));
+const PhrasesPage = lazyWithRetry(() => import('@/components/vocabulary/phrases-page').then((m) => ({ default: m.PhrasesPage })));
+const LexicalTrapsPage = lazyWithRetry(() => import('@/components/vocabulary/lexical-traps-page').then((m) => ({ default: m.LexicalTrapsPage })));
 const Collections = lazyWithRetry(() => import('@/components/collections').then((m) => ({ default: m.Collections })));
 const CollectionDetail = lazyWithRetry(() => import('@/components/collection-detail').then((m) => ({ default: m.CollectionDetail })));
 const CollectionCreate = lazyWithRetry(() => import('@/components/collection-create').then((m) => ({ default: m.CollectionCreate })));
@@ -88,6 +90,8 @@ export function App() {
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/vocabulary" element={<VocabularySection />} />
                   <Route path="/vocabulary/learn" element={<VocabularyScreen />} />
+                  <Route path="/vocabulary/phrases" element={<PhrasesPage />} />
+                  <Route path="/vocabulary/lexical-traps" element={<LexicalTrapsPage />} />
                   <Route path="/collections" element={<Collections />} />
                   <Route path="/collections/create" element={<CollectionCreate />} />
                   <Route path="/collections/:id" element={<CollectionDetail />} />

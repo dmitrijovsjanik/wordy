@@ -25,6 +25,18 @@ const ACTIVITY_CARDS: Card[] = [
     navigateTo: '/review',
   },
   {
+    key: 'phrases',
+    title: 'Фразеологизмы',
+    description: 'Устойчивые сочетания слов английского.',
+    navigateTo: '/vocabulary/phrases',
+  },
+  {
+    key: 'lexical-traps',
+    title: 'Тонкости лексики',
+    description: 'Похожие слова с разным значением.',
+    navigateTo: '/vocabulary/lexical-traps',
+  },
+  {
     key: 'collections',
     title: 'Коллекции',
     description: 'Управляй словарным пулом для лестницы.',
