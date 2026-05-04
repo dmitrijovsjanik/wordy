@@ -352,7 +352,7 @@ export function ReadingPage() {
   useBackButton(
     useCallback(() => {
       reset();
-      navigate('/modes');
+      navigate('/');
     }, [navigate, reset]),
   );
 
@@ -363,7 +363,7 @@ export function ReadingPage() {
         <BackButton
           onClick={() => {
             reset();
-            navigate('/modes');
+            navigate('/');
           }}
           variant="ghost"
         />

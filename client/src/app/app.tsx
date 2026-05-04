@@ -1,7 +1,6 @@
 import { Suspense, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { TelegramProvider } from '@/components/telegram-provider';
-import { BottomTabs } from '@/components/bottom-tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { useUserStore } from '@/stores/user-store';
@@ -111,7 +110,6 @@ export function App() {
               </Suspense>
             </ErrorBoundary>
           </main>
-          <BottomTabs />
         </div>
       </TelegramProvider>
     </BrowserRouter>

@@ -35,7 +35,7 @@ export function SpellingPage() {
   const [error, setError] = useState<string | null>(null);
   const recentMeaningIds = useRef<number[]>([]);
 
-  useBackButton(useCallback(() => navigate('/modes'), [navigate]));
+  useBackButton(useCallback(() => navigate('/'), [navigate]));
 
   const fetchNext = useCallback(async () => {
     setIsLoading(true);
@@ -103,7 +103,7 @@ export function SpellingPage() {
 
   return (
     <div className="flex min-h-full flex-col px-4 pt-4 pb-8">
-      <BackButton onClick={() => navigate('/modes')} />
+      <BackButton onClick={() => navigate('/')} />
 
       <div className="mt-4 flex flex-col">
         <h1 className="text-xl font-bold">Спеллинг</h1>

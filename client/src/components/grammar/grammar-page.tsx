@@ -18,13 +18,13 @@ export function GrammarPage() {
   const tenseView = useGrammarStore((s) => s.tenseView);
   const articleView = useGrammarStore((s) => s.articleView);
 
-  useBackButton(useCallback(() => navigate('/modes'), [navigate]));
+  useBackButton(useCallback(() => navigate('/'), [navigate]));
 
   return (
     <div className="flex h-full flex-col px-4 pt-4 pb-4">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <BackButton to="/modes" variant="ghost" />
+        <BackButton to="/" variant="ghost" />
         <h1 className="text-xl font-bold">Грамматика</h1>
       </div>
 
