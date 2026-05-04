@@ -410,6 +410,32 @@ export async function recordAnswer(input: RecordAnswerInput): Promise<RecordAnsw
     });
   }
 
+  // K-cooldown на word-level (затрагивает оба пула — pickNextWord и pickNextItem
+  // через резолв meaning→word). Правила:
+  //   - tierBefore='production' → cooldown=2 на ЛЮБОЙ ответ. Декомпозиция
+  //     одного слова в N meanings без cooldown выглядит для юзера как
+  //     цикл одного слова (will: воля→непременно→хотеть→...).
+  //   - tierBefore in (encounter/passive/active) AND wasAdvanced (≠review) → 2.
+  //   - tierBefore in (passive/active) AND error → 4.
+  //   - review не трогаем (там SRS через nextReviewAt).
+  let cooldownK: number | null = null;
+  if (tierBefore === 'production') {
+    cooldownK = COOLDOWN_ON_ADVANCE;
+  } else if (tierBefore !== 'review') {
+    if (transition.wasAdvanced && transition.tier !== 'review') {
+      cooldownK = COOLDOWN_ON_ADVANCE;
+    } else if (!isCorrect && (tierBefore === 'passive' || tierBefore === 'active')) {
+      cooldownK = COOLDOWN_ON_ERROR;
+    }
+  }
+  if (cooldownK !== null) {
+    const wmRow = await db.execute(sql`SELECT word_id FROM word_meanings WHERE id = ${meaningId}`);
+    const w = (wmRow as unknown as { rows: Array<{ word_id: number }> }).rows[0]?.word_id;
+    if (typeof w === 'number') {
+      setCooldown(userId, Number(w), cooldownK);
+    }
+  }
+
   return {
     tierBefore,
     tierAfter: transition.tier,
@@ -583,9 +609,10 @@ export async function undoSwipe(
  */
 export async function pickNextItem(
   userId: number,
-  opts: { excludeMeaningIds?: number[]; collectionId?: number } = {},
+  opts: { excludeMeaningIds?: number[]; excludeWordIds?: number[]; collectionId?: number } = {},
 ): Promise<{ meaningId: number; tier: LearningTier } | null> {
   const exclude = opts.excludeMeaningIds ?? [];
+  const excludeWordIds = opts.excludeWordIds ?? [];
   const now = new Date();
 
   // Если задан collectionId — ограничиваем пул meanings из этой коллекции.
@@ -621,6 +648,15 @@ export async function pickNextItem(
       ...(collectionFilter ? [collectionFilter] : []),
       ...(exclude.length > 0
         ? [sql`${userWordProgress.meaningId} NOT IN (${sql.join(exclude.map(id => sql`${id}`), sql`, `)})`]
+        : []),
+      // Word-level cooldown в meaning-pool: исключаем все meanings слов из
+      // excludeWordIds. Без этого decomposition production (5+ meanings одного
+      // слова) крутит одно и то же слово через свои meaning-варианты.
+      ...(excludeWordIds.length > 0
+        ? [sql`${userWordProgress.meaningId} NOT IN (
+            SELECT id FROM ${wordMeanings}
+            WHERE word_id IN (${sql.join(excludeWordIds.map(id => sql`${id}`), sql`, `)})
+          )`]
         : []),
     ))
     .orderBy(sql`CASE ${userWordProgress.learningTier}
@@ -1123,6 +1159,7 @@ export async function pickNextItemCombined(
   });
   const meaningPick = await pickNextItem(userId, {
     excludeMeaningIds: opts.excludeMeaningIds,
+    excludeWordIds: opts.excludeWordIds,
     collectionId: opts.collectionId,
   });
 

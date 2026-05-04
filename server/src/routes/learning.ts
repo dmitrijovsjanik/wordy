@@ -155,19 +155,17 @@ export default async function learningRoutes(app: FastifyInstance) {
     });
     pick = await resolveWordPick(combined);
 
-    // Fallback: cooldown — мягкое исключение. Если ничего не нашли, но в
-    // активной колоде что-то есть — повторяем без cooldown excluded
-    // (только client-side recent). Лучше показать «недавнее» чем ничего.
+    // Fallback: cooldown — мягкое исключение, recent — жёсткое. Если первый
+    // pick null И cooldown непуст — повторяем БЕЗ cooldown excluded (только
+    // client-side recent). Если retry тоже null — реально ничего нет, идём в
+    // embedded_review/empty ниже.
     if (!pick && cooldownExcluded.length > 0) {
-      const activeNow = await getActiveDeckSize(userId, validCollectionId);
-      if (activeNow > 0) {
-        const retry = await pickNextItemCombined(userId, {
-          collectionId: validCollectionId,
-          excludeWordIds,
-          excludeMeaningIds,
-        });
-        pick = await resolveWordPick(retry);
-      }
+      const retry = await pickNextItemCombined(userId, {
+        collectionId: validCollectionId,
+        excludeWordIds,
+        excludeMeaningIds,
+      });
+      pick = await resolveWordPick(retry);
     }
 
     // Шаг 2: ничего не готово И активная колода пуста — встроенный обзор.
