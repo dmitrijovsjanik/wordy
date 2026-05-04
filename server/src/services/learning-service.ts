@@ -992,6 +992,16 @@ export async function undoWordSwipe(
 /**
  * Word-level pickNextItem. Возвращает word на текущем tier'е (encounter/passive/
  * active/review). Tier='production' игнорируется — это L4 (per-meaning).
+ *
+ * Приоритет:
+ *   1. Due review (tier='review' AND nextReviewAt <= NOW()) — повторение
+ *      первичнее новизны. Внутри review ORDER BY nextReviewAt ASC: давно
+ *      просроченные раньше.
+ *   2. Активная колода (tier IN encounter/passive/active) — БЕЗ tier-приоритета
+ *      внутри. ORDER BY lastSeenAt ASC NULLS FIRST, id ASC: слово, которое
+ *      давно не показывали, идёт раньше; никогда не показанные — самые первые.
+ *      Это даёт ротацию по всей колоде и предотвращает зацикливание на
+ *      слове, застрявшем на active с tcc=0/1.
  */
 export async function pickNextWord(
   userId: number,
@@ -1032,13 +1042,15 @@ export async function pickNextWord(
         ? [sql`${userWordProgressWord.wordId} NOT IN (${sql.join(exclude.map(id => sql`${id}`), sql`, `)})`]
         : []),
     ))
-    .orderBy(sql`CASE ${userWordProgressWord.learningTier}
-        WHEN 'review' THEN 0
-        WHEN 'active' THEN 2
-        WHEN 'passive' THEN 3
-        WHEN 'encounter' THEN 4
-        ELSE 5 END`,
-      sql`${userWordProgressWord.nextReviewAt} NULLS FIRST`,
+    .orderBy(
+      // Группа 1: review (0), всё остальное (1).
+      sql`CASE WHEN ${userWordProgressWord.learningTier} = 'review' THEN 0 ELSE 1 END`,
+      // Внутри review — по next_review_at ASC; для не-review это поле игнорируется (CASE).
+      sql`CASE WHEN ${userWordProgressWord.learningTier} = 'review' THEN ${userWordProgressWord.nextReviewAt} END ASC NULLS LAST`,
+      // Внутри активной колоды — по last_seen_at ASC NULLS FIRST: давно не
+      // показанные / никогда не показанные впереди. Tier-приоритета нет.
+      sql`${userWordProgressWord.lastSeenAt} ASC NULLS FIRST`,
+      sql`${userWordProgressWord.id} ASC`,
     )
     .limit(1);
 
