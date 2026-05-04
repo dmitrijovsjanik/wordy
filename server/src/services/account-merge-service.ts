@@ -15,7 +15,6 @@ import {
   leagueNotifications,
   inviteTokens,
   payments,
-  placementResults,
 } from '../db/schema.js';
 
 /**
@@ -147,11 +146,7 @@ export async function mergeAccounts(targetUserId: number, sourceUserId: number):
       .set({ userId: targetUserId })
       .where(eq(payments.userId, sourceUserId));
 
-    // 14. Placement results — оставляем target
-    await tx.delete(placementResults)
-      .where(eq(placementResults.userId, sourceUserId));
-
-    // 15. Invite tokens
+    // 14. Invite tokens
     await tx.delete(inviteTokens)
       .where(eq(inviteTokens.userId, sourceUserId));
 

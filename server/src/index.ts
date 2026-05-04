@@ -18,7 +18,6 @@ import paymentRoutes from './routes/payments.js';
 import grammarRoutes from './routes/grammar.js';
 import readingRoutes from './routes/reading.js';
 import ttsRoutes from './routes/tts.js';
-import placementRoutes from './routes/placement.js';
 
 import { runStartupMigrations } from './db/startup-migrations.js';
 import './cron/league-cron.js';
@@ -58,7 +57,6 @@ await app.register(paymentRoutes);
 await app.register(grammarRoutes);
 await app.register(readingRoutes);
 await app.register(ttsRoutes);
-await app.register(placementRoutes);
 
 const port = Number(process.env.PORT) || 3000;
 
