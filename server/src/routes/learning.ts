@@ -137,7 +137,7 @@ export default async function learningRoutes(app: FastifyInstance) {
   // ─── GET /api/learning/next ────────────────────────────────────────────
   // Возвращает следующее упражнение по приоритету tier'ов.
 
-  app.get<{ Querystring: { generators?: string; collectionId?: string; exclude?: string; lockMeaningId?: string; lockWordId?: string } }>('/api/learning/next', async (request) => {
+  app.get<{ Querystring: { generators?: string; collectionId?: string; exclude?: string } }>('/api/learning/next', async (request) => {
     const userId = request.user.id;
     const generatorsStr = request.query.generators ?? '';
     const recentGenerators = generatorsStr ? generatorsStr.split(',').filter(Boolean) : [];
@@ -147,8 +147,6 @@ export default async function learningRoutes(app: FastifyInstance) {
     const excludeIds = excludeStr
       ? excludeStr.split(',').map(Number).filter(n => Number.isFinite(n))
       : [];
-    const lockMeaningId = request.query.lockMeaningId ? Number(request.query.lockMeaningId) : null;
-    const lockWordId = request.query.lockWordId ? Number(request.query.lockWordId) : null;
 
     // Возвращаемая структура: либо word-level (kind='word'), либо meaning-level (kind='meaning').
     // Клиент использует wordId/meaningId из ответа для последующего /answer.
@@ -158,58 +156,7 @@ export default async function learningRoutes(app: FastifyInstance) {
 
     let pick: Pick | null = null;
 
-    // ─── Демо-режим (lockWordId — новый, lockMeaningId — backward compat) ────
-    if (lockWordId !== null && Number.isFinite(lockWordId)) {
-      const row = await db.query.userWordProgressWord.findFirst({
-        where: and(
-          eq(userWordProgressWord.userId, userId),
-          eq(userWordProgressWord.wordId, lockWordId),
-        ),
-        columns: { learningTier: true, state: true },
-      });
-      if (!row) return { question: null, tier: null };
-      if (row.state !== 'learning' && row.state !== 'snoozed') {
-        return { question: null, tier: null };
-      }
-      // На production tier'е word-record «спит» — демо переключается на
-      // meaning-level. Берём первое eligible meaning слова в production.
-      if (row.learningTier === 'production') {
-        const meaningRow = await db.query.userWordProgress.findFirst({
-          where: and(
-            eq(userWordProgress.userId, userId),
-            eq(userWordProgress.learningTier, 'production'),
-          ),
-          columns: { meaningId: true },
-        });
-        if (!meaningRow) return { question: null, tier: null };
-        // Проверяем что meaning принадлежит lockWordId.
-        const checkRow = await db.execute(sql`
-          SELECT word_id FROM word_meanings WHERE id = ${meaningRow.meaningId}
-        `);
-        const checkWordId = (checkRow as unknown as { rows: Array<{ word_id: number }> }).rows[0]?.word_id;
-        if (Number(checkWordId) !== lockWordId) return { question: null, tier: null };
-        pick = { kind: 'meaning', meaningId: meaningRow.meaningId, tier: 'production' };
-      } else {
-        const meaningId = await pickRepresentativeMeaning(lockWordId);
-        if (meaningId === null) return { question: null, tier: null };
-        pick = { kind: 'word', wordId: lockWordId, meaningId, tier: row.learningTier };
-      }
-    } else if (lockMeaningId !== null && Number.isFinite(lockMeaningId)) {
-      // Backward compat: старый демо-режим по meaningId.
-      const row = await db.query.userWordProgress.findFirst({
-        where: and(
-          eq(userWordProgress.userId, userId),
-          eq(userWordProgress.meaningId, lockMeaningId),
-        ),
-        columns: { learningTier: true, state: true },
-      });
-      if (!row) return { question: null, tier: null };
-      if (row.state !== 'learning' && row.state !== 'snoozed') {
-        return { question: null, tier: null };
-      }
-      pick = { kind: 'meaning', meaningId: lockMeaningId, tier: row.learningTier };
-    } else {
-      // ─── Обычный режим ──────────────────────────────────────────────────
+    {
       // excludeIds могут быть word_id (с word-level next) ИЛИ meaning_id.
       // Для безопасности передаём их и туда и туда.
       const combined = await pickNextItemCombined(userId, {
@@ -583,70 +530,6 @@ export default async function learningRoutes(app: FastifyInstance) {
       await applyWordSwipe({ userId, wordId: id, action, snoozeDays });
     }
     return { ok: true };
-  });
-
-  // ─── POST /api/learning/demo-reset ─────────────────────────────────────
-  // Сбрасывает прогресс одного meaning'а на encounter+tcc=0+lock=0, чтобы
-  // его можно было пройти через все уровни лестницы за одну сессию.
-  // Если meaningId не передан — берёт первое доступное слово из активных
-  // коллекций (по тем же фильтрам, что и introduceUnseenMeaning).
-
-  app.post<{ Body: { wordId?: number } }>('/api/learning/demo-reset', async (request) => {
-    const userId = request.user.id;
-    let wordIdParam = request.body.wordId;
-
-    // Если wordId не передан — берём первое доступное слово из активных коллекций.
-    if (typeof wordIdParam !== 'number' || !Number.isFinite(wordIdParam)) {
-      const result = await db.execute(sql`
-        SELECT w.id
-        FROM word_meanings wm
-        JOIN words w ON w.id = wm.word_id
-        WHERE wm.id IN (
-          SELECT cw.meaning_id FROM collection_words cw
-          JOIN user_collections uc ON uc.collection_id = cw.collection_id
-          WHERE uc.user_id = ${userId} AND uc.is_active = true
-        )
-        AND (wm.popularity_rank IS NULL OR wm.popularity_rank <= 3)
-        AND (wm.frequency IS NULL OR wm.frequency >= 5)
-        AND wm.translation ~ '[а-яА-ЯёЁ]'
-        AND ${NON_FUNCTIONAL_SQL}
-        GROUP BY w.id, w.frequency_rank
-        ORDER BY w.frequency_rank NULLS LAST
-        LIMIT 1
-      `);
-      const row = (result as unknown as { rows: Array<{ id: number }> }).rows[0];
-      if (!row) return { ok: false, error: 'Нет доступных слов в активных коллекциях' };
-      wordIdParam = Number(row.id);
-    }
-
-    const wordId = wordIdParam;
-
-    // Сбрасываем word-level прогресс (encounter, lock=0).
-    await db.delete(userWordProgressWord).where(and(
-      eq(userWordProgressWord.userId, userId),
-      eq(userWordProgressWord.wordId, wordId),
-    ));
-    await db.insert(userWordProgressWord).values({
-      userId,
-      wordId,
-      state: 'learning',
-      learningTier: 'encounter',
-      tierCorrectCount: 0,
-      nextReviewAt: new Date(),
-      lastSeenAt: new Date(),
-    });
-
-    // Также удаляем все meaning-записи для этого слова (на случай если осталось
-    // от прошлого demo с production-фазой). Чтобы L4 в новом demo стартовал чистым.
-    await db.execute(sql`
-      DELETE FROM user_word_progress
-      USING word_meanings wm
-      WHERE wm.id = user_word_progress.meaning_id
-        AND wm.word_id = ${wordId}
-        AND user_word_progress.user_id = ${userId}
-    `);
-
-    return { ok: true, wordId };
   });
 
   // ─── POST /api/learning/mnemonic-revealed ──────────────────────────────

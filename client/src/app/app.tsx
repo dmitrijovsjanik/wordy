@@ -25,7 +25,6 @@ const Settings = lazyWithRetry(() => import('@/components/settings').then((m) =>
 const AllWords = lazyWithRetry(() => import('@/components/all-words').then((m) => ({ default: m.AllWords })));
 const GrammarPage = lazyWithRetry(() => import('@/components/grammar/grammar-page').then((m) => ({ default: m.GrammarPage })));
 const ReadingPage = lazyWithRetry(() => import('@/components/reading/reading-page').then((m) => ({ default: m.ReadingPage })));
-const QuizShowcase = lazyWithRetry(() => import('@/components/quiz-showcase').then((m) => ({ default: m.QuizShowcase })));
 const ReviewPage = lazyWithRetry(() => import('@/components/review/review-page').then((m) => ({ default: m.ReviewPage })));
 const SpellingPage = lazyWithRetry(() => import('@/components/spelling-page').then((m) => ({ default: m.SpellingPage })));
 const ProblemsPage = lazyWithRetry(() => import('@/components/problems-page').then((m) => ({ default: m.ProblemsPage })));
@@ -102,7 +101,6 @@ export function App() {
                   <Route path="/words" element={<AllWords />} />
                   <Route path="/grammar" element={<GrammarPage />} />
                   <Route path="/reading" element={<ReadingPage />} />
-                  <Route path="/quiz-showcase" element={<QuizShowcase />} />
                   <Route path="/review" element={<ReviewPage />} />
                   <Route path="/spelling" element={<SpellingPage />} />
                   <Route path="/problems" element={<ProblemsPage />} />
