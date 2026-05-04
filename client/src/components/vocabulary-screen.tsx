@@ -57,7 +57,7 @@ function getQuizContainerKey(
   return `${meaningId}-${questionIndex}`;
 }
 
-export function Home() {
+export function VocabularyScreen() {
   const navigate = useNavigate();
   const { hapticImpact, hapticNotification } = useTelegram();
   const user = useUserStore((s) => s.user);

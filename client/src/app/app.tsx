@@ -9,7 +9,7 @@ import { platformBridge } from '@/lib/platform-bridge';
 import { acceptInvite, sendFriendRequest } from '@/lib/api';
 import { lazyWithRetry } from '@/lib/lazy-retry';
 
-const Home = lazyWithRetry(() => import('@/components/home').then((m) => ({ default: m.Home })));
+const VocabularyScreen = lazyWithRetry(() => import('@/components/vocabulary-screen').then((m) => ({ default: m.VocabularyScreen })));
 const Collections = lazyWithRetry(() => import('@/components/collections').then((m) => ({ default: m.Collections })));
 const CollectionDetail = lazyWithRetry(() => import('@/components/collection-detail').then((m) => ({ default: m.CollectionDetail })));
 const CollectionCreate = lazyWithRetry(() => import('@/components/collection-create').then((m) => ({ default: m.CollectionCreate })));
@@ -85,7 +85,8 @@ export function App() {
             <ErrorBoundary>
               <Suspense fallback={<PageSkeleton />}>
                 <Routes>
-                  <Route path="/" element={<Home />} />
+                  <Route path="/" element={<VocabularyScreen />} />
+                  <Route path="/vocabulary" element={<VocabularyScreen />} />
                   <Route path="/collections" element={<Collections />} />
                   <Route path="/collections/create" element={<CollectionCreate />} />
                   <Route path="/collections/:id" element={<CollectionDetail />} />
