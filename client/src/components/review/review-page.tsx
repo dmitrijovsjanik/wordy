@@ -8,13 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BackButton } from '@/components/ui/back-button';
 import { WordStack } from './word-stack';
-import type { ReviewFeedCard, ReviewFeedWord } from '@/types/api';
-import { cn } from '@/lib/utils';
 
-// Variants для вертикальной карусели слов. Текущая верхняя карта улетает
-// независимо (drag-driven, см. word-stack), поэтому здесь только enter:
-// новая стопка появляется снизу при forward, сверху при backward.
-// Exit делаем минимальный fade — старая стопка под улетевшей картой просто исчезает.
+// Variants для вертикальной карусели слов. Текущая карта улетает независимо
+// (drag-driven, см. word-stack), здесь только enter — новое слово появляется
+// снизу при forward, сверху при backward (после undo).
 const wordVariants = {
   enter: (direction: 'forward' | 'backward') => ({
     y: direction === 'forward' ? '60%' : '-60%',
@@ -24,50 +21,22 @@ const wordVariants = {
   exit: { opacity: 0, transition: { duration: 0.15 } },
 };
 
-/** Режим B: «плоское» значение → виртуальное слово с одной meaning,
- *  чтобы переиспользовать WordStack (никаких фантомов, тот же UX свайпа). */
-function cardToVirtualWord(card: ReviewFeedCard): ReviewFeedWord {
-  return {
-    wordId: -card.meaningId, // отрицательный, чтобы не пересекался с реальными wordId
-    word: card.word,
-    transcription: card.transcription,
-    meanings: [{
-      meaningId: card.meaningId,
-      translation: card.translation,
-      partOfSpeech: card.partOfSpeech,
-      cefr: card.cefr,
-      example: card.example,
-      mnemonic: card.mnemonic,
-    }],
-  };
-}
-
 /**
- * Режим обзора. Два режима, переключаются toggle'ом сверху:
- *   A — по словам (стопка значений внутри слова, дефолт)
- *   B — по значениям (плоский поток, по 1 meaning'у на карточку)
+ * Изолированный режим обзора (этап 3, единый режим).
  *
- * Жесты:
- *   вправо → знаю, влево → учить, вверх → отложить (skip всей стопки в A),
- *   вниз → назад (undo).
- *
- * Feed бесконечный: store фоном подгружает следующие пачки. Счётчик не
- * показываем — это поток, как лента.
+ * Карточка = слово + все его eligible meanings строкой через точку с запятой.
+ * Свайп — решение по слову целиком. Жесты: вправо/влево/вверх/вниз
+ * (см. WordStack). Feed бесконечный, store фоном подгружает следующие пачки.
  */
 export function ReviewPage() {
   const navigate = useNavigate();
   const { hapticImpact, hapticNotification } = useTelegram();
   const {
-    mode,
     words,
     wordIndex,
-    meaningIndex,
-    cards,
-    cardIndex,
     isLoading,
     error,
     wordTransitionDirection,
-    setMode,
     fetchInitial,
     swipe,
     undo,
@@ -95,112 +64,56 @@ export function ReviewPage() {
     undo();
   }, [undo, hapticImpact]);
 
-  const isEmpty = mode === 'A'
-    ? !words[wordIndex]
-    : !cards[cardIndex];
-
-  // Header и кнопочный блок снизу всегда статичны — никаких ранних return,
-  // которые бы пересоздавали всю структуру при isLoading/isEmpty/error.
-  // Содержимое карусели меняется внутри (skeleton / empty / error / карта).
+  const currentWord = words[wordIndex];
+  const isEmpty = !currentWord;
 
   return (
     <div className="flex min-h-full flex-col px-4 pt-4 pb-8">
       <div className="w-full"><BackButton onClick={() => navigate('/vocabulary')} /></div>
 
-      <div className="mt-2 flex items-center justify-between gap-2">
+      <div className="mt-2 flex items-center">
         <h1 className="text-lg font-semibold">Обзор</h1>
-        {/* Toggle между режимами */}
-        <div className="inline-flex rounded-full bg-[var(--gray-3)] p-0.5 text-xs">
-          <button
-            onClick={() => setMode('A')}
-            className={cn('rounded-full px-3 py-1 transition-colors', mode === 'A' ? 'bg-[var(--gray-1)] font-semibold' : 'text-[var(--gray-11)]')}
-          >
-            По словам
-          </button>
-          <button
-            onClick={() => setMode('B')}
-            className={cn('rounded-full px-3 py-1 transition-colors', mode === 'B' ? 'bg-[var(--gray-1)] font-semibold' : 'text-[var(--gray-11)]')}
-          >
-            По значениям
-          </button>
-        </div>
       </div>
 
       <div className="relative mx-auto mt-4 flex w-full max-w-sm flex-1 items-center justify-center overflow-hidden">
         <div className="relative h-[60vh] w-full">
-          {/* Плавный fade при смене режима. mode="wait" — exit старого
-              ПОЛНОСТЬЮ завершается до enter нового. */}
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={`mode-${mode}`}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.18 }}
-              className="absolute inset-0"
-            >
-              {error ? (
-                <div className="flex h-full flex-col items-center justify-center gap-4">
-                  <p className="text-sm text-[var(--gray-11)]">Не удалось загрузить</p>
-                  <Button onClick={() => fetchInitial()}>Попробовать снова</Button>
-                </div>
-              ) : isLoading && isEmpty ? (
-                <Skeleton className="h-full w-full rounded-2xl" />
-              ) : isEmpty ? (
-                <div className="flex h-full flex-col items-center justify-center">
-                  <p className="text-center text-sm text-[var(--gray-11)]">
-                    Пока всё. Возвращайся позже.
-                  </p>
-                </div>
-              ) : (
-                /* Внутренняя карусель слов в активном режиме. */
-                <AnimatePresence custom={wordTransitionDirection} mode="popLayout" initial={false}>
-                  {mode === 'A' ? (
-                    <motion.div
-                      key={`a-${words[wordIndex]!.wordId}`}
-                      custom={wordTransitionDirection}
-                      variants={wordVariants}
-                      initial="enter"
-                      animate="center"
-                      exit="exit"
-                      transition={{ type: 'spring', stiffness: 220, damping: 28 }}
-                      className="absolute inset-0"
-                    >
-                      <WordStack
-                        word={words[wordIndex]!}
-                        meaningIndex={meaningIndex}
-                        onSwipe={handleSwipe}
-                        onUndo={handleUndo}
-                      />
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key={`b-${cards[cardIndex]!.meaningId}`}
-                      custom={wordTransitionDirection}
-                      variants={wordVariants}
-                      initial="enter"
-                      animate="center"
-                      exit="exit"
-                      transition={{ type: 'spring', stiffness: 220, damping: 28 }}
-                      className="absolute inset-0"
-                    >
-                      <WordStack
-                        word={cardToVirtualWord(cards[cardIndex]!)}
-                        meaningIndex={0}
-                        onSwipe={handleSwipe}
-                        onUndo={handleUndo}
-                      />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              )}
-            </motion.div>
-          </AnimatePresence>
+          {error ? (
+            <div className="flex h-full flex-col items-center justify-center gap-4">
+              <p className="text-sm text-[var(--gray-11)]">Не удалось загрузить</p>
+              <Button onClick={() => fetchInitial()}>Попробовать снова</Button>
+            </div>
+          ) : isLoading && isEmpty ? (
+            <Skeleton className="h-full w-full rounded-2xl" />
+          ) : isEmpty ? (
+            <div className="flex h-full flex-col items-center justify-center">
+              <p className="text-center text-sm text-[var(--gray-11)]">
+                Пока всё. Возвращайся позже.
+              </p>
+            </div>
+          ) : (
+            <AnimatePresence custom={wordTransitionDirection} mode="popLayout" initial={false}>
+              <motion.div
+                key={`word-${currentWord.wordId}`}
+                custom={wordTransitionDirection}
+                variants={wordVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ type: 'spring', stiffness: 220, damping: 28 }}
+                className="absolute inset-0"
+              >
+                <WordStack
+                  word={currentWord}
+                  onSwipe={handleSwipe}
+                  onUndo={handleUndo}
+                />
+              </motion.div>
+            </AnimatePresence>
+          )}
         </div>
       </div>
 
-      {/* Кнопочный fallback. Цветовое кодирование совпадает с ripple-заливкой:
-          знаю — success (зелёный), учить — destructive (красный), нейтральные — secondary/ghost. */}
+      {/* Кнопочный fallback. Цветовое кодирование совпадает с ripple-заливкой. */}
       <div className="mt-4 grid grid-cols-4 gap-2">
         <Button variant="destructive" onClick={() => handleSwipe('unknown')} className="text-xs">Учить</Button>
         <Button variant="secondary" onClick={() => handleSwipe('snooze')} className="text-xs">Отложить</Button>

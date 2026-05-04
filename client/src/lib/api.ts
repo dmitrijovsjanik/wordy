@@ -30,7 +30,6 @@ import type {
   LearningAnswerResponse,
   LearningSwipeResponse,
   ReviewFeedResponse,
-  ReviewFeedWordsResponse,
 } from '@/types/api';
 
 const TOKEN_KEY = 'wordy_token';
@@ -200,21 +199,14 @@ export function learningProblemsNext(opts: { recentGenerators?: string[]; exclud
   return fetchApi<LearningNextResponse>('GET', `/api/learning/problems/next${qs ? '?' + qs : ''}`);
 }
 
-// ─── Review Feed (фаза 4) ──────────────────────────────────────────────────
+// ─── Review Feed ───────────────────────────────────────────────────────────
 
-export function reviewFeedNext(opts: { limit?: number } = {}) {
-  const params = new URLSearchParams();
-  if (opts.limit) params.set('limit', String(opts.limit));
-  const qs = params.toString();
-  return fetchApi<ReviewFeedResponse>('GET', `/api/review-feed/next${qs ? '?' + qs : ''}`);
-}
-
-export function reviewFeedWords(opts: { limit?: number; excludeWordIds?: number[] } = {}) {
+export function reviewFeedNext(opts: { limit?: number; excludeWordIds?: number[] } = {}) {
   const params = new URLSearchParams();
   if (opts.limit) params.set('limit', String(opts.limit));
   if (opts.excludeWordIds?.length) params.set('exclude', opts.excludeWordIds.join(','));
   const qs = params.toString();
-  return fetchApi<ReviewFeedWordsResponse>('GET', `/api/review-feed/words${qs ? '?' + qs : ''}`);
+  return fetchApi<ReviewFeedResponse>('GET', `/api/review-feed/next${qs ? '?' + qs : ''}`);
 }
 
 // Duels

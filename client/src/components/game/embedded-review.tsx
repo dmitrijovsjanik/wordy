@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BackButton } from '@/components/ui/back-button';
 import { WordStack } from '@/components/review/word-stack';
-import { reviewFeedWords } from '@/lib/api';
+import { reviewFeedNext } from '@/lib/api';
 import { useUnifiedGameStore } from '@/stores/unified-game-store';
 import { useTelegram } from '@/hooks/use-telegram';
 import type { ReviewFeedWord } from '@/types/api';
@@ -35,7 +35,6 @@ export function EmbeddedReview() {
 
   const [words, setWords] = useState<ReviewFeedWord[]>([]);
   const [wordIndex, setWordIndex] = useState(0);
-  const [meaningIndex, setMeaningIndex] = useState(0);
   const [isLoadingFeed, setIsLoadingFeed] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
   const [isPrefetching, setIsPrefetching] = useState(false);
@@ -43,7 +42,7 @@ export function EmbeddedReview() {
   // Загрузка батча (используется и для initial, и для prefetch).
   const loadBatch = useCallback(async (excludeWordIds: number[]): Promise<ReviewFeedWord[] | null> => {
     try {
-      const res = await reviewFeedWords({ limit: BATCH_SIZE, excludeWordIds });
+      const res = await reviewFeedNext({ limit: BATCH_SIZE, excludeWordIds });
       return res.words;
     } catch {
       return null;
@@ -88,13 +87,10 @@ export function EmbeddedReview() {
     if (!word) return;
     hapticImpact('light');
     // Шлём на сервер свайп. embeddedReviewSwipe сам решает выходить ли из
-    // режима обзора (если poolSize ≥ poolMinForResume).
+    // режима обзора (если poolSize ≥ poolMinForResume). Решение применяется
+    // к слову целиком (state на word, а не на meaning).
     await embeddedReviewSwipe(word.wordId, action);
-    // Переход к следующему слову / следующему meaning'у того же слова.
-    // Перебор meaning'ов внутри слова не нужен — на сервере состояние
-    // ставится word-level, и одно решение покрывает все meaning'и слова.
     setWordIndex((i) => i + 1);
-    setMeaningIndex(0);
   }, [words, wordIndex, hapticImpact, embeddedReviewSwipe]);
 
   // ── empty stub ──────────────────────────────────────────────────────────
@@ -163,7 +159,6 @@ export function EmbeddedReview() {
             <WordStack
               key={`embedded-${currentWord.wordId}`}
               word={currentWord}
-              meaningIndex={meaningIndex}
               onSwipe={handleSwipe}
               onUndo={() => { /* no-op в embedded режиме */ }}
             />

@@ -280,40 +280,27 @@ export type PassiveRecallApiQuestion = {
 
 export type LearningTier = 'encounter' | 'passive' | 'active' | 'production' | 'review';
 
-// Карточка из режима обзора (фаза 4).
-export type ReviewFeedCard = {
-  meaningId: number;
-  word: string;
-  translation: string;
-  transcription: string | null;
-  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
-  cefr: string | null;
-  example: { en: string; ru: string } | null;
-  mnemonic: string | null;
-};
-
-export type ReviewFeedResponse = {
-  cards: ReviewFeedCard[];
-};
-
-// Режим A: слова со всеми значениями.
+// Обзор (этап 3): один режим — карточка = слово + все его eligible meanings.
+// Решение (свайп) применяется к слову целиком.
 export type ReviewFeedMeaning = {
   meaningId: number;
   translation: string;
-  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
-  cefr: string | null;
-  example: { en: string; ru: string } | null;
-  mnemonic: string | null;
+  /** Заполнено только у первого meaning по popularity_rank ASC.
+   *  UI показывает один пример на карточку, под списком переводов. */
+  exampleEn?: string;
+  exampleRu?: string;
 };
 
 export type ReviewFeedWord = {
   wordId: number;
-  word: string;
+  text: string;
   transcription: string | null;
+  /** POS первого meaning по popularity_rank ASC (одно слово в одной POS-роли). */
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
   meanings: ReviewFeedMeaning[];
 };
 
-export type ReviewFeedWordsResponse = {
+export type ReviewFeedResponse = {
   words: ReviewFeedWord[];
 };
 
