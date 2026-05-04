@@ -76,7 +76,7 @@ export function ReviewPage() {
 
   useBackButton(useCallback(() => {
     reset();
-    navigate('/');
+    navigate('/vocabulary');
   }, [reset, navigate]));
 
   useEffect(() => {
@@ -105,7 +105,7 @@ export function ReviewPage() {
 
   return (
     <div className="flex min-h-full flex-col px-4 pt-4 pb-8">
-      <div className="w-full"><BackButton onClick={() => navigate('/')} /></div>
+      <div className="w-full"><BackButton onClick={() => navigate('/vocabulary')} /></div>
 
       <div className="mt-2 flex items-center justify-between gap-2">
         <h1 className="text-lg font-semibold">Обзор</h1>

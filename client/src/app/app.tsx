@@ -9,6 +9,7 @@ import { acceptInvite, sendFriendRequest } from '@/lib/api';
 import { lazyWithRetry } from '@/lib/lazy-retry';
 
 const Dashboard = lazyWithRetry(() => import('@/components/dashboard').then((m) => ({ default: m.Dashboard })));
+const VocabularySection = lazyWithRetry(() => import('@/components/vocabulary-section').then((m) => ({ default: m.VocabularySection })));
 const VocabularyScreen = lazyWithRetry(() => import('@/components/vocabulary-screen').then((m) => ({ default: m.VocabularyScreen })));
 const Collections = lazyWithRetry(() => import('@/components/collections').then((m) => ({ default: m.Collections })));
 const CollectionDetail = lazyWithRetry(() => import('@/components/collection-detail').then((m) => ({ default: m.CollectionDetail })));
@@ -85,7 +86,7 @@ export function App() {
               <Suspense fallback={<PageSkeleton />}>
                 <Routes>
                   <Route path="/" element={<Dashboard />} />
-                  <Route path="/vocabulary" element={<VocabularyScreen />} />
+                  <Route path="/vocabulary" element={<VocabularySection />} />
                   <Route path="/vocabulary/learn" element={<VocabularyScreen />} />
                   <Route path="/collections" element={<Collections />} />
                   <Route path="/collections/create" element={<CollectionCreate />} />

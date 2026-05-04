@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCollectionStore } from '@/stores/collection-store';
 import { Button } from '@/components/ui/button';
@@ -6,6 +6,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { PremiumDrawer } from '@/components/ui/premium-drawer';
+import { BackButton } from '@/components/ui/back-button';
+import { useBackButton } from '@/hooks/use-back-button';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Add01Icon, Book02Icon } from '@hugeicons/core-free-icons';
 import { Progress } from '@/components/ui/progress';
@@ -212,6 +214,9 @@ export function Collections() {
   const [showPremiumDrawer, setShowPremiumDrawer] = useState(false);
   const customCollectionsCount = library.filter((c) => c.type === 'user').length;
 
+  const goBack = useCallback(() => navigate(-1), [navigate]);
+  useBackButton(goBack);
+
   useEffect(() => {
     fetchLibrary();
     fetchMarketplace();
@@ -223,6 +228,7 @@ export function Collections() {
       {/* Sticky tabs */}
       <div className="pointer-events-none sticky top-0 z-10 -mx-4">
         <div className="pointer-events-auto bg-[var(--gray-1)] px-4 pt-4">
+          <BackButton onClick={goBack} variant="ghost" />
           <TabsList>
             <TabsTrigger active={activeTab === 'library'} onClick={() => setActiveTab('library')}>
               Библиотека

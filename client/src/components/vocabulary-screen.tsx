@@ -346,7 +346,7 @@ export function VocabularyScreen() {
     <div className="relative z-[2] flex h-full flex-col overflow-hidden px-4 pt-4 pb-4">
       {/* Row 1: Back | Gems (center) | History | Avatar */}
       <div className="mb-2 flex items-center gap-3">
-        <BackButton onClick={() => navigate('/')} variant="ghost" />
+        <BackButton onClick={() => navigate('/vocabulary')} variant="ghost" />
         <div className="flex flex-1 justify-center">
           <GemsIndicator gems={user.gems} freezes={user.streakFreezes} onClick={() => navigate('/shop')} />
         </div>
