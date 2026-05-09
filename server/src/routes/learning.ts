@@ -207,8 +207,12 @@ export default async function learningRoutes(app: FastifyInstance) {
 
     // Retry без cooldown — на случай "main пуст из-за cooldown" (защита
     // от случая когда все слова в активной колоде временно блокированы
-    // K-cooldown'ом). Применяем тот же fallback-порядок, но без cooldown
-    // excluded (только client-side recent).
+    // K-cooldown'ом). Применяем тот же fallback-порядок, передаём ТОЛЬКО
+    // client-side recent (excludeWordIds из query — обычно последние 2
+    // показанных слова). Cooldown снимается, recent остаётся жёстким —
+    // это гарантирует, что retry не вернёт слово, на которое юзер только
+    // что ответил. Если recent блокирует всех кандидатов → pick=null →
+    // ниже сработает embedded_review (если активная колода+pool пусты).
     if (!pick && cooldownExcluded.length > 0) {
       for (const fn of fallbackOrder[slot]) {
         pick = await fn(excludeWordIds);

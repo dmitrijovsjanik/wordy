@@ -25,6 +25,10 @@ import { recordEvent, type LearningTier } from './analytics-service.js';
 import { FUNCTIONAL_POS, FUNCTIONAL_ENGLISH_WORDS } from '../db/word-filters.js';
 import { setCooldown } from './cooldown-service.js';
 
+/** Drizzle db или активная транзакция — для функций, безопасно работающих
+ *  и снаружи, и внутри транзакции. */
+type DbOrTx = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 /** Сколько fetchNext пропустить после повышения tier (encounter→passive→active→production). */
 const COOLDOWN_ON_ADVANCE = 2;
 /** Сколько fetchNext пропустить после ошибки на passive/active. */
@@ -687,8 +691,11 @@ export type RecordWordAnswerResult = {
  * (popularity_rank ≤ 3, frequency ≥ 5, кириллический перевод, не functional).
  * Используется при L3→L4 переходе для создания meaning-записей.
  */
-async function getEligibleMeaningsForWord(wordId: number): Promise<{ id: number }[]> {
-  const rows = await db
+async function getEligibleMeaningsForWord(
+  wordId: number,
+  tx: DbOrTx = db,
+): Promise<{ id: number }[]> {
+  const rows = await tx
     .select({ id: wordMeanings.id })
     .from(wordMeanings)
     .innerJoin(words, eq(words.id, wordMeanings.wordId))
@@ -710,6 +717,11 @@ async function getEligibleMeaningsForWord(wordId: number): Promise<{ id: number 
  * L3 → L4 переход. Вызывается из recordWordAnswer когда слово достигло
  * tier='production' на word-level (т.е. прошло L3 active recall).
  *
+ * Принимает Drizzle transaction (или db) — должна вызываться внутри той
+ * же транзакции, что и UPDATE word-level записи в recordWordAnswer.
+ * Без атомарности возможен рассинхрон: word.tier='production' без
+ * meaning-записей → слот production навсегда пуст для этого слова.
+ *
  * Что делает:
  *   1. Удаляет stale meaning-записи на tier ∈ {encounter, passive, active}
  *      (это backfill-артефакты от старой архитектуры — больше не нужны)
@@ -717,9 +729,9 @@ async function getEligibleMeaningsForWord(wordId: number): Promise<{ id: number 
  *      meanings слова. ON CONFLICT DO NOTHING — если запись уже есть
  *      (например, на production+ от прошлой попытки), не трогаем.
  */
-async function transitionWordToProduction(userId: number, wordId: number, now: Date): Promise<void> {
+async function transitionWordToProduction(tx: DbOrTx, userId: number, wordId: number, now: Date): Promise<void> {
   // 1. Удалить stale L1-3 meaning-записи слова.
-  await db.execute(sql`
+  await tx.execute(sql`
     DELETE FROM user_word_progress
     USING word_meanings wm
     WHERE wm.id = user_word_progress.meaning_id
@@ -729,9 +741,9 @@ async function transitionWordToProduction(userId: number, wordId: number, now: D
   `);
 
   // 2. Вставить meaning-записи на production для eligible meanings.
-  const eligible = await getEligibleMeaningsForWord(wordId);
+  const eligible = await getEligibleMeaningsForWord(wordId, tx);
   for (const m of eligible) {
-    await db
+    await tx
       .insert(userWordProgress)
       .values({
         userId,
@@ -836,58 +848,67 @@ export async function recordWordAnswer(input: RecordWordAnswerInput): Promise<Re
     effectiveNextReviewAt = now;
   }
 
-  // Persist word-level row.
-  if (existing) {
-    await db
-      .update(userWordProgressWord)
-      .set({
+  // L3 → L4 переход требует атомарности: UPDATE word.tier='production' и
+  // создание meaning-записей через transitionWordToProduction должны быть
+  // в одной транзакции. Иначе при падении между ними word.tier='production'
+  // остаётся без meanings → слот production навсегда пуст для слова, юзер
+  // его никогда больше не увидит. На остальные случаи транзакция не вредит
+  // (один UPDATE/INSERT — атомарен сам по себе).
+  const willEnterProduction = tierBefore === 'active' && transition.tier === 'production' && transition.wasAdvanced;
+
+  let enteredProduction = false;
+  await db.transaction(async (tx) => {
+    // Persist word-level row.
+    if (existing) {
+      await tx
+        .update(userWordProgressWord)
+        .set({
+          learningTier: transition.tier,
+          tierCorrectCount: transition.tierCorrectCount,
+          reviewStage: transition.reviewStage,
+          nextReviewAt: effectiveNextReviewAt,
+          hasPenalty: transition.hasPenalty,
+          masteredAt: transition.becameLearned ? now : existing.masteredAt,
+          correctCount: isCorrect ? sql`${userWordProgressWord.correctCount} + 1` : userWordProgressWord.correctCount,
+          incorrectCount: !isCorrect ? sql`${userWordProgressWord.incorrectCount} + 1` : userWordProgressWord.incorrectCount,
+          fromPlacement: false,
+          lastSeenAt: now,
+          updatedAt: now,
+        })
+        .where(eq(userWordProgressWord.id, existing.id));
+    } else {
+      await tx.insert(userWordProgressWord).values({
+        userId,
+        wordId,
+        state: 'learning',
         learningTier: transition.tier,
         tierCorrectCount: transition.tierCorrectCount,
         reviewStage: transition.reviewStage,
         nextReviewAt: effectiveNextReviewAt,
         hasPenalty: transition.hasPenalty,
-        masteredAt: transition.becameLearned ? now : existing.masteredAt,
-        correctCount: isCorrect ? sql`${userWordProgressWord.correctCount} + 1` : userWordProgressWord.correctCount,
-        incorrectCount: !isCorrect ? sql`${userWordProgressWord.incorrectCount} + 1` : userWordProgressWord.incorrectCount,
-        fromPlacement: false,
+        masteredAt: transition.becameLearned ? now : null,
+        correctCount: isCorrect ? 1 : 0,
+        incorrectCount: isCorrect ? 0 : 1,
         lastSeenAt: now,
-        updatedAt: now,
-      })
-      .where(eq(userWordProgressWord.id, existing.id));
-  } else {
-    await db.insert(userWordProgressWord).values({
-      userId,
-      wordId,
-      state: 'learning',
-      learningTier: transition.tier,
-      tierCorrectCount: transition.tierCorrectCount,
-      reviewStage: transition.reviewStage,
-      nextReviewAt: effectiveNextReviewAt,
-      hasPenalty: transition.hasPenalty,
-      masteredAt: transition.becameLearned ? now : null,
-      correctCount: isCorrect ? 1 : 0,
-      incorrectCount: isCorrect ? 0 : 1,
-      lastSeenAt: now,
-    });
-  }
+      });
+    }
+
+    if (willEnterProduction) {
+      await transitionWordToProduction(tx, userId, wordId, now);
+      enteredProduction = true;
+    }
+  });
 
   // K-cooldown: исключение слова на N следующих fetchNext.
-  // Случаи взаимоисключающие (advance бывает только при isCorrect=true).
+  // Ставится ПОСЛЕ успешной транзакции — иначе при rollback'е cooldown
+  // остался бы in-memory, а БД нет: слово невидимо без записи.
   // Review исключаем — там SRS через nextReviewAt.
-  if (transition.wasAdvanced && transition.tier !== 'review') {
-    setCooldown(userId, wordId, COOLDOWN_ON_ADVANCE);
-  } else if (!isCorrect && (tierBefore === 'passive' || tierBefore === 'active')) {
+  // Порядок проверок важен: К3 — на passive ОШИБКЕ ставим K=4, а не K=2,
+  // несмотря на то что computeTransition даёт wasAdvanced=true (migrate-on-touch).
+  if (!isCorrect && (tierBefore === 'passive' || tierBefore === 'active')) {
     setCooldown(userId, wordId, COOLDOWN_ON_ERROR);
-  }
-
-  // L3 → L4: создать meaning-записи на production.
-  // Это происходит когда tierBefore='active' и transition.tier='production'.
-  // computeTransition даёт tier='production' только когда production tier
-  // включён в конфиге; иначе сразу 'review'.
-  let enteredProduction = false;
-  if (tierBefore === 'active' && transition.tier === 'production' && transition.wasAdvanced) {
-    await transitionWordToProduction(userId, wordId, now);
-    enteredProduction = true;
+  } else if (transition.wasAdvanced && transition.tier !== 'review') {
+    setCooldown(userId, wordId, COOLDOWN_ON_ADVANCE);
   }
 
   // Analytics events.

@@ -46,15 +46,14 @@ const REVIEW_WRONG_DAYS = learningConfig.intervals.reviewWrongCooldownDays;
 // ─── encounter ──────────────────────────────────────────────────────────────
 
 describe('computeTransition — encounter', () => {
-  // Encounter is just a "card shown" tier. Per the source, ANY answer
-  // (correct or wrong) advances to passive with the same schedule. The
-  // function does not branch on isCorrect for tier='encounter'.
+  // Encounter is just a "card shown" tier. ANY answer (correct or wrong)
+  // advances to active (passive скрыт из потока — см. computeTransition).
   it.each([true, false])(
-    'isCorrect=%s → advances to passive, count=0, scheduled %ih ahead',
+    'isCorrect=%s → advances to active, count=0',
     (isCorrect) => {
       const result = computeTransition(input('encounter', 0, 0, isCorrect), NOW);
 
-      expect(result.tier).toBe('passive');
+      expect(result.tier).toBe('active');
       expect(result.tierCorrectCount).toBe(0);
       expect(result.reviewStage).toBe(0);
       expect(result.hasPenalty).toBe(false);
@@ -69,7 +68,7 @@ describe('computeTransition — encounter', () => {
 
   it('ignores tierCorrectCount and reviewStage in input', () => {
     const result = computeTransition(input('encounter', 5, 7, true), NOW);
-    expect(result.tier).toBe('passive');
+    expect(result.tier).toBe('active');
     expect(result.tierCorrectCount).toBe(0);
     expect(result.reviewStage).toBe(0);
   });
@@ -80,85 +79,54 @@ describe('computeTransition — encounter', () => {
   });
 });
 
-// ─── passive ────────────────────────────────────────────────────────────────
+// ─── passive (legacy migrate-on-touch) ──────────────────────────────────────
+// Passive скрыт из потока, в БД могут быть legacy-записи. Любой ответ
+// (правильный/неправильный) при tier='passive' переводит на active с
+// tcc=0, wasAdvanced=true, без penalty. Это обеспечивает само-очищение
+// БД от legacy-passive за один ответ. K-cooldown на ошибку (=4) ставится
+// в recordWordAnswer отдельно (К3), не в computeTransition.
 
-describe('computeTransition — passive, wrong answer', () => {
-  // Wrong answer in learning phase (passive/active): no tier rollback, just
-  // reset count to 0 and apply 30-min cooldown with hasPenalty=true.
-  const cases: Array<[number, number]> = [
-    [0, 0],
-    [1, 0],
-    // reviewStage in input is irrelevant for non-review tiers; output is 0.
-    [0, 3],
+describe('computeTransition — passive (legacy migrate-on-touch)', () => {
+  const cases: Array<[number, number, boolean]> = [
+    [0, 0, true],
+    [1, 0, true],
+    [0, 3, true],
+    [0, 0, false],
+    [1, 0, false],
   ];
 
   it.each(cases)(
-    'count=%i reviewStage=%i + wrong → stays passive, cooldown %im',
-    (count, reviewStage) => {
-      const result = computeTransition(input('passive', count, reviewStage, false), NOW);
+    'count=%i reviewStage=%i isCorrect=%s → migrates to active, tcc=0, wasAdvanced=true',
+    (count, reviewStage, isCorrect) => {
+      const result = computeTransition(input('passive', count, reviewStage, isCorrect), NOW);
 
-      expect(result.tier).toBe('passive');
+      expect(result.tier).toBe('active');
       expect(result.tierCorrectCount).toBe(0);
       expect(result.reviewStage).toBe(0);
-      expect(result.hasPenalty).toBe(true);
+      expect(result.hasPenalty).toBe(false);
       expect(result.becameLearned).toBe(false);
       expect(result.wasReset).toBe(false);
-      expect(result.wasAdvanced).toBe(false);
+      expect(result.wasAdvanced).toBe(true);
       expect(result.nextReviewAt.getTime()).toBe(
-        addMinutes(NOW, COOLDOWN_MIN).getTime(),
+        addHours(NOW, LEARN_HOURS[0]!).getTime(),
       );
     },
   );
 });
 
-describe('computeTransition — passive, correct answer', () => {
-  // correctToAdvance for passive is 2. Path:
-  //   count=0 + correct → count=1, stays passive, scheduled at LEARN_HOURS[1]
-  //     (because newCount=1 is used as index, clamped to len-1=1).
-  //   count=1 + correct → newCount=2 ≥ 2 → advances to active, count=0,
-  //     scheduled at LEARN_HOURS[0] (4h).
-  it('count=0 + correct → count=1, stays passive, scheduled at LEARN_HOURS[1]', () => {
-    const result = computeTransition(input('passive', 0, 0, true), NOW);
+describe('computeTransition — active (replaces former passive→active path)', () => {
+  // После скрытия passive ровно та же траектория correct→advance работает
+  // на active: 2 правильных → production. Не дублирую — покрыто блоком
+  // "active" ниже. Этот блок-плейсхолдер удержать namespace.
+  it('count=1 + correct → advances to production', () => {
+    const result = computeTransition(input('active', 1, 0, true), NOW);
 
-    expect(result.tier).toBe('passive');
-    expect(result.tierCorrectCount).toBe(1);
-    expect(result.reviewStage).toBe(0);
-    expect(result.hasPenalty).toBe(false);
-    expect(result.becameLearned).toBe(false);
-    expect(result.wasReset).toBe(false);
-    expect(result.wasAdvanced).toBe(false);
-    // newCount=1, idx=min(1, 1)=1 → LEARN_HOURS[1] (8h).
-    expect(result.nextReviewAt.getTime()).toBe(
-      addHours(NOW, LEARN_HOURS[1]!).getTime(),
-    );
-  });
-
-  it('count=1 + correct → advances to active, count=0, scheduled at LEARN_HOURS[0]', () => {
-    const result = computeTransition(input('passive', 1, 0, true), NOW);
-
-    expect(result.tier).toBe('active');
+    expect(result.tier).toBe('production');
     expect(result.tierCorrectCount).toBe(0);
-    expect(result.reviewStage).toBe(0);
-    expect(result.hasPenalty).toBe(false);
-    expect(result.becameLearned).toBe(false);
-    expect(result.wasReset).toBe(false);
     expect(result.wasAdvanced).toBe(true);
     expect(result.nextReviewAt.getTime()).toBe(
       addHours(NOW, LEARN_HOURS[0]!).getTime(),
     );
-  });
-
-  it('count above correctToAdvance still triggers advance (defensive)', () => {
-    // newCount = 3 >= 2 → advances. This shouldn't happen in practice but
-    // verifies the >= comparison, not strict equality.
-    const result = computeTransition(input('passive', 2, 0, true), NOW);
-    expect(result.tier).toBe('active');
-    expect(result.wasAdvanced).toBe(true);
-  });
-
-  it('reviewStage in input is ignored on passive correct (output reviewStage=0)', () => {
-    const result = computeTransition(input('passive', 0, 4, true), NOW);
-    expect(result.reviewStage).toBe(0);
   });
 });
 
@@ -492,14 +460,19 @@ describe('computeTransition — invariants', () => {
     ).toBe(false);
   });
 
-  // wasAdvanced is true only on tier-forward transitions (encounter→passive,
-  // passive→active, active→production|review, production→review).
+  // wasAdvanced is true on tier-forward transitions (encounter→active,
+  // active→production|review, production→review) и на legacy passive→active
+  // (migrate-on-touch — любой ответ ведёт на active независимо от isCorrect).
   it('wasAdvanced=true only on tier-forward transitions', () => {
     expect(
       computeTransition(input('encounter', 0, 0, true), NOW).wasAdvanced,
     ).toBe(true);
+    // passive — всегда migrates to active (любой isCorrect).
     expect(
-      computeTransition(input('passive', 1, 0, true), NOW).wasAdvanced,
+      computeTransition(input('passive', 0, 0, true), NOW).wasAdvanced,
+    ).toBe(true);
+    expect(
+      computeTransition(input('passive', 0, 0, false), NOW).wasAdvanced,
     ).toBe(true);
     expect(
       computeTransition(input('active', 1, 0, true), NOW).wasAdvanced,
@@ -508,12 +481,13 @@ describe('computeTransition — invariants', () => {
       computeTransition(input('production', 2, 0, true), NOW).wasAdvanced,
     ).toBe(true);
 
-    // Same-tier or rollback transitions → wasAdvanced=false.
+    // Same-tier (active/production без advance) или rollback (review wrong) →
+    // wasAdvanced=false.
     expect(
-      computeTransition(input('passive', 0, 0, true), NOW).wasAdvanced,
+      computeTransition(input('active', 0, 0, true), NOW).wasAdvanced,
     ).toBe(false);
     expect(
-      computeTransition(input('passive', 0, 0, false), NOW).wasAdvanced,
+      computeTransition(input('active', 0, 0, false), NOW).wasAdvanced,
     ).toBe(false);
     expect(
       computeTransition(input('review', 0, 1, true), NOW).wasAdvanced,
@@ -523,14 +497,10 @@ describe('computeTransition — invariants', () => {
     ).toBe(false);
   });
 
-  // hasPenalty=true on output is set ONLY on wrong answers in the learning
-  // phase tiers (passive/active/production). Wrong on review clears penalty
-  // because review-wrong sets hasPenalty=false (rollback comes with its own
-  // 1-day cooldown rather than a penalty flag).
+  // hasPenalty=true on output is set ONLY on wrong answers in active/production
+  // (passive больше не имеет ветки penalty — migrate-on-touch без penalty).
+  // Wrong on review clears penalty (rollback comes with its own 1-day cooldown).
   it('hasPenalty=true only on learning-phase wrong answers', () => {
-    expect(
-      computeTransition(input('passive', 0, 0, false), NOW).hasPenalty,
-    ).toBe(true);
     expect(
       computeTransition(input('active', 0, 0, false), NOW).hasPenalty,
     ).toBe(true);
@@ -538,15 +508,19 @@ describe('computeTransition — invariants', () => {
       computeTransition(input('production', 0, 0, false), NOW).hasPenalty,
     ).toBe(true);
 
-    // Encounter wrong, review wrong, and any correct answer → false.
+    // Encounter wrong, passive wrong (migrate, no penalty), review wrong,
+    // any correct → false.
     expect(
       computeTransition(input('encounter', 0, 0, false), NOW).hasPenalty,
+    ).toBe(false);
+    expect(
+      computeTransition(input('passive', 0, 0, false), NOW).hasPenalty,
     ).toBe(false);
     expect(
       computeTransition(input('review', 0, 0, false), NOW).hasPenalty,
     ).toBe(false);
     expect(
-      computeTransition(input('passive', 0, 0, true), NOW).hasPenalty,
+      computeTransition(input('active', 0, 0, true), NOW).hasPenalty,
     ).toBe(false);
   });
 });
@@ -564,7 +538,8 @@ describe('computeTransition — invariants', () => {
 // тесты ловят сломанную лестницу целиком.
 
 describe('lifecycle — happy path encounter → ... → review', () => {
-  it('1 encounter + 2 passive + 2 active + 3 production correct → review', () => {
+  it('1 encounter + 2 active + 3 production correct → review', () => {
+    // После скрытия passive: encounter → active → production → review.
     // Стартовое состояние новой записи user_word_progress(_word).
     let s: ReturnType<typeof computeTransition> = {
       tier: 'encounter',
@@ -577,24 +552,14 @@ describe('lifecycle — happy path encounter → ... → review', () => {
       wasAdvanced: false,
     };
 
-    // Шаг 1: encounter — «понятно». Любой ответ → passive, tcc=0.
-    s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
-    expect(s.tier).toBe('passive');
-    expect(s.tierCorrectCount).toBe(0);
-    expect(s.wasAdvanced).toBe(true);
-    expect(s.becameLearned).toBe(false);
-
-    // Шаги 2-3: passive correct ×2 → active.
-    s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
-    expect(s.tier).toBe('passive');
-    expect(s.tierCorrectCount).toBe(1);
-
+    // Шаг 1: encounter — «понятно». Любой ответ → active (passive скрыт), tcc=0.
     s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
     expect(s.tier).toBe('active');
     expect(s.tierCorrectCount).toBe(0);
     expect(s.wasAdvanced).toBe(true);
+    expect(s.becameLearned).toBe(false);
 
-    // Шаги 4-5: active correct ×2 → production.
+    // Шаги 2-3: active correct ×2 → production.
     s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
     expect(s.tier).toBe('active');
     expect(s.tierCorrectCount).toBe(1);
@@ -604,7 +569,7 @@ describe('lifecycle — happy path encounter → ... → review', () => {
     expect(s.tierCorrectCount).toBe(0);
     expect(s.becameLearned).toBe(false); // production ещё не «выучено»
 
-    // Шаги 6-8: production correct ×3 → review (becameLearned=true).
+    // Шаги 4-6: production correct ×3 → review (becameLearned=true).
     s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
     expect(s.tier).toBe('production');
     expect(s.tierCorrectCount).toBe(1);
@@ -652,9 +617,9 @@ describe('lifecycle — happy path encounter → ... → review', () => {
 });
 
 describe('lifecycle — wrong answers and rollbacks', () => {
-  it('passive C-W-C-C: один wrong сбрасывает tcc, дальше 2 correct advance', () => {
+  it('active C-W-C-C: один wrong сбрасывает tcc, дальше 2 correct advance', () => {
     let s: ReturnType<typeof computeTransition> = {
-      tier: 'passive',
+      tier: 'active',
       tierCorrectCount: 0,
       reviewStage: 0,
       nextReviewAt: NOW,
@@ -666,26 +631,26 @@ describe('lifecycle — wrong answers and rollbacks', () => {
 
     // C: tcc 0→1, hasPenalty=false.
     s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
-    expect(s.tier).toBe('passive');
+    expect(s.tier).toBe('active');
     expect(s.tierCorrectCount).toBe(1);
     expect(s.hasPenalty).toBe(false);
 
-    // W: tcc 1→0, hasPenalty=true. Слово остаётся на passive.
+    // W: tcc 1→0, hasPenalty=true. Слово остаётся на active.
     s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, false, s.hasPenalty), NOW);
-    expect(s.tier).toBe('passive');
+    expect(s.tier).toBe('active');
     expect(s.tierCorrectCount).toBe(0);
     expect(s.hasPenalty).toBe(true);
     expect(s.nextReviewAt.getTime()).toBe(addMinutes(NOW, COOLDOWN_MIN).getTime());
 
     // C: tcc 0→1, hasPenalty снимается на correct.
     s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
-    expect(s.tier).toBe('passive');
+    expect(s.tier).toBe('active');
     expect(s.tierCorrectCount).toBe(1);
     expect(s.hasPenalty).toBe(false);
 
-    // C: tcc 1→2 ≥ correctToAdvance → advance to active.
+    // C: tcc 1→2 ≥ correctToAdvance → advance to production.
     s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
-    expect(s.tier).toBe('active');
+    expect(s.tier).toBe('production');
     expect(s.wasAdvanced).toBe(true);
   });
 
@@ -700,28 +665,27 @@ describe('lifecycle — wrong answers and rollbacks', () => {
   });
 });
 
-describe('lifecycle — backfill artifact regression', () => {
-  // Регрессия по реальному инциденту: после Phase D у backfill-юзера слово
-  // застряло на passive с tcc=1, correct=3, incorrect=0. Reconstruction
-  // показала: backfill copied chosen-meaning'а (tcc=0, correct=2, incorrect=0),
-  // дальше один word-level correct сделал tcc=1. Чтобы advance — нужен ещё
-  // один correct. Не баг механики, а артефакт перехода.
+describe('lifecycle — legacy passive migrate-on-touch', () => {
+  // После скрытия passive: legacy записи в БД могут иметь tier='passive'.
+  // Любой ответ переводит их на active с tcc=0 и wasAdvanced=true. Penalty
+  // на ошибку НЕ ставится в computeTransition (оно нейтрально для passive);
+  // K=COOLDOWN_ON_ERROR=4 ставится в recordWordAnswer отдельно (К3).
   //
-  // Тест валидирует: с tcc=1 на passive один correct даёт advance к active.
-  it('passive с tcc=1 + correct → active (tcc=2 ≥ correctToAdvance)', () => {
+  // Старая backfill-регрессия (passive застрял с tcc=1) сейчас невозможна:
+  // одно касание любым isCorrect выводит на active.
+  it('passive с tcc=1 + correct → active', () => {
     const s = computeTransition(input('passive', 1, 0, true), NOW);
     expect(s.tier).toBe('active');
     expect(s.tierCorrectCount).toBe(0);
     expect(s.wasAdvanced).toBe(true);
   });
 
-  // Дополнительно: с tcc=1 + wrong → reset, без advance.
-  it('passive с tcc=1 + wrong → passive с tcc=0 + hasPenalty', () => {
-    const s = computeTransition(input('passive', 1, 0, false), NOW);
-    expect(s.tier).toBe('passive');
+  it('passive с tcc=0 + wrong → active (migrate-on-touch без penalty)', () => {
+    const s = computeTransition(input('passive', 0, 0, false), NOW);
+    expect(s.tier).toBe('active');
     expect(s.tierCorrectCount).toBe(0);
-    expect(s.hasPenalty).toBe(true);
-    expect(s.wasAdvanced).toBe(false);
+    expect(s.hasPenalty).toBe(false);
+    expect(s.wasAdvanced).toBe(true);
   });
 });
 
