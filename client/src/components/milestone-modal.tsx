@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { PILOT_FEATURES } from '@/lib/pilot-config';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -72,15 +73,17 @@ export function MilestoneModal({ milestone, onClose }: MilestoneModalProps) {
             </p>
 
             {/* Gems reward */}
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: 'spring', damping: 12, stiffness: 200, delay: 0.25 }}
-            >
-              <Badge variant="primary" className="px-4 py-1.5 text-base">
-                +{milestone.gemsReward} {'\u{1F48E}'}
-              </Badge>
-            </motion.div>
+            {PILOT_FEATURES.gems && (
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', damping: 12, stiffness: 200, delay: 0.25 }}
+              >
+                <Badge variant="primary" className="px-4 py-1.5 text-base">
+                  +{milestone.gemsReward} {'\u{1F48E}'}
+                </Badge>
+              </motion.div>
+            )}
 
             {/* Continue button */}
             <Button

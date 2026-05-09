@@ -356,9 +356,13 @@ export function VocabularyScreen() {
       {/* Row 1: Back | Gems (center) | History | Avatar */}
       <div className="mb-2 flex items-center gap-3">
         <BackButton onClick={() => navigate('/vocabulary')} variant="ghost" />
-        <div className="flex flex-1 justify-center">
-          <GemsIndicator gems={user.gems} freezes={user.streakFreezes} onClick={() => navigate('/shop')} />
-        </div>
+        {PILOT_FEATURES.gems ? (
+          <div className="flex flex-1 justify-center">
+            <GemsIndicator gems={user.gems} freezes={user.streakFreezes} onClick={() => navigate('/shop')} />
+          </div>
+        ) : (
+          <div className="flex-1" />
+        )}
         <Button variant="secondary" size="icon" onClick={() => setHistoryDrawerOpen(true)}>
           <HugeiconsIcon icon={CheckListIcon} size={24} className="text-[var(--gray-11)]" />
         </Button>

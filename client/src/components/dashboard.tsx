@@ -30,13 +30,17 @@ const SYSTEMS_SECTIONS: CoreSection[] = [
     status: 'active',
     navigateTo: '/vocabulary',
   },
-  {
-    key: 'grammar',
-    title: 'Грамматика',
-    description: 'Артикли и времена: правила и тренажёр.',
-    status: 'active',
-    navigateTo: '/grammar',
-  },
+  ...(PILOT_FEATURES.grammar
+    ? [
+        {
+          key: 'grammar',
+          title: 'Грамматика',
+          description: 'Артикли и времена: правила и тренажёр.',
+          status: 'active' as const,
+          navigateTo: '/grammar',
+        },
+      ]
+    : []),
   {
     key: 'spelling',
     title: 'Орфография',
@@ -54,13 +58,17 @@ const SYSTEMS_SECTIONS: CoreSection[] = [
 ];
 
 const SKILLS_SECTIONS: CoreSection[] = [
-  {
-    key: 'reading',
-    title: 'Чтение',
-    description: 'Мини-тексты с проверкой понимания.',
-    status: 'active',
-    navigateTo: '/reading',
-  },
+  ...(PILOT_FEATURES.reading
+    ? [
+        {
+          key: 'reading',
+          title: 'Чтение',
+          description: 'Мини-тексты с проверкой понимания.',
+          status: 'active' as const,
+          navigateTo: '/reading',
+        },
+      ]
+    : []),
   {
     key: 'listening',
     title: 'Аудирование',
@@ -198,13 +206,16 @@ export function Dashboard() {
         <button onClick={() => navigate('/profile')} className="shrink-0">
           <Avatar src={user.avatarUrl} fallback={user.firstName} size={48} />
         </button>
-        <div className="flex flex-1 justify-center">
-          <GemsIndicator
-            gems={user.gems}
-            freezes={user.streakFreezes}
-            onClick={() => navigate('/shop')}
-          />
-        </div>
+        {PILOT_FEATURES.gems && (
+          <div className="flex flex-1 justify-center">
+            <GemsIndicator
+              gems={user.gems}
+              freezes={user.streakFreezes}
+              onClick={() => navigate('/shop')}
+            />
+          </div>
+        )}
+        {!PILOT_FEATURES.gems && <div className="flex-1" />}
         {PILOT_FEATURES.leagues && (
           <button
             onClick={() => navigate('/leaderboard')}

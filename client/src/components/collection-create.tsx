@@ -11,6 +11,7 @@ import { PremiumDrawer } from '@/components/ui/premium-drawer';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Search01Icon, Cancel01Icon, Add01Icon } from '@hugeicons/core-free-icons';
 import { dictionaryLookup, addCollectionWords } from '@/lib/api';
+import { PILOT_FEATURES } from '@/lib/pilot-config';
 import type { DictionaryLookupResult } from '@/types/api';
 
 const MAX_FREE_WORDS = 50;
@@ -87,7 +88,7 @@ export function CollectionCreate() {
       custom?: { wordText: string; translation: string },
     ) => {
       // Проверяем лимит слов для бесплатного плана
-      if (words.length >= MAX_FREE_WORDS) {
+      if (PILOT_FEATURES.payments && words.length >= MAX_FREE_WORDS) {
         setShowPremiumDrawer(true);
         return;
       }

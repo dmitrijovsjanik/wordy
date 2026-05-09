@@ -18,6 +18,7 @@ import { BackButton } from '@/components/ui/back-button';
 import { PremiumDrawer } from '@/components/ui/premium-drawer';
 import { useThemeStore } from '@/stores/theme-store';
 import { speakText, stopAudio } from '@/lib/tts';
+import { PILOT_FEATURES } from '@/lib/pilot-config';
 import { TTS_VOICES } from '@/config/tts-voices';
 import { cn } from '@/lib/utils';
 
@@ -102,7 +103,7 @@ function VoiceSection() {
   };
 
   const handleSelect = async (voiceId: string, isPremiumVoice: boolean) => {
-    if (isPremiumVoice && !userIsPremium) {
+    if (PILOT_FEATURES.payments && isPremiumVoice && !userIsPremium) {
       setPremiumOpen(true);
       return;
     }
@@ -120,7 +121,7 @@ function VoiceSection() {
         <div className="mt-3 flex flex-col gap-2">
           {TTS_VOICES.map((v) => {
             const isActive = user.ttsVoice === v.id;
-            const isLocked = v.premium && !userIsPremium;
+            const isLocked = PILOT_FEATURES.payments && v.premium && !userIsPremium;
             const isPreviewing = previewingId === v.id;
             const genderLabel = v.gender === 'F' ? 'Жен.' : 'Муж.';
             const accentLabel = v.accent === 'GB' ? 'Брит.' : 'Амер.';

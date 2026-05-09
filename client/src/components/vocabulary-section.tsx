@@ -66,13 +66,17 @@ export function VocabularySection() {
       {/* Header: Back | Gems (center) | League | Streak | Avatar */}
       <div className="flex items-center gap-3">
         <BackButton onClick={() => navigate('/')} variant="ghost" />
-        <div className="flex flex-1 justify-center">
-          <GemsIndicator
-            gems={user.gems}
-            freezes={user.streakFreezes}
-            onClick={() => navigate('/shop')}
-          />
-        </div>
+        {PILOT_FEATURES.gems ? (
+          <div className="flex flex-1 justify-center">
+            <GemsIndicator
+              gems={user.gems}
+              freezes={user.streakFreezes}
+              onClick={() => navigate('/shop')}
+            />
+          </div>
+        ) : (
+          <div className="flex-1" />
+        )}
         {PILOT_FEATURES.leagues && (
           <button
             onClick={() => navigate('/leaderboard')}

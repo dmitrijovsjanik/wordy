@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { useResetTimer } from '@/hooks/use-reset-timer';
 import { getStreakCalendar } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { PILOT_FEATURES } from '@/lib/pilot-config';
 import type { StreakActivityDay } from '@/types/api';
 import fireStreakData from '@/assets/fire-streak.json';
 
@@ -201,7 +202,9 @@ export function StreakInfoSheet({
           </div>
           <DrawerTitle className="text-center">Стрик дней</DrawerTitle>
           <DrawerDescription className="text-center">
-            Играйте каждый день, чтобы не потерять стрик. Заморозки защищают стрик в пропущенные дни.
+            {PILOT_FEATURES.gems
+              ? 'Играйте каждый день, чтобы не потерять стрик. Заморозки защищают стрик в пропущенные дни.'
+              : 'Дайте 25 правильных ответов в день, чтобы день засчитался в стрик.'}
           </DrawerDescription>
         </DrawerHeader>
 

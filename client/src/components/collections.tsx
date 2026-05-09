@@ -12,6 +12,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { Add01Icon, Book02Icon } from '@hugeicons/core-free-icons';
 import { Progress } from '@/components/ui/progress';
 import { ICON_MAP, DEFAULT_ICON } from '@/lib/icon-map';
+import { PILOT_FEATURES } from '@/lib/pilot-config';
 import type { MarketplaceCollection, CollectionGroup, LibraryCollection, CefrLevel } from '@/types/api';
 
 const MAX_FREE_COLLECTIONS = 1;
@@ -340,7 +341,7 @@ export function Collections() {
             <Button
               className="w-full gap-2"
               onClick={() => {
-                if (customCollectionsCount >= MAX_FREE_COLLECTIONS) {
+                if (PILOT_FEATURES.payments && customCollectionsCount >= MAX_FREE_COLLECTIONS) {
                   setShowPremiumDrawer(true);
                 } else {
                   navigate('/collections/create');

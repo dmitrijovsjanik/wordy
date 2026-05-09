@@ -1,4 +1,5 @@
 import type { RewardDisplay } from '@/types/game';
+import { PILOT_FEATURES } from '@/lib/pilot-config';
 
 type RewardFeedbackProps = {
   reward: RewardDisplay;
@@ -28,7 +29,7 @@ export function RewardFeedback({ reward }: RewardFeedbackProps) {
       </div>
 
       {/* LP group — value + multiplier, slower animation */}
-      {reward.lp > 0 && (
+      {PILOT_FEATURES.leagues && reward.lp > 0 && (
         <div className="animate-reward-group-slow flex items-center gap-1.5">
           <span className="text-xs font-medium text-[var(--amber-11)]">
             +{reward.lp} LP

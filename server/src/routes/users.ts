@@ -40,7 +40,7 @@ export default async function userRoutes(app: FastifyInstance) {
       if (!VALID_VOICES.includes(ttsVoice as typeof VALID_VOICES[number])) {
         return reply.code(400).send({ error: 'Неизвестный голос', code: 'INVALID_VOICE' });
       }
-      if (ttsVoice !== DEFAULT_VOICE) {
+      if (ttsVoice !== DEFAULT_VOICE && PILOT_FEATURES.payments) {
         const premium = await isPremium(request.user.id);
         if (!premium) {
           return reply.code(403).send({ error: 'Необходима подписка PRO', code: 'PREMIUM_REQUIRED' });
