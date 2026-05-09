@@ -3,8 +3,14 @@ import { getNextArticleQuestion, checkArticleAnswer } from '../services/grammar/
 import { getNextTenseQuestion, checkTenseAnswer } from '../services/grammar/tense-quiz-service.js';
 import { getNextCollocation, checkCollocationAnswer } from '../services/game/generators/collocation.js';
 import { getNextFalseFriendQuestion, checkFalseFriendAnswer } from '../services/grammar/false-friends-service.js';
+import { PILOT_FEATURES } from '../config/pilot-config.js';
 
 export default async function grammarRoutes(app: FastifyInstance) {
+  app.addHook('onRequest', async (_request, reply) => {
+    if (!PILOT_FEATURES.grammar) {
+      return reply.code(404).send({ error: 'Not Found' });
+    }
+  });
   app.addHook('onRequest', app.authenticate);
 
   // ─── Articles Quiz ───────────────────────────────────────────────

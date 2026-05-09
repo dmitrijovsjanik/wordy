@@ -1,7 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { createDuel, joinDuel, getDuel, finishDuel, startDuelQuiz } from '../services/duel-service.js';
+import { PILOT_FEATURES } from '../config/pilot-config.js';
 
 export default async function duelRoutes(app: FastifyInstance) {
+  app.addHook('onRequest', async (_request, reply) => {
+    if (!PILOT_FEATURES.duels) {
+      return reply.code(404).send({ error: 'Not Found' });
+    }
+  });
   app.addHook('onRequest', app.authenticate);
 
   app.post('/api/duels/create', async (request) => {

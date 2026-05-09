@@ -1,7 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { getNextPassage, checkAnswer } from '../services/reading/reading-service.js';
+import { PILOT_FEATURES } from '../config/pilot-config.js';
 
 export default async function readingRoutes(app: FastifyInstance) {
+  app.addHook('onRequest', async (_request, reply) => {
+    if (!PILOT_FEATURES.reading) {
+      return reply.code(404).send({ error: 'Not Found' });
+    }
+  });
   app.addHook('onRequest', app.authenticate);
 
   // ─── Get Next Passage ──────────────────────────────────────────────
