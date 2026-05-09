@@ -18,24 +18,24 @@
 
 ## Решения по механикам
 
-| # | Механика | Решение | Заметка |
+| # | Механика | Решение | Реализация |
 |---|---|---|---|
-| 1 | Дуэли | ❌ скрыть | PvP бессмысленен на узком круге |
-| 2 | Лиги / LP | ❌ скрыть | Соревновательный рейтинг требует массы |
-| 3 | Гемы (всё) | ❌ скрыть | Индикатор, /shop, награды; `addGems()` no-op |
-| 4 | Streak дней | ✅ оставить | Без freeze (гемов нет) |
-| 5 | Streak ответов | ✅ оставить | Без gem-награды |
+| 1 | Дуэли | ❌ скрыть | UI: routes off, OTHER_SECTIONS card off. Server: 404 на `/api/duels/*` |
+| 2 | Лиги / LP | ❌ скрыть | UI: routes off, LeagueBadge скрыт в шапках. Server: 404 на `/api/leagues/*` |
+| 3 | Гемы (всё) | ❌ скрыть | `addGems()` no-op. Все накопители `gemsEarned` зануляются. GemsIndicator → null. `/shop` route off. Роуты покупок (`streak-freeze/purchase`, `lives/refill`, `xp-boost/purchase`) → 403 |
+| 4 | Streak дней | ✅ оставить | Без freeze (гемов нет → выкупа нет) |
+| 5 | Streak ответов | ✅ оставить | Без gem-награды (гемы off) |
 | 6 | Друзья | ✅ оставить | |
 | 7 | XP / уровни | ✅ оставить | Без gem-награды на level up |
-| 8 | Double XP / boost | ❌ скрыть | |
-| 9 | Premium / payments | ❌ скрыть | |
-| 10 | Milestones | 🔄 редизайн | 25 правильных = зачёт дня для streak; 50/7-day убираем |
-| 11 | Reading mode | ❌ скрыть | Побочный режим |
-| 12 | Grammar module | ❌ скрыть | Побочный режим |
+| 8 | Double XP / boost | ❌ скрыть | Серверный `maybeApplyDoubleXp` отключён, клиентский таймер скрыт |
+| 9 | Premium / payments | ❌ скрыть | `/api/payments/create` → 403 |
+| 10 | Milestones | 🔄 редизайн | `lastLoginDate` обновляется при `dailyCorrectCount >= 25` (порог `STREAK_DAY_THRESHOLD` в `pilot-config.ts`). 50/7-day milestones — гемов off, награды нет |
+| 11 | Reading mode | ❌ скрыть | UI route off, server 404 на `/api/reading/*` |
+| 12 | Grammar module | ❌ скрыть | UI routes off, server 404 на `/api/grammar/*` |
 | 13 | Admin | ✅ оставить | По `userId == 409693570` |
-| 14 | Онбординг | ❌ скрыть | Кроме выбора коллекции (это базовый сетап) |
+| 14 | Онбординг | ❌ скрыть | В коде отдельного flow нет; первый выбор коллекции остаётся как был |
 | 15 | TTS | ✅ оставить | Часть core learning loop |
-| 16 | Жизни (hearts) | ❌ скрыто (уже) | `LIVES_ENABLED = false` исторически |
+| 16 | Жизни (hearts) | ❌ скрыто | `LIVES_ENABLED = false` исторически |
 
 ## Ключевая редизайн-механика: Milestone → Streak
 
