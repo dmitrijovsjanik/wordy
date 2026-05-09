@@ -1162,19 +1162,19 @@ export async function pickNextItemCombined(
 // Каждая возвращает NextPick совместимый с loadPooledMeaning + generateForTier.
 
 /**
- * L1-L3 + word-level review.
+ * L1-L3 (без review).
  *
- * Фильтр: state='learning' AND tier IN ('encounter','passive','active','review')
+ * Фильтр: state='learning' AND tier IN ('encounter','passive','active')
  *   - 'passive' включён намеренно: legacy-записи в БД должны попадать в
  *     picker, чтобы migrate-on-touch (computeTransition) их перевёл на active.
  *   - 'production' исключён — там meaning-pool через pickNextProduction.
- *   - 'review' попадает сюда только когда word-level review-запись due.
+ *   - 'review' исключён — main и review слоты не должны пересекаться.
+ *     Word-level review-due идёт ТОЛЬКО через pickNextReviewDue.
  *
- * Сортировка как в pickNextWord: review приоритетнее, внутри активной
- * колоды — lastSeenAt ASC NULLS FIRST.
+ * Сортировка: lastSeenAt ASC NULLS FIRST (давно/никогда не показанные впереди).
  *
- * Возвращает kind='word' (для всех tier'ов в этом пуле — ответ идёт через
- * recordWordAnswer; meaningId резолвится позже через pickRepresentativeMeaning).
+ * Возвращает kind='word' — ответ идёт через recordWordAnswer; meaningId
+ * резолвится позже через pickRepresentativeMeaning.
  */
 export async function pickNextL1L3(
   userId: number,
@@ -1199,9 +1199,8 @@ export async function pickNextL1L3(
     .where(and(
       eq(userWordProgressWord.userId, userId),
       eq(userWordProgressWord.state, 'learning'),
-      // L1-3 (encounter/passive/active) + word-level review.
-      // production исключён — он меaning-уровневый.
-      sql`${userWordProgressWord.learningTier} IN ('encounter','passive','active','review')`,
+      // L1-3 (encounter/passive/active). production и review — отдельные слоты.
+      sql`${userWordProgressWord.learningTier} IN ('encounter','passive','active')`,
       or(isNull(userWordProgressWord.snoozedUntil), lte(userWordProgressWord.snoozedUntil, now))!,
       or(isNull(userWordProgressWord.nextReviewAt), lte(userWordProgressWord.nextReviewAt, now))!,
       ...(collectionFilter ? [collectionFilter] : []),
@@ -1210,9 +1209,6 @@ export async function pickNextL1L3(
         : []),
     ))
     .orderBy(
-      // review приоритетнее активной колоды.
-      sql`CASE WHEN ${userWordProgressWord.learningTier} = 'review' THEN 0 ELSE 1 END`,
-      sql`CASE WHEN ${userWordProgressWord.learningTier} = 'review' THEN ${userWordProgressWord.nextReviewAt} END ASC NULLS LAST`,
       // Активная колода: давно не показанные / never-shown — впереди.
       sql`${userWordProgressWord.lastSeenAt} ASC NULLS FIRST`,
       sql`${userWordProgressWord.id} ASC`,
