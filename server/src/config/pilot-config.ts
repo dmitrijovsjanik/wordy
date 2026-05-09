@@ -15,17 +15,59 @@
  *   для своей механики; этот файл переиспользует их через re-export, чтобы
  *   получить единую сводку «что в пилоте».
  *
- * Решение по конкретным механикам делается отдельным проходом — см.
- * docs/pilot-scope.md.
+ * Решения зафиксированы в docs/pilot-scope.md.
  */
 import { LIVES_ENABLED } from './lives-config';
 
 export const PILOT_FEATURES = {
+  // ===== СКРЫТО В ПИЛОТЕ =====
+
+  /** PvP-режим, рейтинг дуэлей. Бессмысленен на узком круге. */
+  duels: false,
+
+  /** Соревновательный рейтинг между юзерами (LP). Требует массы. */
+  leagues: false,
+
+  /** Гемы целиком: индикатор в шапке, /shop, награды, freeze. */
+  gems: false,
+
+  /** Double XP / XP boost-механики. Шум без соревновательного контекста. */
+  xpBoost: false,
+
+  /** Premium / IAP / Telegram Stars / YooKassa. */
+  payments: false,
+
+  /** Read-mode (отдельный режим чтения текстов). */
+  reading: false,
+
+  /** Grammar module (отдельный режим грамматики). */
+  grammar: false,
+
+  /** Онбординг (туры, объяснения механик). Кроме первого выбора коллекции. */
+  onboarding: false,
+
   /** Система жизней (сердечки). Источник: lives-config.ts. */
   lives: LIVES_ENABLED,
 
-  // Слоты под будущие решения (заполнятся по мере прохода по механикам).
-  // Пример: duels: false, leagues: false, shop: false, streak: true, ...
+  // ===== ОСТАВЛЕНО В ПИЛОТЕ =====
+
+  /** Streak дней. В пилоте без freeze (гемы скрыты). */
+  streakDays: true,
+
+  /** Streak ответов в сессии. Без gem-награды. */
+  streakAnswers: true,
+
+  /** Друзья. Социальный список. */
+  friends: true,
+
+  /** XP и уровни. Без gem-награды на level up. */
+  xpLevels: true,
+
+  /** TTS-озвучка слов. Часть core learning loop. */
+  tts: true,
+
+  /** Дневные milestones (25 правильных = зачёт дня для streak). */
+  milestones: true,
 } as const;
 
 export type PilotFeatureKey = keyof typeof PILOT_FEATURES;
