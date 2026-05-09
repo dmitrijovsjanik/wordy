@@ -160,10 +160,41 @@ export default async function learningRoutes(app: FastifyInstance) {
     });
     pick = await resolveWordPick(combined);
 
+    // Шаг 2a: если cooldown заблокировал ВСЁ И активная колода + pool пусты —
+    // зацикливать одно production-слово через fallback бессмысленно (юзер
+    // увидит одно и то же будто баг). Лучше отправить в обзор за новыми
+    // словами. Эта проверка ДО fallback'а потому что fallback физически
+    // нашёл бы единственное оставшееся production-слово.
+    if (!pick && cooldownExcluded.length > 0) {
+      const activeAfter = await getActiveDeckSize(userId, validCollectionId);
+      if (activeAfter === 0) {
+        const poolSize = await getPoolSize(userId, validCollectionId);
+        if (poolSize < learningConfig.activeDeck.poolMinForResume) {
+          const userRow = await db
+            .select({ cefr: users.estimatedCefr })
+            .from(users)
+            .where(eq(users.id, userId))
+            .limit(1);
+          const userCefr = userRow[0]?.cefr ?? null;
+          const available = await hasAvailableForReview(userId, userCefr);
+          if (!available) {
+            console.log(`[next.review] u=${userId} no active words + cooldown blocks all → embedded_review_empty`);
+            return { mode: 'embedded_review_empty' as const };
+          }
+          console.log(`[next.review] u=${userId} no active words + cooldown blocks all → embedded_review (poolSize=${poolSize})`);
+          return {
+            mode: 'embedded_review' as const,
+            poolSize,
+            poolMinForResume: learningConfig.activeDeck.poolMinForResume,
+          };
+        }
+      }
+    }
+
     // Fallback: cooldown — мягкое исключение, recent — жёсткое. Если первый
     // pick null И cooldown непуст — повторяем БЕЗ cooldown excluded (только
-    // client-side recent). Если retry тоже null — реально ничего нет, идём в
-    // embedded_review/empty ниже.
+    // client-side recent). Применяется когда в активной колоде/pool есть
+    // запас, но он временно "выхолощён" cooldown'ом.
     let usedFallback = false;
     if (!pick && cooldownExcluded.length > 0) {
       usedFallback = true;
@@ -176,7 +207,7 @@ export default async function learningRoutes(app: FastifyInstance) {
       pick = await resolveWordPick(retry);
     }
 
-    // Шаг 2: ничего не готово И активная колода пуста — встроенный обзор.
+    // Шаг 2b: ничего не готово И активная колода пуста — встроенный обзор.
     // Активная колода может быть >0, но pickNextItemCombined вернёт null
     // если у всех записей nextReviewAt в будущем (review-кулдаун) — в этом
     // случае мы НЕ переключаемся в обзор, ждём пока подойдёт время.
