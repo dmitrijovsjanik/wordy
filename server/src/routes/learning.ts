@@ -125,6 +125,34 @@ export default async function learningRoutes(app: FastifyInstance) {
     if (activeBefore <= learningConfig.activeDeck.threshold) {
       await drawFromPool(userId, learningConfig.activeDeck.target, activeBefore);
     }
+    const poolNow = await getPoolSize(userId, validCollectionId);
+    const activeAfterDraw = await getActiveDeckSize(userId, validCollectionId);
+
+    // Шаг 1.5: ранний выход в embedded_review.
+    // Если активная колода (L1-L3) пуста и pool тоже пуст — отправляем юзера
+    // в обзор за новыми словами, ДАЖЕ если есть production-meanings или
+    // review-due. Без этого юзер бесконечно крутит N meanings одного и того
+    // же слова на L4 (decompose) — визуально это «3-4 слова повторяются».
+    // Обзор возвращает контроль: юзер свайпает unknown → pool пополняется →
+    // drawFromPool тянет в активную колоду → обычное обучение возобновляется.
+    // Counter квоты НЕ сдвигается на embedded — слот возобновится после.
+    if (activeAfterDraw === 0 && poolNow < learningConfig.activeDeck.poolMinForResume) {
+      const userRow = await db
+        .select({ cefr: users.estimatedCefr })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      const userCefr = userRow[0]?.cefr ?? null;
+      const available = await hasAvailableForReview(userId, userCefr);
+      if (!available) {
+        return { mode: 'embedded_review_empty' as const };
+      }
+      return {
+        mode: 'embedded_review' as const,
+        poolSize: poolNow,
+        poolMinForResume: learningConfig.activeDeck.poolMinForResume,
+      };
+    }
 
     // Шаг 2: cooldown. Один decrement на запрос; объединяем с client-side
     // recentWordIds (anti-repeat 2 последних). Все три pick-функции
