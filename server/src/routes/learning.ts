@@ -6,7 +6,6 @@ import { NON_FUNCTIONAL_SQL } from '../db/word-filters.js';
 import { learningConfig } from '../config/learning-config.js';
 import {
   recordAnswer,
-  pickNextItemCombined,
   recordWordAnswer,
   applyWordSwipe,
   undoWordSwipe,
@@ -14,12 +13,21 @@ import {
   getActiveDeckSize,
   getPoolSize,
   drawFromPool,
+  pickNextL1L3,
+  pickNextProduction,
+  pickNextReviewDue,
+  type NextPick,
 } from '../services/learning-service.js';
 import { hasAvailableForReview } from '../services/review-feed-service.js';
 import {
   decrementOnFetch as cooldownDecrementOnFetch,
   getExcludedWordIds as cooldownGetExcludedWordIds,
 } from '../services/cooldown-service.js';
+import {
+  getCurrentSlot,
+  advanceSlot,
+  type QuotaSlot,
+} from '../services/quota-service.js';
 import {
   getProblemMeanings,
   getProblemMeaningsCount,
@@ -119,7 +127,8 @@ export default async function learningRoutes(app: FastifyInstance) {
     }
 
     // Шаг 2: cooldown. Один decrement на запрос; объединяем с client-side
-    // recentWordIds (anti-repeat 2 последних). pickNextWord исключит оба.
+    // recentWordIds (anti-repeat 2 последних). Все три pick-функции
+    // (L1L3/production/review) уважают excludeWordIds.
     cooldownDecrementOnFetch(userId);
     const cooldownExcluded = cooldownGetExcludedWordIds(userId);
     const combinedExcludeWordIds = cooldownExcluded.length > 0
@@ -130,84 +139,91 @@ export default async function learningRoutes(app: FastifyInstance) {
       | { kind: 'word'; wordId: number; meaningId: number; tier: 'encounter' | 'passive' | 'active' | 'production' | 'review' }
       | { kind: 'meaning'; meaningId: number; tier: 'encounter' | 'passive' | 'active' | 'production' | 'review' };
 
-    let pick: Pick | null = null;
+    // Шаг 3: квота 4:1:1. Получаем текущий слот (НЕ инкрементируем — это
+    // делаем только при фактическом возврате карточки в самом конце).
+    const slot = getCurrentSlot(userId);
 
-    const toPick = (combined: Awaited<ReturnType<typeof pickNextItemCombined>>): Pick | null => {
-      if (combined?.kind === 'word') return null; // resolve meaning ниже
-      if (combined?.kind === 'meaning') return { kind: 'meaning', meaningId: combined.meaningId, tier: combined.tier };
-      return null;
+    // Резолверы для L1-L3 picks (kind='word' → нужен meaningId через
+    // pickRepresentativeMeaning) и для review-picks (kind='word' тоже
+    // требует meaningId; kind='meaning' идёт как есть).
+    const resolveL1L3 = async (raw: Awaited<ReturnType<typeof pickNextL1L3>>): Promise<Pick | null> => {
+      if (!raw) return null;
+      const meaningId = await pickRepresentativeMeaning(raw.wordId);
+      if (meaningId === null) return null;
+      return { kind: 'word', wordId: raw.wordId, meaningId, tier: raw.tier };
     };
 
-    const resolveWordPick = async (combined: Awaited<ReturnType<typeof pickNextItemCombined>>): Promise<Pick | null> => {
-      if (combined?.kind === 'word') {
-        const meaningId = await pickRepresentativeMeaning(combined.wordId);
-        if (meaningId !== null) {
-          return { kind: 'word', wordId: combined.wordId, meaningId, tier: combined.tier };
-        }
+    const resolveReview = async (raw: NextPick | null): Promise<Pick | null> => {
+      if (!raw) return null;
+      if (raw.kind === 'meaning') {
+        return { kind: 'meaning', meaningId: raw.meaningId, tier: raw.tier };
       }
-      return toPick(combined);
+      // word-level review: нужен meaningId.
+      const meaningId = await pickRepresentativeMeaning(raw.wordId);
+      if (meaningId === null) return null;
+      return { kind: 'word', wordId: raw.wordId, meaningId, tier: raw.tier };
     };
 
-    const combined = await pickNextItemCombined(userId, {
-      collectionId: validCollectionId,
-      excludeWordIds: combinedExcludeWordIds,
-      excludeMeaningIds,
-    });
-    pick = await resolveWordPick(combined);
-
-    // Шаг 2a: если cooldown заблокировал ВСЁ И активная колода + pool пусты —
-    // зацикливать одно production-слово через fallback бессмысленно (юзер
-    // увидит одно и то же будто баг). Лучше отправить в обзор за новыми
-    // словами. Эта проверка ДО fallback'а потому что fallback физически
-    // нашёл бы единственное оставшееся production-слово.
-    if (!pick && cooldownExcluded.length > 0) {
-      const activeAfter = await getActiveDeckSize(userId, validCollectionId);
-      if (activeAfter === 0) {
-        const poolSize = await getPoolSize(userId, validCollectionId);
-        if (poolSize < learningConfig.activeDeck.poolMinForResume) {
-          const userRow = await db
-            .select({ cefr: users.estimatedCefr })
-            .from(users)
-            .where(eq(users.id, userId))
-            .limit(1);
-          const userCefr = userRow[0]?.cefr ?? null;
-          const available = await hasAvailableForReview(userId, userCefr);
-          if (!available) {
-            return { mode: 'embedded_review_empty' as const };
-          }
-          return {
-            mode: 'embedded_review' as const,
-            poolSize,
-            poolMinForResume: learningConfig.activeDeck.poolMinForResume,
-          };
-        }
-      }
-    }
-
-    // Fallback: cooldown — мягкое исключение, recent — жёсткое. Если первый
-    // pick null И cooldown непуст — повторяем БЕЗ cooldown excluded (только
-    // client-side recent). Применяется когда в активной колоде/pool есть
-    // запас, но он временно "выхолощён" cooldown'ом.
-    if (!pick && cooldownExcluded.length > 0) {
-      const retry = await pickNextItemCombined(userId, {
+    // Все три попытки в порядке для конкретного слота (с fallback'ами
+    // согласно ТЗ).
+    const tryMain = async (excludeW: number[]): Promise<Pick | null> =>
+      resolveL1L3(await pickNextL1L3(userId, {
+        excludeWordIds: excludeW,
         collectionId: validCollectionId,
-        excludeWordIds,
+      }));
+
+    const tryProduction = async (excludeW: number[]): Promise<Pick | null> => {
+      const raw = await pickNextProduction(userId, {
+        excludeWordIds: excludeW,
         excludeMeaningIds,
+        collectionId: validCollectionId,
       });
-      pick = await resolveWordPick(retry);
+      if (!raw) return null;
+      return { kind: 'meaning', meaningId: raw.meaningId, tier: raw.tier };
+    };
+
+    const tryReview = async (excludeW: number[]): Promise<Pick | null> =>
+      resolveReview(await pickNextReviewDue(userId, {
+        excludeWordIds: excludeW,
+        excludeMeaningIds,
+        collectionId: validCollectionId,
+      }));
+
+    // Порядок попыток для каждого слота:
+    //   main       → main, production, review
+    //   production → production, review, main
+    //   review     → review, production, main
+    const fallbackOrder: Record<QuotaSlot, Array<(ex: number[]) => Promise<Pick | null>>> = {
+      main: [tryMain, tryProduction, tryReview],
+      production: [tryProduction, tryReview, tryMain],
+      review: [tryReview, tryProduction, tryMain],
+    };
+
+    let pick: Pick | null = null;
+    for (const fn of fallbackOrder[slot]) {
+      pick = await fn(combinedExcludeWordIds);
+      if (pick) break;
     }
 
-    // Шаг 2b: ничего не готово И активная колода пуста — встроенный обзор.
-    // Активная колода может быть >0, но pickNextItemCombined вернёт null
-    // если у всех записей nextReviewAt в будущем (review-кулдаун) — в этом
-    // случае мы НЕ переключаемся в обзор, ждём пока подойдёт время.
+    // Retry без cooldown — на случай "main пуст из-за cooldown" (защита
+    // от случая когда все слова в активной колоде временно блокированы
+    // K-cooldown'ом). Применяем тот же fallback-порядок, но без cooldown
+    // excluded (только client-side recent).
+    if (!pick && cooldownExcluded.length > 0) {
+      for (const fn of fallbackOrder[slot]) {
+        pick = await fn(excludeWordIds);
+        if (pick) break;
+      }
+    }
+
+    // Шаг 4: ничего нигде нет → проверяем, не пора ли в embedded review.
+    // Условие то же что было: активная колода=0 И pool<min.
+    // Counter квоты НЕ сдвигается на embedded — слот возобновится.
     if (!pick) {
       const activeAfter = await getActiveDeckSize(userId, validCollectionId);
       if (activeAfter === 0) {
         const poolSize = await getPoolSize(userId, validCollectionId);
         if (poolSize < learningConfig.activeDeck.poolMinForResume) {
-          // Пул мал → нужен встроенный обзор. Но если в общей базе нет
-          // доступных для обзора слов — показать стену.
           const userRow = await db
             .select({ cefr: users.estimatedCefr })
             .from(users)
@@ -248,6 +264,12 @@ export default async function learningRoutes(app: FastifyInstance) {
       tierAfter: pick.tier,
       questionType: generated.generatorType,
     });
+
+    // Counter квоты сдвигается ТОЛЬКО при фактическом возврате карточки
+    // (через основной слот или fallback). Если loadPooledMeaning или
+    // generateForTier вернули null, или сработал embedded_review/empty,
+    // или ничего не нашлось — слот остаётся на той же позиции.
+    advanceSlot(userId);
 
     return {
       question: generated.question,

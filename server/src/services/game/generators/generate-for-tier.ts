@@ -120,6 +120,16 @@ export async function generateForTier(
   tier: LearningTier,
   opts: GenerateForTierOpts = {},
 ): Promise<GenerateForTierResult> {
+  // Passive скрыт из потока обучения (см. computeTransition: passive→active
+  // при первом касании). Если pickNextL1L3 всё-таки вернул passive-запись
+  // (legacy в БД), генерируем active-карточку (free-recall) — миграция
+  // произойдёт через recordWordAnswer на этом ответе. Проверка идёт ДО
+  // cfg.enabled чтобы не зависеть от состояния passive в конфиге.
+  if (tier === 'passive') {
+    const q = await tryGenerate('free-recall', meaning);
+    return q ? { question: q, generatorType: 'free-recall' } : null;
+  }
+
   const cfg = learningConfig.tiers[tier];
   if (!cfg.enabled) {
     return null;

@@ -17,7 +17,7 @@
  *   - Лестницу пользователь не видит явно — это внутренняя логика отбора.
  */
 
-import { eq, and, sql, isNull, or, lte, inArray, ne } from 'drizzle-orm';
+import { eq, and, sql, isNull, or, lte, inArray, ne, type SQL } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { userWordProgress, userWordProgressWord, collectionWords, wordMeanings, words } from '../db/schema.js';
 import { learningConfig, type ExerciseType } from '../config/learning-config.js';
@@ -105,12 +105,11 @@ export function computeTransition(
   const cfg = learningConfig.tiers[tier];
 
   // ─── encounter ────────────────────────────────────────────────────────────
-  // Encounter — это просто показ карточки. По плану 1 показ = переход на passive.
-  // Корректность ответа не имеет смысла (нет проверки), но защитимся: считаем
-  // любой записанный ответ как «карточка показана».
+  // Encounter — это просто показ карточки. 1 показ = переход на active
+  // (passive скрыт, см. ниже). Корректность ответа не имеет смысла.
   if (tier === 'encounter') {
     return {
-      tier: 'passive',
+      tier: 'active',
       tierCorrectCount: 0,
       reviewStage: 0,
       nextReviewAt: addHours(now, learningConfig.intervals.encounterToPassiveHours),
@@ -122,43 +121,21 @@ export function computeTransition(
   }
 
   // ─── passive ──────────────────────────────────────────────────────────────
+  // Passive скрыт из потока обучения. Migrate-on-touch: любая запись с
+  // tier='passive' (legacy в БД) при касании немедленно переходит на active
+  // независимо от isCorrect. tcc сбрасывается, wasAdvanced=true (поставит
+  // K-cooldown как при обычном повышении). После одного ответа БД
+  // самоочищается от legacy passive-записей.
   if (tier === 'passive') {
-    if (!isCorrect) {
-      return {
-        tier: 'passive',
-        tierCorrectCount: 0,
-        reviewStage: 0,
-        nextReviewAt: addMinutes(now, learningConfig.intervals.learningCooldownMinutes),
-        hasPenalty: true,
-        becameLearned: false,
-        wasReset: false,
-        wasAdvanced: false,
-      };
-    }
-    const newCount = tierCorrectCount + 1;
-    if (newCount >= cfg.correctToAdvance) {
-      return {
-        tier: 'active',
-        tierCorrectCount: 0,
-        reviewStage: 0,
-        nextReviewAt: addHours(now, learningConfig.intervals.learningIntervalsHours[0]),
-        hasPenalty: false,
-        becameLearned: false,
-        wasReset: false,
-        wasAdvanced: true,
-      };
-    }
-    const intervals = learningConfig.intervals.learningIntervalsHours;
-    const idx = Math.min(newCount, intervals.length - 1);
     return {
-      tier: 'passive',
-      tierCorrectCount: newCount,
+      tier: 'active',
+      tierCorrectCount: 0,
       reviewStage: 0,
-      nextReviewAt: addHours(now, intervals[idx]!),
+      nextReviewAt: addHours(now, learningConfig.intervals.learningIntervalsHours[0]),
       hasPenalty: false,
       becameLearned: false,
       wasReset: false,
-      wasAdvanced: false,
+      wasAdvanced: true,
     };
   }
 
@@ -1134,6 +1111,7 @@ export type NextPick =
   | { kind: 'word'; wordId: number; tier: LearningTier }
   | { kind: 'meaning'; meaningId: number; tier: LearningTier };
 
+// legacy, used only by tests
 const TIER_PRIORITY: Record<LearningTier, number> = {
   review: 0,
   production: 1,
@@ -1143,11 +1121,15 @@ const TIER_PRIORITY: Record<LearningTier, number> = {
 };
 
 /**
+ * legacy, used only by tests.
+ *
  * Объединённый picker: возвращает либо word (L1-3 + word-review), либо
  * meaning (L4 production + per-meaning rollback). По tier-приоритету.
  *
- * Логика: запрашиваем оба пула, выбираем top-1 из каждого, затем top-1
- * по tier-приоритету.
+ * После Step B /api/learning/next использует квоту 4:1:1 (см.
+ * pickNextL1L3 / pickNextProduction / pickNextReviewDue + quota-service).
+ * Эта функция оставлена только для unit-тестов picker-логики и для
+ * обратной совместимости.
  */
 export async function pickNextItemCombined(
   userId: number,
@@ -1172,6 +1154,216 @@ export async function pickNextItemCombined(
     return { kind: 'word', wordId: wordPick.wordId, tier: wordPick.tier };
   }
   return { kind: 'meaning', meaningId: meaningPick.meaningId, tier: meaningPick.tier };
+}
+
+// ─── Quota-based pickers (Step B: квота 4:1:1) ──────────────────────────────
+//
+// Три узких pick-функции для квота-flow в /api/learning/next.
+// Каждая возвращает NextPick совместимый с loadPooledMeaning + generateForTier.
+
+/**
+ * L1-L3 + word-level review.
+ *
+ * Фильтр: state='learning' AND tier IN ('encounter','passive','active','review')
+ *   - 'passive' включён намеренно: legacy-записи в БД должны попадать в
+ *     picker, чтобы migrate-on-touch (computeTransition) их перевёл на active.
+ *   - 'production' исключён — там meaning-pool через pickNextProduction.
+ *   - 'review' попадает сюда только когда word-level review-запись due.
+ *
+ * Сортировка как в pickNextWord: review приоритетнее, внутри активной
+ * колоды — lastSeenAt ASC NULLS FIRST.
+ *
+ * Возвращает kind='word' (для всех tier'ов в этом пуле — ответ идёт через
+ * recordWordAnswer; meaningId резолвится позже через pickRepresentativeMeaning).
+ */
+export async function pickNextL1L3(
+  userId: number,
+  opts: { excludeWordIds?: number[]; collectionId?: number } = {},
+): Promise<{ wordId: number; tier: LearningTier } | null> {
+  const exclude = opts.excludeWordIds ?? [];
+  const now = new Date();
+
+  let collectionFilter: SQL | undefined;
+  if (opts.collectionId !== undefined) {
+    collectionFilter = sql`${userWordProgressWord.wordId} IN (
+      SELECT DISTINCT ${wordMeanings.wordId}
+      FROM ${wordMeanings}
+      INNER JOIN collection_words ON collection_words.meaning_id = ${wordMeanings.id}
+      WHERE collection_words.collection_id = ${opts.collectionId}
+    )`;
+  }
+
+  const results = await db
+    .select({ wordId: userWordProgressWord.wordId, tier: userWordProgressWord.learningTier })
+    .from(userWordProgressWord)
+    .where(and(
+      eq(userWordProgressWord.userId, userId),
+      eq(userWordProgressWord.state, 'learning'),
+      // L1-3 (encounter/passive/active) + word-level review.
+      // production исключён — он меaning-уровневый.
+      sql`${userWordProgressWord.learningTier} IN ('encounter','passive','active','review')`,
+      or(isNull(userWordProgressWord.snoozedUntil), lte(userWordProgressWord.snoozedUntil, now))!,
+      or(isNull(userWordProgressWord.nextReviewAt), lte(userWordProgressWord.nextReviewAt, now))!,
+      ...(collectionFilter ? [collectionFilter] : []),
+      ...(exclude.length > 0
+        ? [sql`${userWordProgressWord.wordId} NOT IN (${sql.join(exclude.map(id => sql`${id}`), sql`, `)})`]
+        : []),
+    ))
+    .orderBy(
+      // review приоритетнее активной колоды.
+      sql`CASE WHEN ${userWordProgressWord.learningTier} = 'review' THEN 0 ELSE 1 END`,
+      sql`CASE WHEN ${userWordProgressWord.learningTier} = 'review' THEN ${userWordProgressWord.nextReviewAt} END ASC NULLS LAST`,
+      // Активная колода: давно не показанные / never-shown — впереди.
+      sql`${userWordProgressWord.lastSeenAt} ASC NULLS FIRST`,
+      sql`${userWordProgressWord.id} ASC`,
+    )
+    .limit(1);
+
+  const row = results[0];
+  if (!row) return null;
+  return { wordId: row.wordId, tier: row.tier };
+}
+
+/**
+ * L4 production (meaning-level).
+ *
+ * Фильтр: tier='production' AND state='learning'.
+ * Word-level cooldown через JOIN word_meanings (как в pickNextItem).
+ */
+export async function pickNextProduction(
+  userId: number,
+  opts: { excludeWordIds?: number[]; excludeMeaningIds?: number[]; collectionId?: number } = {},
+): Promise<{ meaningId: number; tier: LearningTier } | null> {
+  const excludeMeanings = opts.excludeMeaningIds ?? [];
+  const excludeWordIds = opts.excludeWordIds ?? [];
+  const now = new Date();
+
+  let collectionFilter: SQL | undefined;
+  if (opts.collectionId !== undefined) {
+    collectionFilter = sql`${userWordProgress.meaningId} IN (
+      SELECT meaning_id FROM collection_words WHERE collection_id = ${opts.collectionId}
+    )`;
+  }
+
+  const results = await db
+    .select({ meaningId: userWordProgress.meaningId, tier: userWordProgress.learningTier })
+    .from(userWordProgress)
+    .where(and(
+      eq(userWordProgress.userId, userId),
+      eq(userWordProgress.state, 'learning'),
+      eq(userWordProgress.learningTier, 'production'),
+      or(isNull(userWordProgress.snoozedUntil), lte(userWordProgress.snoozedUntil, now))!,
+      or(isNull(userWordProgress.nextReviewAt), lte(userWordProgress.nextReviewAt, now))!,
+      ...(collectionFilter ? [collectionFilter] : []),
+      ...(excludeMeanings.length > 0
+        ? [sql`${userWordProgress.meaningId} NOT IN (${sql.join(excludeMeanings.map(id => sql`${id}`), sql`, `)})`]
+        : []),
+      ...(excludeWordIds.length > 0
+        ? [sql`${userWordProgress.meaningId} NOT IN (
+            SELECT id FROM ${wordMeanings}
+            WHERE word_id IN (${sql.join(excludeWordIds.map(id => sql`${id}`), sql`, `)})
+          )`]
+        : []),
+    ))
+    .orderBy(
+      // Внутри production — давно не показанные впереди.
+      sql`${userWordProgress.nextReviewAt} ASC NULLS FIRST`,
+      sql`${userWordProgress.id} ASC`,
+    )
+    .limit(1);
+
+  const row = results[0];
+  if (!row) return null;
+  return { meaningId: row.meaningId, tier: row.tier };
+}
+
+/**
+ * L5 review-due. Объединяет word-level review (state='learning' AND tier='review')
+ * и meaning-level review (tier='review' в user_word_progress).
+ *
+ * Делаем двумя отдельными запросами + Math.min на JS-стороне (UNION ALL в SQL
+ * был бы немного эффективнее, но даёт сложный запрос). Возвращаем тот, у
+ * которого минимальный nextReviewAt; при равенстве предпочитаем word-level.
+ */
+export async function pickNextReviewDue(
+  userId: number,
+  opts: { excludeWordIds?: number[]; excludeMeaningIds?: number[]; collectionId?: number } = {},
+): Promise<NextPick | null> {
+  const excludeWordIds = opts.excludeWordIds ?? [];
+  const excludeMeanings = opts.excludeMeaningIds ?? [];
+  const now = new Date();
+
+  // Word-level review.
+  let wordCollectionFilter: SQL | undefined;
+  if (opts.collectionId !== undefined) {
+    wordCollectionFilter = sql`${userWordProgressWord.wordId} IN (
+      SELECT DISTINCT ${wordMeanings.wordId}
+      FROM ${wordMeanings}
+      INNER JOIN collection_words ON collection_words.meaning_id = ${wordMeanings.id}
+      WHERE collection_words.collection_id = ${opts.collectionId}
+    )`;
+  }
+
+  const wordResults = await db
+    .select({ wordId: userWordProgressWord.wordId, nextReviewAt: userWordProgressWord.nextReviewAt })
+    .from(userWordProgressWord)
+    .where(and(
+      eq(userWordProgressWord.userId, userId),
+      eq(userWordProgressWord.state, 'learning'),
+      eq(userWordProgressWord.learningTier, 'review'),
+      lte(userWordProgressWord.nextReviewAt, now),
+      ...(wordCollectionFilter ? [wordCollectionFilter] : []),
+      ...(excludeWordIds.length > 0
+        ? [sql`${userWordProgressWord.wordId} NOT IN (${sql.join(excludeWordIds.map(id => sql`${id}`), sql`, `)})`]
+        : []),
+    ))
+    .orderBy(sql`${userWordProgressWord.nextReviewAt} ASC NULLS LAST`)
+    .limit(1);
+
+  // Meaning-level review.
+  let meaningCollectionFilter: SQL | undefined;
+  if (opts.collectionId !== undefined) {
+    meaningCollectionFilter = sql`${userWordProgress.meaningId} IN (
+      SELECT meaning_id FROM collection_words WHERE collection_id = ${opts.collectionId}
+    )`;
+  }
+
+  const meaningResults = await db
+    .select({ meaningId: userWordProgress.meaningId, nextReviewAt: userWordProgress.nextReviewAt })
+    .from(userWordProgress)
+    .where(and(
+      eq(userWordProgress.userId, userId),
+      eq(userWordProgress.state, 'learning'),
+      eq(userWordProgress.learningTier, 'review'),
+      lte(userWordProgress.nextReviewAt, now),
+      ...(meaningCollectionFilter ? [meaningCollectionFilter] : []),
+      ...(excludeMeanings.length > 0
+        ? [sql`${userWordProgress.meaningId} NOT IN (${sql.join(excludeMeanings.map(id => sql`${id}`), sql`, `)})`]
+        : []),
+      ...(excludeWordIds.length > 0
+        ? [sql`${userWordProgress.meaningId} NOT IN (
+            SELECT id FROM ${wordMeanings}
+            WHERE word_id IN (${sql.join(excludeWordIds.map(id => sql`${id}`), sql`, `)})
+          )`]
+        : []),
+    ))
+    .orderBy(sql`${userWordProgress.nextReviewAt} ASC NULLS LAST`)
+    .limit(1);
+
+  const wordRow = wordResults[0];
+  const meaningRow = meaningResults[0];
+
+  if (!wordRow && !meaningRow) return null;
+  if (wordRow && !meaningRow) return { kind: 'word', wordId: wordRow.wordId, tier: 'review' };
+  if (meaningRow && !wordRow) return { kind: 'meaning', meaningId: meaningRow.meaningId, tier: 'review' };
+
+  // Оба есть — выбираем меньший nextReviewAt; при равенстве — word.
+  const wordTime = wordRow!.nextReviewAt?.getTime() ?? Infinity;
+  const meaningTime = meaningRow!.nextReviewAt?.getTime() ?? Infinity;
+  if (wordTime <= meaningTime) {
+    return { kind: 'word', wordId: wordRow!.wordId, tier: 'review' };
+  }
+  return { kind: 'meaning', meaningId: meaningRow!.meaningId, tier: 'review' };
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
