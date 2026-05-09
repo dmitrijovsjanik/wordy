@@ -18,6 +18,7 @@ import { eq, sql, and, isNotNull } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { users, userWordProgress, userWordProgressWord, wordMeanings } from '../db/schema.js';
 import { getNewlyReachedMilestones, type MilestoneConfig } from '../config/milestones-config.js';
+import { PILOT_FEATURES } from '../config/pilot-config.js';
 import { addGems } from './progression-service.js';
 
 /**
@@ -140,11 +141,13 @@ export async function checkAndAwardMilestones(userId: number): Promise<Milestone
   if (newMilestones.length === 0) return [];
 
   let totalGems = 0;
-  for (const milestone of newMilestones) {
-    totalGems += milestone.gemsReward;
-  }
-  if (totalGems > 0) {
-    await addGems(userId, totalGems);
+  if (PILOT_FEATURES.gems) {
+    for (const milestone of newMilestones) {
+      totalGems += milestone.gemsReward;
+    }
+    if (totalGems > 0) {
+      await addGems(userId, totalGems);
+    }
   }
 
   const updatedShown = [...shownMilestones, ...newMilestones.map((m) => m.id)];

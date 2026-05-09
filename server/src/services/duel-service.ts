@@ -4,6 +4,7 @@ import { duels, quizSessions } from '../db/schema.js';
 import { generateQuestion } from './quiz-service.js';
 import { rewardDuelWin, addGems } from './progression-service.js';
 import { GEMS_DUEL_WIN_DAILY } from '../config/gems-config.js';
+import { PILOT_FEATURES } from '../config/pilot-config.js';
 import { getMskTodayStart } from '../lib/msk-date.js';
 
 export async function createDuel(challengerId: number) {
@@ -158,7 +159,7 @@ export async function finishDuel(duelId: number) {
     });
 
     // Если это единственная победа за сегодня — начисляем гемы
-    if (otherWinsToday.length <= 1) {
+    if (otherWinsToday.length <= 1 && PILOT_FEATURES.gems) {
       await addGems(winnerId, GEMS_DUEL_WIN_DAILY);
       gemsEarned = GEMS_DUEL_WIN_DAILY;
     }

@@ -11,6 +11,7 @@ import {
   XP_CORRECT_ANSWER,
 } from './progression-service.js';
 import { ANSWER_STREAK_MILESTONES, DAILY_CORRECT_MILESTONES } from '../config/gems-config.js';
+import { PILOT_FEATURES } from '../config/pilot-config.js';
 import { getAiExamples, getAiMnemonic } from './ai-content-service.js';
 import {
   generateRandom,
@@ -731,26 +732,26 @@ export async function recordInfiniteAnswer(
     }
 
     let milestoneGems = 0;
-
-    // Гемы за мильники стрика ответов подряд (разово в день)
     const newStreak = streak + 1;
-    for (const [threshold, gems] of ANSWER_STREAK_MILESTONES) {
-      if (newStreak >= threshold && !streakMilestonesDone.has(threshold)) {
-        await addGems(userId, gems);
-        milestoneGems += gems;
-        streakMilestonesDone.add(threshold);
-      }
-    }
-
-    // Инкрементируем дневной счётчик правильных ответов
     const newDailyCorrectCount = dailyCorrectCount + 1;
 
-    // Гемы за суммарные правильные ответы за день (разово в день)
-    for (const [threshold, gems] of DAILY_CORRECT_MILESTONES) {
-      if (newDailyCorrectCount >= threshold && !correctMilestonesDone.has(threshold)) {
-        await addGems(userId, gems);
-        milestoneGems += gems;
-        correctMilestonesDone.add(threshold);
+    if (PILOT_FEATURES.gems) {
+      // Гемы за мильники стрика ответов подряд (разово в день)
+      for (const [threshold, gems] of ANSWER_STREAK_MILESTONES) {
+        if (newStreak >= threshold && !streakMilestonesDone.has(threshold)) {
+          await addGems(userId, gems);
+          milestoneGems += gems;
+          streakMilestonesDone.add(threshold);
+        }
+      }
+
+      // Гемы за суммарные правильные ответы за день (разово в день)
+      for (const [threshold, gems] of DAILY_CORRECT_MILESTONES) {
+        if (newDailyCorrectCount >= threshold && !correctMilestonesDone.has(threshold)) {
+          await addGems(userId, gems);
+          milestoneGems += gems;
+          correctMilestonesDone.add(threshold);
+        }
       }
     }
 
@@ -769,7 +770,9 @@ export async function recordInfiniteAnswer(
 
     // Проверяем milestones
     const newMilestones = await checkAndAwardMilestones(userId);
-    const milestoneGemsFromAchievements = newMilestones.reduce((sum, m) => sum + m.gemsReward, 0);
+    const milestoneGemsFromAchievements = PILOT_FEATURES.gems
+      ? newMilestones.reduce((sum, m) => sum + m.gemsReward, 0)
+      : 0;
 
     // Получаем текущие жизни для корректного ответа (без декремента)
     const livesStatus = await getLivesStatus(userId);
@@ -1044,24 +1047,25 @@ export async function recordMatchPairsAnswer(
     }
 
     let milestoneGems = 0;
-
-    // Стрик ответов
     const finalStreak = currentStreak;
-    for (const [threshold, gems] of ANSWER_STREAK_MILESTONES) {
-      if (finalStreak >= threshold && !streakMilestonesDone.has(threshold)) {
-        await addGems(userId, gems);
-        milestoneGems += gems;
-        streakMilestonesDone.add(threshold);
-      }
-    }
-
     const newDailyCorrectCount = dailyCorrectCount + correctCount;
 
-    for (const [threshold, gems] of DAILY_CORRECT_MILESTONES) {
-      if (newDailyCorrectCount >= threshold && !correctMilestonesDone.has(threshold)) {
-        await addGems(userId, gems);
-        milestoneGems += gems;
-        correctMilestonesDone.add(threshold);
+    if (PILOT_FEATURES.gems) {
+      // Стрик ответов
+      for (const [threshold, gems] of ANSWER_STREAK_MILESTONES) {
+        if (finalStreak >= threshold && !streakMilestonesDone.has(threshold)) {
+          await addGems(userId, gems);
+          milestoneGems += gems;
+          streakMilestonesDone.add(threshold);
+        }
+      }
+
+      for (const [threshold, gems] of DAILY_CORRECT_MILESTONES) {
+        if (newDailyCorrectCount >= threshold && !correctMilestonesDone.has(threshold)) {
+          await addGems(userId, gems);
+          milestoneGems += gems;
+          correctMilestonesDone.add(threshold);
+        }
       }
     }
 
@@ -1168,20 +1172,23 @@ export async function recordGrammarAnswer(
 
     let milestoneGems = 0;
     const newStreak = streak + 1;
-    for (const [threshold, gems] of ANSWER_STREAK_MILESTONES) {
-      if (newStreak >= threshold && !streakMilestonesDone.has(threshold)) {
-        await addGems(userId, gems);
-        milestoneGems += gems;
-        streakMilestonesDone.add(threshold);
-      }
-    }
-
     const newDailyCorrectCount = dailyCorrectCount + 1;
-    for (const [threshold, gems] of DAILY_CORRECT_MILESTONES) {
-      if (newDailyCorrectCount >= threshold && !correctMilestonesDone.has(threshold)) {
-        await addGems(userId, gems);
-        milestoneGems += gems;
-        correctMilestonesDone.add(threshold);
+
+    if (PILOT_FEATURES.gems) {
+      for (const [threshold, gems] of ANSWER_STREAK_MILESTONES) {
+        if (newStreak >= threshold && !streakMilestonesDone.has(threshold)) {
+          await addGems(userId, gems);
+          milestoneGems += gems;
+          streakMilestonesDone.add(threshold);
+        }
+      }
+
+      for (const [threshold, gems] of DAILY_CORRECT_MILESTONES) {
+        if (newDailyCorrectCount >= threshold && !correctMilestonesDone.has(threshold)) {
+          await addGems(userId, gems);
+          milestoneGems += gems;
+          correctMilestonesDone.add(threshold);
+        }
       }
     }
 

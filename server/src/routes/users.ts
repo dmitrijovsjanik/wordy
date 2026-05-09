@@ -5,6 +5,7 @@ import { isPremium } from '../services/premium-service.js';
 import { getLivesStatus, refillLives } from '../services/lives-service.js';
 import { VALID_VOICES, DEFAULT_VOICE } from '../config/tts-config.js';
 import { XP_BOOST_GEM_COST, XP_BOOST_DURATION_MS } from '../config/xp-boost-config.js';
+import { PILOT_FEATURES } from '../config/pilot-config.js';
 import { db } from '../db/index.js';
 import { wordMeanings, userWordProgress, users } from '../db/schema.js';
 
@@ -60,6 +61,10 @@ export default async function userRoutes(app: FastifyInstance) {
   app.post<{
     Body: { days: number };
   }>('/api/users/me/streak-freeze/purchase', async (request, reply) => {
+    if (!PILOT_FEATURES.gems) {
+      return reply.code(403).send({ error: 'Магазин недоступен', code: 'GEMS_DISABLED' });
+    }
+
     const { days } = request.body;
     if (!days || typeof days !== 'number') {
       return reply.code(400).send({ error: 'Укажите количество дней', code: 'INVALID_PACK' });
@@ -90,6 +95,10 @@ export default async function userRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/users/me/lives/refill', async (request, reply) => {
+    if (!PILOT_FEATURES.gems) {
+      return reply.code(403).send({ error: 'Магазин недоступен', code: 'GEMS_DISABLED' });
+    }
+
     try {
       const result = await refillLives(request.user.id);
       return { success: true, lives: result.lives, gems: result.gems };
@@ -105,6 +114,10 @@ export default async function userRoutes(app: FastifyInstance) {
   // ─── XP Boost ─────────────────────────────────────────────────────────────
 
   app.post('/api/users/me/xp-boost/purchase', async (request, reply) => {
+    if (!PILOT_FEATURES.gems) {
+      return reply.code(403).send({ error: 'Магазин недоступен', code: 'GEMS_DISABLED' });
+    }
+
     const userId = request.user.id;
 
     const user = await db.query.users.findFirst({
