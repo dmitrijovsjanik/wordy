@@ -27,6 +27,27 @@
  *
  * Запуск: cd server && npx tsx src/scripts/backfill-word-progress.ts
  *         или с --dry-run для предпросмотра без записи
+ *
+ * ─── Известный артефакт перехода ────────────────────────────────────────────
+ *
+ * После Phase D у backfill-пользователей (включая user_id=1, dev) состояние
+ * слов в word-level таблице — снимок ОДНОГО chosen-meaning'а (по max-tier +
+ * max-correct тай-брейкеру). Если у слова было N значений, в word-level
+ * перенеслись counters только одного — incorrect_count, has_penalty и т.п.
+ * могут расходиться с сумарной историей по всем meanings.
+ *
+ * Конкретное следствие: на passive слова требуется по 2 word-level correct'а
+ * каждое, чтобы advance до active. У dev-юзера с ~6-10 passive словами это
+ * ~12-20 правильных ответов через main flow, что может ощущаться как «слово
+ * крутится в петле» из-за маленького пула + anti-repeat=2. Это **не баг
+ * tier-машины**, а артефакт перехода с per-meaning на per-word.
+ *
+ * Новые пользователи стартуют с чистой word-level логикой (через
+ * introduceUnseenWord) и не сталкиваются с этим эффектом.
+ *
+ * Если нужно «обнулить» прогресс на dev-аккаунте для чистого теста — есть
+ * утилита `debug-word-progress.ts` для снимка состояния и `/demo-reset`
+ * route для одного слова.
  */
 
 import { sql } from 'drizzle-orm';

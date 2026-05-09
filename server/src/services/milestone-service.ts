@@ -2,11 +2,21 @@
  * Milestone Service
  *
  * Проверяет достижения пользователя и начисляет награды.
+ *
+ * После Phase D (word-level redesign):
+ *   - "wordsLearned" считается на уровне слов через `userWordProgressWord`.
+ *     Слово считается выученным когда оно достигло tier='review'
+ *     или state='known_from_review'.
+ *   - "totalAnswers" суммирует счётчики из обеих таблиц
+ *     (`userWordProgress` для L4/review, `userWordProgressWord` для L1-L3).
+ *     У backfill-пользователей возможна небольшая дублирующая инфляция —
+ *     приемлемо, метрики milestone завязаны на круглые пороги.
+ *   - CEFR-уровень определяется per-word: каждому слову присваивается
+ *     минимальный CEFR его meanings (= «самый базовый смысл слова»).
  */
-
-import { eq, sql, isNotNull } from 'drizzle-orm';
+import { eq, sql, and, isNotNull } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { users, userWordProgress, wordMeanings } from '../db/schema.js';
+import { users, userWordProgress, userWordProgressWord, wordMeanings } from '../db/schema.js';
 import { getNewlyReachedMilestones, type MilestoneConfig } from '../config/milestones-config.js';
 import { addGems } from './progression-service.js';
 
@@ -15,7 +25,6 @@ import { addGems } from './progression-service.js';
  * Возвращает массив только что достигнутых milestones (может быть пустым).
  */
 export async function checkAndAwardMilestones(userId: number): Promise<MilestoneConfig[]> {
-  // Получаем данные пользователя
   const user = await db.query.users.findFirst({
     where: eq(users.id, userId),
     columns: {
@@ -28,47 +37,86 @@ export async function checkAndAwardMilestones(userId: number): Promise<Milestone
 
   const shownMilestones = (user.shownMilestones ?? []) as string[];
 
-  // Считаем выученные слова (srsStage >= 3), исключая помеченные через онбординг
+  // ─── wordsLearned: word-level через userWordProgressWord ──────────────────
+  // Слово выучено, если tier='review' (прошло L1-L4) или state='known_from_review'
+  // (отмечено через обзор/онбординг). Исключаем from_placement=true (отметка
+  // через placement-тест не считается «реальным» обучением).
   const [wordsRow] = await db
     .select({
       count: sql<number>`COUNT(*)`.as('count'),
     })
-    .from(userWordProgress)
+    .from(userWordProgressWord)
     .where(
-      sql`${userWordProgress.userId} = ${userId} AND ${userWordProgress.srsStage} >= 3 AND ${userWordProgress.fromPlacement} = false`,
+      and(
+        eq(userWordProgressWord.userId, userId),
+        eq(userWordProgressWord.fromPlacement, false),
+        sql`(${userWordProgressWord.learningTier} = 'review' OR ${userWordProgressWord.state} = 'known_from_review')`,
+      ),
     );
   const wordsLearned = Number(wordsRow?.count ?? 0);
 
-  // Считаем общее количество ответов (исключая онбординг)
-  const [answersRow] = await db
+  // ─── totalAnswers: сумма по обеим таблицам ────────────────────────────────
+  // userWordProgress отвечает за L4 production + per-meaning review;
+  // userWordProgressWord — за L1-L3.
+  const [meaningAnswersRow] = await db
     .select({
-      total: sql<number>`COALESCE(SUM(${userWordProgress.correctCount} + ${userWordProgress.incorrectCount}), 0)`.as('total'),
+      total: sql<number>`COALESCE(SUM(${userWordProgress.correctCount} + ${userWordProgress.incorrectCount}), 0)`.as(
+        'total',
+      ),
     })
     .from(userWordProgress)
-    .where(
-      sql`${userWordProgress.userId} = ${userId} AND ${userWordProgress.fromPlacement} = false`,
-    );
-  const totalAnswers = Number(answersRow?.total ?? 0);
+    .where(and(eq(userWordProgress.userId, userId), eq(userWordProgress.fromPlacement, false)));
 
-  // Определяем CEFR-уровень (сколько уровней пройдено с >=80%)
-  const cefrRows = await db
+  const [wordAnswersRow] = await db
     .select({
-      cefrLevel: wordMeanings.cefr,
-      totalWords: sql<number>`COUNT(DISTINCT ${wordMeanings.id})`.as('total_words'),
-      learnedWords: sql<number>`COUNT(DISTINCT CASE WHEN ${userWordProgress.srsStage} >= 3 AND ${userWordProgress.fromPlacement} = false THEN ${wordMeanings.id} END)`.as('learned_words'),
+      total: sql<number>`COALESCE(SUM(${userWordProgressWord.correctCount} + ${userWordProgressWord.incorrectCount}), 0)`.as(
+        'total',
+      ),
+    })
+    .from(userWordProgressWord)
+    .where(
+      and(
+        eq(userWordProgressWord.userId, userId),
+        eq(userWordProgressWord.fromPlacement, false),
+      ),
+    );
+
+  const totalAnswers = Number(meaningAnswersRow?.total ?? 0) + Number(wordAnswersRow?.total ?? 0);
+
+  // ─── CEFR per-word ─────────────────────────────────────────────────────────
+  // Для каждого слова берём MIN CEFR его meanings (минимальный = «базовый» смысл).
+  // Считаем сколько слов на уровне всего и сколько из них выучено.
+  // Уровень считается «пройденным» при ≥80% выученных.
+  const wordCefrSq = db
+    .select({
+      wordId: wordMeanings.wordId,
+      cefrRank: sql<number>`MIN(CASE ${wordMeanings.cefr}
+        WHEN 'a1' THEN 1 WHEN 'a2' THEN 2 WHEN 'b1' THEN 3
+        WHEN 'b2' THEN 4 WHEN 'c1' THEN 5 WHEN 'c2' THEN 6
+        ELSE 99 END)`.as('cefr_rank'),
     })
     .from(wordMeanings)
-    .leftJoin(
-      userWordProgress,
-      sql`${userWordProgress.meaningId} = ${wordMeanings.id} AND ${userWordProgress.userId} = ${userId}`,
-    )
     .where(isNotNull(wordMeanings.cefr))
-    .groupBy(wordMeanings.cefr)
-    .orderBy(
-      sql`CASE ${wordMeanings.cefr}
-        WHEN 'a1' THEN 1 WHEN 'a2' THEN 2 WHEN 'b1' THEN 3
-        WHEN 'b2' THEN 4 WHEN 'c1' THEN 5 ELSE 6 END`,
-    );
+    .groupBy(wordMeanings.wordId)
+    .as('word_cefr');
+
+  const cefrRows = await db
+    .select({
+      cefrRank: wordCefrSq.cefrRank,
+      totalWords: sql<number>`COUNT(*)`.as('total_words'),
+      learnedWords: sql<number>`COUNT(CASE
+        WHEN ${userWordProgressWord.fromPlacement} = false
+          AND (${userWordProgressWord.learningTier} = 'review' OR ${userWordProgressWord.state} = 'known_from_review')
+        THEN 1 END)`.as('learned_words'),
+    })
+    .from(wordCefrSq)
+    .leftJoin(
+      userWordProgressWord,
+      sql`${userWordProgressWord.wordId} = ${wordCefrSq.wordId} AND ${userWordProgressWord.userId} = ${userId}`,
+    )
+    .where(sql`${wordCefrSq.cefrRank} < 99`)
+    .groupBy(wordCefrSq.cefrRank)
+    .orderBy(wordCefrSq.cefrRank);
 
   let cefrLevel = 0;
   for (const row of cefrRows) {
@@ -82,7 +130,6 @@ export async function checkAndAwardMilestones(userId: number): Promise<Milestone
     }
   }
 
-  // Находим новые milestones
   const newMilestones = getNewlyReachedMilestones(shownMilestones, {
     wordsLearned,
     streakDays: user.streakDays,
@@ -92,7 +139,6 @@ export async function checkAndAwardMilestones(userId: number): Promise<Milestone
 
   if (newMilestones.length === 0) return [];
 
-  // Начисляем награды
   let totalGems = 0;
   for (const milestone of newMilestones) {
     totalGems += milestone.gemsReward;
@@ -101,7 +147,6 @@ export async function checkAndAwardMilestones(userId: number): Promise<Milestone
     await addGems(userId, totalGems);
   }
 
-  // Обновляем shownMilestones
   const updatedShown = [...shownMilestones, ...newMilestones.map((m) => m.id)];
   await db
     .update(users)

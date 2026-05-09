@@ -6,12 +6,43 @@ import {
   userCollections,
   userCustomWords,
   userCustomWordProgress,
-  userWordProgress,
+  userWordProgressWord,
   wordMeanings,
   words,
 } from '../db/schema.js';
 import { FREE_LIMITS } from '../config/premium-config.js';
 import { LEARNED_PROGRESS } from './srs-service.js';
+
+// ─── Word-level progress helpers ────────────────────────────────────────────
+//
+// После Phase D (word-level redesign) прогресс L1-L3 хранится в
+// `userWordProgressWord` — единица учёта = Word. Для совместимости с клиентом
+// (который ждёт per-meaning srsStage 0-3) маппим word-level tier → старую шкалу:
+//
+//   review / known_from_review → 3 (выучено)
+//   production                  → 2 (почти выучено, но L4 ещё в процессе)
+//   active                      → 2
+//   passive                     → 1
+//   encounter                   → 0
+//   нет записи (слово не встречалось) → null
+//
+// Все meanings одного слова получают одинаковый srsStage — это семантически
+// правильно, поскольку в новой модели слово учится как единая сущность.
+const TIER_TO_SRS_STAGE_SQL = sql<number | null>`CASE
+  WHEN ${userWordProgressWord.id} IS NULL THEN NULL
+  WHEN ${userWordProgressWord.state} = 'known_from_review' THEN 3
+  WHEN ${userWordProgressWord.learningTier} = 'review' THEN 3
+  WHEN ${userWordProgressWord.learningTier} = 'production' THEN 2
+  WHEN ${userWordProgressWord.learningTier} = 'active' THEN 2
+  WHEN ${userWordProgressWord.learningTier} = 'passive' THEN 1
+  ELSE 0
+END`;
+
+// Условие «слово выучено» — для COUNT/HAVING запросов.
+const WORD_IS_MASTERED_SQL = sql`(
+  ${userWordProgressWord.learningTier} = 'review'
+  OR ${userWordProgressWord.state} = 'known_from_review'
+)`;
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -118,7 +149,8 @@ export async function getLibrary(userId: number) {
     .from(collections)
     .where(and(inArray(collections.id, collectionIds), isNull(collections.deletedAt)));
 
-  // SRS progress per collection: count mastered WORDS (all meanings of a word must be srsStage >= 3)
+  // SRS progress per collection: count mastered WORDS (через word-level прогресс).
+  // Слово считается выученным когда tier='review' или state='known_from_review'.
   const masteredSq = db
     .select({
       collectionId: collectionWords.collectionId,
@@ -126,16 +158,15 @@ export async function getLibrary(userId: number) {
     })
     .from(collectionWords)
     .innerJoin(wordMeanings, eq(collectionWords.meaningId, wordMeanings.id))
-    .leftJoin(
-      userWordProgress,
+    .innerJoin(
+      userWordProgressWord,
       and(
-        eq(userWordProgress.meaningId, collectionWords.meaningId),
-        eq(userWordProgress.userId, userId),
+        eq(userWordProgressWord.wordId, wordMeanings.wordId),
+        eq(userWordProgressWord.userId, userId),
       ),
     )
-    .where(inArray(collectionWords.collectionId, collectionIds))
+    .where(and(inArray(collectionWords.collectionId, collectionIds), WORD_IS_MASTERED_SQL))
     .groupBy(collectionWords.collectionId, wordMeanings.wordId)
-    .having(sql`min(coalesce(${userWordProgress.srsStage}, 0)) >= 3`)
     .as('mastered_words');
 
   const progressRows = await db
@@ -190,7 +221,8 @@ export async function getCollectionDetail(collectionId: number, userId: number) 
     lte(wordMeanings.popularityRank, MAX_POPULARITY_RANK),
   );
 
-  // Системные слова с SRS-прогрессом и popularity
+  // Системные слова с SRS-прогрессом и popularity.
+  // srsStage выводится из word-level tier (см. TIER_TO_SRS_STAGE_SQL вверху файла).
   const systemWords = await db
     .select({
       id: wordMeanings.id,
@@ -205,17 +237,17 @@ export async function getCollectionDetail(collectionId: number, userId: number) 
       synonyms: wordMeanings.synonyms,
       meaningHints: wordMeanings.meaningHints,
       frequency: wordMeanings.frequency,
-      srsStage: userWordProgress.srsStage,
+      srsStage: TIER_TO_SRS_STAGE_SQL,
       popularityRank: words.frequencyRank,
     })
     .from(collectionWords)
     .innerJoin(wordMeanings, eq(collectionWords.meaningId, wordMeanings.id))
     .innerJoin(words, eq(wordMeanings.wordId, words.id))
     .leftJoin(
-      userWordProgress,
+      userWordProgressWord,
       and(
-        eq(userWordProgress.meaningId, wordMeanings.id),
-        eq(userWordProgress.userId, userId),
+        eq(userWordProgressWord.wordId, wordMeanings.wordId),
+        eq(userWordProgressWord.userId, userId),
       ),
     )
     .where(and(eq(collectionWords.collectionId, collectionId), popularityFilter))
@@ -471,7 +503,8 @@ export async function getAllWords(userId: number) {
     lte(wordMeanings.popularityRank, MAX_POPULARITY_RANK),
   );
 
-  // System words from collections with SRS progress and popularity
+  // System words from collections with SRS progress and popularity.
+  // srsStage выводится из word-level tier (см. TIER_TO_SRS_STAGE_SQL вверху файла).
   const systemWords = await db
     .select({
       id: wordMeanings.id,
@@ -481,7 +514,7 @@ export async function getAllWords(userId: number) {
       translation: wordMeanings.translation,
       alternativeTranslations: wordMeanings.alternativeTranslations,
       partOfSpeech: wordMeanings.partOfSpeech,
-      srsStage: userWordProgress.srsStage,
+      srsStage: TIER_TO_SRS_STAGE_SQL,
       popularityRank: wordMeanings.popularityRank,
       frequencyRank: words.frequencyRank,
     })
@@ -489,10 +522,10 @@ export async function getAllWords(userId: number) {
     .innerJoin(wordMeanings, eq(collectionWords.meaningId, wordMeanings.id))
     .innerJoin(words, eq(wordMeanings.wordId, words.id))
     .leftJoin(
-      userWordProgress,
+      userWordProgressWord,
       and(
-        eq(userWordProgress.meaningId, wordMeanings.id),
-        eq(userWordProgress.userId, userId),
+        eq(userWordProgressWord.wordId, wordMeanings.wordId),
+        eq(userWordProgressWord.userId, userId),
       ),
     )
     .where(and(inArray(collectionWords.collectionId, collectionIds), popularityFilter))
@@ -655,14 +688,26 @@ export async function getQuizPool(userId: number, collectionId?: number): Promis
     byRank.set(rank, [...new Set(ids)]);
   }
 
-  // Получаем прогресс пользователя для определения разблокированных рангов
+  // Получаем прогресс пользователя для определения разблокированных рангов.
+  // После word-level redesign прогресс хранится per-word; маппим в per-meaning
+  // через JOIN wordMeanings → userWordProgressWord по wordId.
   let progressMap = new Map<number, number>();
   if (allMeaningIds.length > 0) {
     const progressRows = await db
-      .select({ meaningId: userWordProgress.meaningId, srsStage: userWordProgress.srsStage })
-      .from(userWordProgress)
-      .where(and(eq(userWordProgress.userId, userId), inArray(userWordProgress.meaningId, allMeaningIds)));
-    progressMap = new Map(progressRows.map((p) => [p.meaningId, p.srsStage]));
+      .select({
+        meaningId: wordMeanings.id,
+        srsStage: TIER_TO_SRS_STAGE_SQL,
+      })
+      .from(wordMeanings)
+      .leftJoin(
+        userWordProgressWord,
+        and(
+          eq(userWordProgressWord.wordId, wordMeanings.wordId),
+          eq(userWordProgressWord.userId, userId),
+        ),
+      )
+      .where(inArray(wordMeanings.id, allMeaningIds));
+    progressMap = new Map(progressRows.map((p) => [p.meaningId, p.srsStage ?? 0]));
   }
 
   // Определяем разблокированные ранги

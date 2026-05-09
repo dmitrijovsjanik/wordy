@@ -550,3 +550,178 @@ describe('computeTransition — invariants', () => {
     ).toBe(false);
   });
 });
+
+// ─── Lifecycle scenarios ────────────────────────────────────────────────────
+//
+// «Сшитые» сценарии: прогоняем слово через всю лестницу, последовательно
+// подавая выход одного шага на вход следующего. Защита от регрессий вроде
+// ситуации с backfill-артефактом — где состояние после Phase D застряло на
+// passive, потому что backfill записал tcc=0+correct=2+incorrect=0 и каждый
+// последующий correct давал tcc=1, не достигая порога advance=2.
+//
+// Тесты не делают БД-запросов; chain — это последовательные вызовы чистой
+// computeTransition. Если кто-то меняет computeTransition или конфиг — эти
+// тесты ловят сломанную лестницу целиком.
+
+describe('lifecycle — happy path encounter → ... → review', () => {
+  it('1 encounter + 2 passive + 2 active + 3 production correct → review', () => {
+    // Стартовое состояние новой записи user_word_progress(_word).
+    let s: ReturnType<typeof computeTransition> = {
+      tier: 'encounter',
+      tierCorrectCount: 0,
+      reviewStage: 0,
+      nextReviewAt: NOW,
+      hasPenalty: false,
+      becameLearned: false,
+      wasReset: false,
+      wasAdvanced: false,
+    };
+
+    // Шаг 1: encounter — «понятно». Любой ответ → passive, tcc=0.
+    s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
+    expect(s.tier).toBe('passive');
+    expect(s.tierCorrectCount).toBe(0);
+    expect(s.wasAdvanced).toBe(true);
+    expect(s.becameLearned).toBe(false);
+
+    // Шаги 2-3: passive correct ×2 → active.
+    s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
+    expect(s.tier).toBe('passive');
+    expect(s.tierCorrectCount).toBe(1);
+
+    s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
+    expect(s.tier).toBe('active');
+    expect(s.tierCorrectCount).toBe(0);
+    expect(s.wasAdvanced).toBe(true);
+
+    // Шаги 4-5: active correct ×2 → production.
+    s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
+    expect(s.tier).toBe('active');
+    expect(s.tierCorrectCount).toBe(1);
+
+    s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
+    expect(s.tier).toBe('production');
+    expect(s.tierCorrectCount).toBe(0);
+    expect(s.becameLearned).toBe(false); // production ещё не «выучено»
+
+    // Шаги 6-8: production correct ×3 → review (becameLearned=true).
+    s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
+    expect(s.tier).toBe('production');
+    expect(s.tierCorrectCount).toBe(1);
+
+    s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
+    expect(s.tier).toBe('production');
+    expect(s.tierCorrectCount).toBe(2);
+
+    s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
+    expect(s.tier).toBe('review');
+    expect(s.tierCorrectCount).toBe(0);
+    expect(s.reviewStage).toBe(0);
+    expect(s.becameLearned).toBe(true);
+    expect(s.nextReviewAt.getTime()).toBe(addDays(NOW, REVIEW_DAYS[0]!).getTime());
+  });
+
+  it('после review correct: reviewStage растёт до конца таблицы интервалов', () => {
+    // Имитируем уже выученное слово: tier=review, reviewStage=0.
+    let s: ReturnType<typeof computeTransition> = {
+      tier: 'review',
+      tierCorrectCount: 0,
+      reviewStage: 0,
+      nextReviewAt: NOW,
+      hasPenalty: false,
+      becameLearned: false,
+      wasReset: false,
+      wasAdvanced: false,
+    };
+
+    // Через review correct'ы reviewStage идёт 0→1→2→...→cap.
+    for (let i = 1; i < REVIEW_DAYS.length; i++) {
+      s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
+      expect(s.tier).toBe('review');
+      expect(s.reviewStage).toBe(i);
+      expect(s.nextReviewAt.getTime()).toBe(addDays(NOW, REVIEW_DAYS[i]!).getTime());
+      expect(s.becameLearned).toBe(false); // не повторяем при последующих повторах
+    }
+
+    // Дальше reviewStage должен «прилипнуть» к последнему индексу (cap).
+    const beforeCap = s.reviewStage;
+    s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
+    expect(s.reviewStage).toBe(beforeCap); // прилипло
+    expect(s.nextReviewAt.getTime()).toBe(addDays(NOW, REVIEW_DAYS[beforeCap]!).getTime());
+  });
+});
+
+describe('lifecycle — wrong answers and rollbacks', () => {
+  it('passive C-W-C-C: один wrong сбрасывает tcc, дальше 2 correct advance', () => {
+    let s: ReturnType<typeof computeTransition> = {
+      tier: 'passive',
+      tierCorrectCount: 0,
+      reviewStage: 0,
+      nextReviewAt: NOW,
+      hasPenalty: false,
+      becameLearned: false,
+      wasReset: false,
+      wasAdvanced: false,
+    };
+
+    // C: tcc 0→1, hasPenalty=false.
+    s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
+    expect(s.tier).toBe('passive');
+    expect(s.tierCorrectCount).toBe(1);
+    expect(s.hasPenalty).toBe(false);
+
+    // W: tcc 1→0, hasPenalty=true. Слово остаётся на passive.
+    s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, false, s.hasPenalty), NOW);
+    expect(s.tier).toBe('passive');
+    expect(s.tierCorrectCount).toBe(0);
+    expect(s.hasPenalty).toBe(true);
+    expect(s.nextReviewAt.getTime()).toBe(addMinutes(NOW, COOLDOWN_MIN).getTime());
+
+    // C: tcc 0→1, hasPenalty снимается на correct.
+    s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
+    expect(s.tier).toBe('passive');
+    expect(s.tierCorrectCount).toBe(1);
+    expect(s.hasPenalty).toBe(false);
+
+    // C: tcc 1→2 ≥ correctToAdvance → advance to active.
+    s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
+    expect(s.tier).toBe('active');
+    expect(s.wasAdvanced).toBe(true);
+  });
+
+  it('review wrong → откат на active с кулдауном reviewWrongCooldownDays', () => {
+    const s = computeTransition(input('review', 0, 2, false), NOW);
+    expect(s.tier).toBe(REVIEW_WRONG_TIER);
+    expect(s.tierCorrectCount).toBe(0);
+    expect(s.reviewStage).toBe(0);
+    expect(s.wasReset).toBe(true);
+    expect(s.becameLearned).toBe(false);
+    expect(s.nextReviewAt.getTime()).toBe(addDays(NOW, REVIEW_WRONG_DAYS).getTime());
+  });
+});
+
+describe('lifecycle — backfill artifact regression', () => {
+  // Регрессия по реальному инциденту: после Phase D у backfill-юзера слово
+  // застряло на passive с tcc=1, correct=3, incorrect=0. Reconstruction
+  // показала: backfill copied chosen-meaning'а (tcc=0, correct=2, incorrect=0),
+  // дальше один word-level correct сделал tcc=1. Чтобы advance — нужен ещё
+  // один correct. Не баг механики, а артефакт перехода.
+  //
+  // Тест валидирует: с tcc=1 на passive один correct даёт advance к active.
+  it('passive с tcc=1 + correct → active (tcc=2 ≥ correctToAdvance)', () => {
+    const s = computeTransition(input('passive', 1, 0, true), NOW);
+    expect(s.tier).toBe('active');
+    expect(s.tierCorrectCount).toBe(0);
+    expect(s.wasAdvanced).toBe(true);
+  });
+
+  // Дополнительно: с tcc=1 + wrong → reset, без advance.
+  it('passive с tcc=1 + wrong → passive с tcc=0 + hasPenalty', () => {
+    const s = computeTransition(input('passive', 1, 0, false), NOW);
+    expect(s.tier).toBe('passive');
+    expect(s.tierCorrectCount).toBe(0);
+    expect(s.hasPenalty).toBe(true);
+    expect(s.wasAdvanced).toBe(false);
+  });
+});
+
