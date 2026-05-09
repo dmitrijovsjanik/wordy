@@ -114,9 +114,14 @@ export default async function learningRoutes(app: FastifyInstance) {
     // Считаем только L1-L3 (encounter/passive/active). Production/review
     // не считаются — они про повторение, а не про темп новых слов.
     const activeBefore = await getActiveDeckSize(userId, validCollectionId);
+    let drawCount: number | null = null;
     if (activeBefore <= learningConfig.activeDeck.threshold) {
-      await drawFromPool(userId, learningConfig.activeDeck.target, activeBefore);
+      drawCount = await drawFromPool(userId, learningConfig.activeDeck.target, activeBefore);
     }
+    const activeAfterDraw = await getActiveDeckSize(userId, validCollectionId);
+    const poolSizeNow = await getPoolSize(userId, validCollectionId);
+    // [pilot-diag] временное логирование состояния колод
+    console.log(`[deck.state] u=${userId} collection=${validCollectionId ?? 'null'} activeBefore=${activeBefore} drawCount=${drawCount} activeAfter=${activeAfterDraw} pool=${poolSizeNow} threshold=${learningConfig.activeDeck.threshold} target=${learningConfig.activeDeck.target}`);
 
     // Шаг 2: cooldown. Один decrement на запрос; объединяем с client-side
     // recentWordIds (anti-repeat 2 последних). pickNextWord исключит оба.
@@ -159,7 +164,10 @@ export default async function learningRoutes(app: FastifyInstance) {
     // pick null И cooldown непуст — повторяем БЕЗ cooldown excluded (только
     // client-side recent). Если retry тоже null — реально ничего нет, идём в
     // embedded_review/empty ниже.
+    let usedFallback = false;
     if (!pick && cooldownExcluded.length > 0) {
+      usedFallback = true;
+      console.log(`[next.fallback] u=${userId} primary pick was null; retrying without cooldown (cooldownExcluded=${JSON.stringify(cooldownExcluded)})`);
       const retry = await pickNextItemCombined(userId, {
         collectionId: validCollectionId,
         excludeWordIds,
@@ -220,6 +228,19 @@ export default async function learningRoutes(app: FastifyInstance) {
       questionType: generated.generatorType,
     });
 
+    // [pilot-diag] временное логирование: что выбрано, и (для kind=meaning)
+    // резолвим wordId меанинга — иначе видно "wordId=null" даже когда фильтр
+    // должен был его исключить.
+    let resolvedWordIdForLog: number | null = null;
+    if (pick.kind === 'word') {
+      resolvedWordIdForLog = pick.wordId;
+    } else {
+      const r = await db.execute(sql`SELECT word_id FROM word_meanings WHERE id = ${pick.meaningId}`);
+      const row = (r as unknown as { rows: Array<{ word_id: number }> }).rows[0];
+      resolvedWordIdForLog = row ? row.word_id : null;
+    }
+    console.log(`[next.pick] u=${userId} kind=${pick.kind} tier=${pick.tier} meaningId=${pick.meaningId} wordId=${resolvedWordIdForLog} fallback=${usedFallback} excludedWords=${JSON.stringify(combinedExcludeWordIds)} excludedMeanings=${JSON.stringify(excludeMeaningIds)}`);
+
     return {
       question: generated.question,
       tier: pick.tier,
@@ -277,6 +298,8 @@ export default async function learningRoutes(app: FastifyInstance) {
 
     // ─── Маршрутизация: word-level vs meaning-level ──────────────────────
     const isWordLevel = typeof wordId === 'number' && Number.isFinite(wordId);
+    // [pilot-diag] временное логирование: на какую ветку идём при ответе
+    console.log(`[answer.route] u=${userId} isWordLevel=${isWordLevel} wordId=${wordId ?? 'null'} meaningId=${meaningId ?? 'null'} isCorrect=${isCorrect}`);
 
     let tierResult: {
       tierBefore: 'encounter' | 'passive' | 'active' | 'production' | 'review';
