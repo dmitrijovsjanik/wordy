@@ -322,6 +322,7 @@ function maybeApplyDoubleXp(
   userId: number,
 ): AnyQuestion | null {
   if (!question) return null;
+  if (!PILOT_FEATURES.xpBoost) return question;
   if (Math.random() >= DOUBLE_XP_CHANCE) return question;
 
   const questionType = ('type' in question && question.type) ? question.type : 'multiple-choice';

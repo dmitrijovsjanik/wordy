@@ -180,7 +180,7 @@ export function VocabularyScreen() {
     hapticNotification('warning');
   }, [expireDoubleXp, hapticNotification]);
 
-  const showDoubleXpTimer = !!doubleXpTimeLimitMs && !doubleXpExpired && !feedback;
+  const showDoubleXpTimer = PILOT_FEATURES.xpBoost && !!doubleXpTimeLimitMs && !doubleXpExpired && !feedback;
 
 
   // Sync lives from user profile
