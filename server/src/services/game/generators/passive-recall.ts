@@ -4,6 +4,7 @@ import { wordMeanings } from '../../../db/schema.js';
 import { getAiExamples, getAiMnemonic } from '../../ai-content-service.js';
 import type { PooledMeaning, PassiveRecallCardQuestion } from '../types.js';
 import { loadWordMeaningsList } from './word-meanings-list.js';
+import { getWordForms } from '../../word-forms-service.js';
 
 /**
  * Генерирует passive-recall карточку — флешкарту с флипом для самооценки.
@@ -42,6 +43,9 @@ export async function generatePassiveRecallFromMeaning(
   // Топ-3 значения слова — для рендера на обратной стороне карточки.
   const meaningsList = await loadWordMeaningsList(meaning.wordId, 3);
 
+  // Грамматические формы слова.
+  const forms = getWordForms(meaning.word.text, meaning.partOfSpeech);
+
   return {
     type: 'passive-recall',
     meaningId: meaning.id,
@@ -53,5 +57,6 @@ export async function generatePassiveRecallFromMeaning(
     meaningIndex: idx + 1,
     totalMeanings: allMeanings.length,
     meanings: meaningsList,
+    forms,
   };
 }

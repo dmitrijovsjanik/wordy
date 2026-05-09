@@ -1,6 +1,7 @@
 import type { PooledMeaning, FreeRecallQuestion } from '../types.js';
 import { getAllTranslations } from './multiple-choice.js';
 import { loadWordMeaningsList } from './word-meanings-list.js';
+import { getWordForms } from '../../word-forms-service.js';
 
 // ─── Generation ──────────────────────────────────────────────────────────────
 
@@ -36,6 +37,11 @@ export async function generateFreeRecallFromMeaning(
     ? await loadWordMeaningsList(correct.wordId, 3)
     : undefined;
 
+  // Грамматические формы слова — только для word-level (L3 active).
+  const forms = opts?.includeMeanings
+    ? getWordForms(correct.word.text, correct.partOfSpeech)
+    : null;
+
   if (direction === 'en-ru') {
     // Показываем английское слово → пользователь пишет перевод
     const allTranslations = getAllTranslations(correct);
@@ -53,6 +59,7 @@ export async function generateFreeRecallFromMeaning(
       acceptableAnswers,
       partOfSpeech: correct.partOfSpeech,
       meanings,
+      forms,
     };
   } else {
     // Показываем русский перевод → пользователь пишет английское слово
@@ -75,6 +82,7 @@ export async function generateFreeRecallFromMeaning(
       acceptableAnswers: unique,
       partOfSpeech: correct.partOfSpeech,
       meanings,
+      forms,
     };
   }
 }

@@ -10,7 +10,8 @@ import {
 } from 'framer-motion';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import type { PassiveRecallApiQuestion, WordMeaningInfo } from '@/types/api';
+import type { PassiveRecallApiQuestion, WordMeaningInfo, WordFormsInfo } from '@/types/api';
+import { HighlightedSentence, WordFormsList } from '../word-forms-display';
 
 type PassiveRecallCardProps = {
   question: PassiveRecallApiQuestion;
@@ -197,6 +198,7 @@ function FlipCard({ question, flipped, dragEnabled, decision, onTap, onSwipe }: 
             example: question.example,
             partOfSpeech: 'noun',
           }]}
+          forms={question.forms ?? null}
         />
 
         {/* Обратная: список всех значений + ripple-заливка для свайпа */}
@@ -209,6 +211,7 @@ function FlipCard({ question, flipped, dragEnabled, decision, onTap, onSwipe }: 
             example: question.example,
             partOfSpeech: 'noun',
           }]}
+          forms={question.forms ?? null}
         />
       </motion.div>
 
@@ -242,22 +245,24 @@ function FlipCard({ question, flipped, dragEnabled, decision, onTap, onSwipe }: 
 type FrontFaceProps = {
   word: string;
   meanings: WordMeaningInfo[];
+  forms: WordFormsInfo | null;
 };
 
-function FrontFace({ word, meanings }: FrontFaceProps) {
+function FrontFace({ word, meanings, forms }: FrontFaceProps) {
   const meaningCount = meanings.length;
   // Предложения с примерами (en) — фильтруем пустые. Каждый en будет иметь
   // соответствующий ru перевод на обратной стороне в том же порядке.
   const examplesEn = meanings
     .map((m) => m.example?.en ?? null)
     .filter((s): s is string => s !== null);
+  const formList = forms?.forms ?? [];
 
   return (
     <Card
       className={`absolute inset-0 flex flex-col gap-3 overflow-hidden px-6 py-8 ${CARD_SHADOW}`}
       style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
     >
-      {/* Слово сверху по центру + индикатор «N значений». */}
+      {/* Слово сверху по центру + индикатор «N значений» + список форм. */}
       <div className="flex flex-col items-center gap-1 text-center">
         {meaningCount > 1 && (
           <div className="text-xs uppercase tracking-wide text-[var(--gray-11)]">
@@ -265,19 +270,28 @@ function FrontFace({ word, meanings }: FrontFaceProps) {
           </div>
         )}
         <div className="text-3xl font-bold">{word}</div>
+        {forms && forms.forms.length > 1 && (
+          <div className="mt-2 max-w-full">
+            <WordFormsList forms={forms} hideBase />
+          </div>
+        )}
       </div>
 
       {/* Список английских примеров — по одному на значение. */}
       {examplesEn.length > 0 && (
         <div className="flex-1 overflow-y-auto border-t border-[var(--gray-5)] pt-3">
           {examplesEn.length === 1 ? (
-            <div className="text-sm text-[var(--gray-12)] text-left">{examplesEn[0]}</div>
+            <div className="text-sm text-[var(--gray-12)] text-left">
+              <HighlightedSentence sentence={examplesEn[0]!} forms={formList} />
+            </div>
           ) : (
             <div className="flex flex-col gap-2 text-left">
               {examplesEn.map((s, idx) => (
                 <div key={idx} className="flex items-baseline gap-2">
                   <span className="text-xs text-[var(--gray-10)]">{idx + 1}.</span>
-                  <span className="text-sm text-[var(--gray-12)]">{s}</span>
+                  <span className="text-sm text-[var(--gray-12)]">
+                    <HighlightedSentence sentence={s} forms={formList} />
+                  </span>
                 </div>
               ))}
             </div>
@@ -294,9 +308,11 @@ type BackFaceProps = {
   fillBg: import('framer-motion').MotionValue<string>;
   showFill: boolean;
   meanings: WordMeaningInfo[];
+  forms: WordFormsInfo | null;
 };
 
-function BackFace({ fillBg, showFill, meanings }: BackFaceProps) {
+function BackFace({ fillBg, showFill, meanings, forms }: BackFaceProps) {
+  const formList = forms?.forms ?? [];
   return (
     <Card
       className={`absolute inset-0 flex flex-col gap-3 overflow-hidden px-6 py-8 ${CARD_SHADOW}`}
@@ -323,7 +339,9 @@ function BackFace({ fillBg, showFill, meanings }: BackFaceProps) {
             <div className="text-3xl font-bold">{meanings[0]!.translation}</div>
             {meanings[0]!.example && (
               <div className="mt-2 border-t border-[var(--gray-5)] pt-3 text-left">
-                <div className="text-sm text-[var(--gray-12)]">{meanings[0]!.example.en}</div>
+                <div className="text-sm text-[var(--gray-12)]">
+                  <HighlightedSentence sentence={meanings[0]!.example.en} forms={formList} />
+                </div>
                 <div className="mt-0.5 text-sm text-[var(--gray-11)]">{meanings[0]!.example.ru}</div>
               </div>
             )}
@@ -344,7 +362,9 @@ function BackFace({ fillBg, showFill, meanings }: BackFaceProps) {
                 </div>
                 {m.example && (
                   <div className="ml-5 mt-1">
-                    <div className="text-xs text-[var(--gray-12)]">{m.example.en}</div>
+                    <div className="text-xs text-[var(--gray-12)]">
+                      <HighlightedSentence sentence={m.example.en} forms={formList} />
+                    </div>
                     <div className="text-xs text-[var(--gray-10)]">{m.example.ru}</div>
                   </div>
                 )}

@@ -4,6 +4,7 @@ import { wordMeanings } from '../../../db/schema.js';
 import { getAiMnemonic, getAiExamples } from '../../ai-content-service.js';
 import type { PooledMeaning, EncounterCardQuestion } from '../types.js';
 import { loadWordMeaningsList } from './word-meanings-list.js';
+import { getWordForms } from '../../word-forms-service.js';
 
 /**
  * Генерирует encounter-карточку для первого знакомства со словом.
@@ -42,6 +43,9 @@ export async function generateEncounterCard(meaning: PooledMeaning): Promise<Enc
   // Список топ-3 значений слова — для word-level UI на L1.
   const meanings = await loadWordMeaningsList(meaning.wordId, 3);
 
+  // Грамматические формы слова — список + лейблы для подсветки в примерах.
+  const forms = getWordForms(meaning.word.text, meaning.partOfSpeech);
+
   return {
     type: 'encounter',
     meaningId: meaning.id,
@@ -57,5 +61,6 @@ export async function generateEncounterCard(meaning: PooledMeaning): Promise<Enc
     meaningIndex,
     totalMeanings,
     meanings,
+    forms,
   };
 }

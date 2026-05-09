@@ -98,6 +98,19 @@ export type WordMeaningInfo = {
   partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
 };
 
+// Грамматическая форма слова и её роль (для подсказок и подсветки в примерах).
+// Подробно: server/src/services/word-forms-service.ts.
+export type WordFormInfo = {
+  text: string;     // напр. "took", "takes"
+  label: string;    // напр. "прошедшее время", "3 лицо ед.ч., наст."
+};
+
+export type WordFormsInfo = {
+  base: string;     // лемма
+  partOfSpeech: 'verb' | 'noun' | 'adjective' | 'modal' | 'pronoun' | 'other';
+  forms: WordFormInfo[];
+};
+
 export type EncounterCardQuestion = {
   type: 'encounter';
   meaningId: number;
@@ -115,6 +128,8 @@ export type EncounterCardQuestion = {
   totalMeanings: number;
   /** Топ-3 значения слова для UI. */
   meanings?: WordMeaningInfo[];
+  /** Грамматические формы слова (для подсказок и подсветки). L1-L3 only. */
+  forms?: WordFormsInfo | null;
 };
 
 // Passive recall card — второй уровень лестницы. Флешкарта с флипом и
@@ -134,6 +149,8 @@ export type PassiveRecallCardQuestion = {
   totalMeanings: number;
   /** Топ-3 значения слова. На обратной стороне карточки рендерим списком. */
   meanings?: WordMeaningInfo[];
+  /** Грамматические формы слова. L1-L3 only. */
+  forms?: WordFormsInfo | null;
 };
 
 // Match-pairs question (соединение пар)
@@ -207,6 +224,8 @@ export type FreeRecallQuestion = {
   /** На L3 word-level: все значения для отображения списка переводов как
    *  стимула. На meaning-level rollback'е может быть undefined / 1 элемент. */
   meanings?: WordMeaningInfo[];
+  /** Грамматические формы слова. L1-L3 only. */
+  forms?: WordFormsInfo | null;
   doubleXpTimeLimitMs?: number;
 };
 

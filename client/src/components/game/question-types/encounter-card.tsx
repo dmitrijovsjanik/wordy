@@ -11,7 +11,8 @@ import {
   DrawerTitle,
 } from '@/components/ui/drawer';
 import { learningMnemonicRevealed } from '@/lib/api';
-import type { EncounterCardApiQuestion, WordMeaningInfo } from '@/types/api';
+import type { EncounterCardApiQuestion, WordMeaningInfo, WordFormsInfo } from '@/types/api';
+import { HighlightedSentence, WordFormsList } from '../word-forms-display';
 
 type EncounterCardProps = {
   question: EncounterCardApiQuestion;
@@ -67,15 +68,16 @@ export function EncounterCard({ question, disabled = false, onAnswer }: Encounte
               style={{ transformStyle: 'preserve-3d' }}
               className="relative h-full w-full"
             >
-              {/* Лицо: слово + transcription + N значений */}
+              {/* Лицо: слово + transcription + N значений + формы */}
               <FrontFace
                 word={question.word}
                 transcription={question.transcription}
                 meaningCount={meaningCount}
+                forms={question.forms ?? null}
               />
 
               {/* Обратная: список значений */}
-              <BackFace meanings={meanings} />
+              <BackFace meanings={meanings} forms={question.forms ?? null} />
             </motion.div>
           </motion.div>
         </div>
@@ -126,9 +128,10 @@ type FrontFaceProps = {
   word: string;
   transcription: string | null;
   meaningCount: number;
+  forms: WordFormsInfo | null;
 };
 
-function FrontFace({ word, transcription, meaningCount }: FrontFaceProps) {
+function FrontFace({ word, transcription, meaningCount, forms }: FrontFaceProps) {
   return (
     <Card
       className={`absolute inset-0 flex flex-col gap-4 overflow-hidden px-6 py-8 text-center ${CARD_SHADOW}`}
@@ -144,6 +147,11 @@ function FrontFace({ word, transcription, meaningCount }: FrontFaceProps) {
         {transcription && (
           <div className="text-sm text-[var(--gray-11)]">[{transcription}]</div>
         )}
+        {forms && forms.forms.length > 1 && (
+          <div className="mt-3 max-w-full px-2">
+            <WordFormsList forms={forms} hideBase />
+          </div>
+        )}
       </div>
       <div className="text-xs text-[var(--gray-10)]">Тапните, чтобы увидеть переводы</div>
     </Card>
@@ -152,7 +160,8 @@ function FrontFace({ word, transcription, meaningCount }: FrontFaceProps) {
 
 // ─── Back: список значений ──────────────────────────────────────────────────
 
-function BackFace({ meanings }: { meanings: WordMeaningInfo[] }) {
+function BackFace({ meanings, forms }: { meanings: WordMeaningInfo[]; forms: WordFormsInfo | null }) {
+  const formList = forms?.forms ?? [];
   return (
     <Card
       className={`absolute inset-0 flex flex-col gap-3 overflow-hidden px-6 py-8 ${CARD_SHADOW}`}
@@ -168,7 +177,9 @@ function BackFace({ meanings }: { meanings: WordMeaningInfo[] }) {
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
             <div className="text-3xl font-bold text-[var(--gray-12)]">{meanings[0]!.translation}</div>
             {meanings[0]!.example && (
-              <div className="mt-2 text-sm text-[var(--gray-11)]">{meanings[0]!.example.en}</div>
+              <div className="mt-2 text-sm text-[var(--gray-11)]">
+                <HighlightedSentence sentence={meanings[0]!.example.en} forms={formList} />
+              </div>
             )}
             {meanings[0]!.example && (
               <div className="text-sm text-[var(--gray-10)]">{meanings[0]!.example.ru}</div>
@@ -186,7 +197,9 @@ function BackFace({ meanings }: { meanings: WordMeaningInfo[] }) {
                   <span className="text-base font-semibold text-[var(--gray-12)]">{m.translation}</span>
                 </div>
                 {m.example && (
-                  <div className="mt-1 ml-5 text-sm text-[var(--gray-11)]">{m.example.en}</div>
+                  <div className="mt-1 ml-5 text-sm text-[var(--gray-11)]">
+                    <HighlightedSentence sentence={m.example.en} forms={formList} />
+                  </div>
                 )}
                 {m.example && (
                   <div className="ml-5 text-xs text-[var(--gray-10)]">{m.example.ru}</div>
