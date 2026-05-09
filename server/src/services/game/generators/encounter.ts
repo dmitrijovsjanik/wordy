@@ -1,6 +1,3 @@
-import { eq, asc } from 'drizzle-orm';
-import { db } from '../../../db/index.js';
-import { wordMeanings } from '../../../db/schema.js';
 import { getAiMnemonic, getAiExamples } from '../../ai-content-service.js';
 import type { PooledMeaning, EncounterCardQuestion } from '../types.js';
 import { loadWordMeaningsList } from './word-meanings-list.js';
@@ -30,18 +27,17 @@ export async function generateEncounterCard(meaning: PooledMeaning): Promise<Enc
     example = { en: ex.text, ru: ex.translation };
   }
 
-  // Позиция значения среди всех значений слова (popularity_rank order).
-  const allMeanings = await db
-    .select({ id: wordMeanings.id })
-    .from(wordMeanings)
-    .where(eq(wordMeanings.wordId, meaning.wordId))
-    .orderBy(asc(wordMeanings.popularityRank));
-  const idx = allMeanings.findIndex(m => m.id === meaning.id);
-  const meaningIndex = idx === -1 ? 1 : idx + 1;
-  const totalMeanings = allMeanings.length;
+  // Все eligible значения слова — для word-level UI на L1.
+  // Без лимита: на L0 (обзор) и L4 (production) показываются все meanings,
+  // L1/L3 синхронизированы с ними.
+  const meanings = await loadWordMeaningsList(meaning.wordId);
 
-  // Список топ-3 значений слова — для word-level UI на L1.
-  const meanings = await loadWordMeaningsList(meaning.wordId, 3);
+  // meaningIndex/totalMeanings рассчитываются по eligible-набору (тому же,
+  // что показывается юзеру в meanings), не по всем meanings таблицы. Иначе
+  // UI «N из M» рассинхронизирован с реально показанным списком.
+  const idx = meanings.findIndex(m => m.meaningId === meaning.id);
+  const meaningIndex = idx === -1 ? 1 : idx + 1;
+  const totalMeanings = meanings.length;
 
   // Грамматические формы слова — список + лейблы для подсветки в примерах.
   const forms = getWordForms(meaning.word.text, meaning.partOfSpeech);

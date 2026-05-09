@@ -1,23 +1,25 @@
 /**
- * Загружает топ-N значений слова для word-level карточек (L1-3).
+ * Загружает все eligible значения слова для word-level карточек (L1-3).
  *
- * Применяемые фильтры (как и в introduceUnseenWord/pickRepresentativeMeaning):
+ * Применяемые фильтры (как и в introduceUnseenWord/pickRepresentativeMeaning
+ * и review-feed-service — все уровни L0/L1/L3/L4 видят одинаковый набор
+ * meanings):
  *   - popularity_rank ≤ 3
  *   - frequency ≥ 5
  *   - кириллический перевод
  *   - не functional POS / не functional english word
  *
- * Сортировка по popularity_rank ASC. Если у слова больше N eligible meanings,
- * берётся top-N. Если меньше — возвращается реальное количество (без паддинга).
+ * Сортировка по popularity_rank ASC. Без LIMIT — возвращаются ВСЕ
+ * eligible meanings слова. Для каждого подмешивается AI-example >
+ * Yandex-example fallback.
  *
- * Для каждого meaning'а подмешивается AI-example > Yandex-example fallback.
+ * Параметр `limit` оставлен опциональным для обратной совместимости с
+ * вызовами, которым нужно ограничить выборку (по умолчанию — без лимита).
  */
 
 import { sql } from 'drizzle-orm';
 import { db } from '../../../db/index.js';
 import type { WordMeaningInfo } from '../types.js';
-
-const TOP_N = 3;
 
 type Row = {
   meaning_id: number;
@@ -27,7 +29,8 @@ type Row = {
   yandex_examples: { text: string; translation: string }[] | null;
 };
 
-export async function loadWordMeaningsList(wordId: number, limit: number = TOP_N): Promise<WordMeaningInfo[]> {
+export async function loadWordMeaningsList(wordId: number, limit?: number): Promise<WordMeaningInfo[]> {
+  const limitClause = typeof limit === 'number' ? sql`LIMIT ${limit}` : sql``;
   const result = await db.execute(sql`
     SELECT
       wm.id AS meaning_id,
@@ -52,7 +55,7 @@ export async function loadWordMeaningsList(wordId: number, limit: number = TOP_N
       )
       AND w.text NOT IN ('a', 'an', 'the')
     ORDER BY wm.popularity_rank NULLS LAST, wm.id
-    LIMIT ${limit}
+    ${limitClause}
   `);
 
   const rows = (result as unknown as { rows: Row[] }).rows;

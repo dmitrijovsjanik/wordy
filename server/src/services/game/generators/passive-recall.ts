@@ -40,8 +40,10 @@ export async function generatePassiveRecallFromMeaning(
   const aiMnemonic = await getAiMnemonic(meaning.id);
   const mnemonic = aiMnemonic?.association ?? null;
 
-  // Топ-3 значения слова — для рендера на обратной стороне карточки.
-  const meaningsList = await loadWordMeaningsList(meaning.wordId, 3);
+  // Все eligible значения слова — для рендера на обратной стороне карточки.
+  // (passive скрыт в пилоте через migrate-on-touch, но если генератор всё-таки
+  // позовётся для legacy-записи — синхронизируемся с остальными уровнями.)
+  const meaningsList = await loadWordMeaningsList(meaning.wordId);
 
   // Грамматические формы слова.
   const forms = getWordForms(meaning.word.text, meaning.partOfSpeech);

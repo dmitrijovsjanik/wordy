@@ -32,9 +32,11 @@ export async function generateFreeRecallFromMeaning(
   const direction = opts?.direction ?? (Math.random() < 0.5 ? 'en-ru' : 'ru-en');
   const englishWord = correct.word.lemma ?? correct.word.text;
 
-  // Подгружаем список значений для word-level (L3 active).
+  // Подгружаем список ВСЕХ eligible значений для word-level (L3 active).
+  // Без лимита: синхронизация с L0/L4, юзер видит все meanings слова как
+  // стимул при ru→en вводе.
   const meanings = opts?.includeMeanings
-    ? await loadWordMeaningsList(correct.wordId, 3)
+    ? await loadWordMeaningsList(correct.wordId)
     : undefined;
 
   // Грамматические формы слова — только для word-level (L3 active).
