@@ -153,32 +153,13 @@ describe('computeTransition — active, wrong answer', () => {
 });
 
 describe('computeTransition — active, correct answer', () => {
-  // correctToAdvance for active is 2. Path при production.enabled=true:
-  //   count=0 + correct → count=1, stays active, LEARN_HOURS[1] (8h).
-  //   count=1 + correct → newCount=2 ≥ 2 → advances to production
-  //     (НЕ review — production включён после фазы 6/7), reviewStage=0,
-  //     becameLearned=false (production не финал), nextReviewAt = now + LEARN_HOURS[0].
-  it('count=0 + correct → count=1, stays active, scheduled at LEARN_HOURS[1]', () => {
-    const result = computeTransition(input('active', 0, 0, true), NOW);
-
-    expect(result.tier).toBe('active');
-    expect(result.tierCorrectCount).toBe(1);
-    expect(result.reviewStage).toBe(0);
-    expect(result.hasPenalty).toBe(false);
-    expect(result.becameLearned).toBe(false);
-    expect(result.wasAdvanced).toBe(false);
-    expect(result.nextReviewAt.getTime()).toBe(
-      addHours(NOW, LEARN_HOURS[1]!).getTime(),
-    );
-  });
-
-  it('count=1 + correct → advances to production, becameLearned=false, LEARN_HOURS[0]', () => {
-    // production.enabled=true после фазы 7 (cloze работает на 2K+ meanings
-    // с AI-examples). Active → Production → Review. becameLearned=false на
-    // переходе, потому что production не финал лестницы.
+  // correctToAdvance for active is 1. Любой правильный → advances to production.
+  // Стимул на active — список ВСЕХ переводов слова, так что одно показывание
+  // покрывает все meanings слова на этом уровне.
+  it('count=0 + correct → advances to production immediately', () => {
     expect(learningConfig.tiers.production.enabled).toBe(true);
 
-    const result = computeTransition(input('active', 1, 0, true), NOW);
+    const result = computeTransition(input('active', 0, 0, true), NOW);
 
     expect(result.tier).toBe('production');
     expect(result.tierCorrectCount).toBe(0);
@@ -199,7 +180,7 @@ describe('computeTransition — active, correct answer', () => {
   });
 
   it('reviewStage in input is ignored on active correct (output reviewStage=0)', () => {
-    const result = computeTransition(input('active', 1, 3, true), NOW);
+    const result = computeTransition(input('active', 0, 3, true), NOW);
     expect(result.reviewStage).toBe(0);
   });
 });
@@ -230,40 +211,12 @@ describe('computeTransition — production, wrong answer', () => {
 });
 
 describe('computeTransition — production, correct answer', () => {
-  // correctToAdvance for production is 3. Path:
-  //   count=0 → count=1, stays production, LEARN_HOURS[min(1,1)] = LEARN_HOURS[1] (8h)
-  //   count=1 → count=2, stays production, LEARN_HOURS[min(2,1)] = LEARN_HOURS[1] (8h, clamped)
-  //   count=2 → newCount=3 ≥ 3 → advances to review, becameLearned=true.
-  it('count=0 + correct → count=1, stays production, LEARN_HOURS[1]', () => {
+  // correctToAdvance for production is 1. Любой правильный → advances to review.
+  // Per-meaning: каждый meaning слова имеет свою cloze-карточку и проходит
+  // production отдельно. Когда ВСЕ eligible meanings на review, word-level
+  // запись тоже идёт на review (см. promoteWordToReview).
+  it('count=0 + correct → advances to review, becameLearned=true, REVIEW_DAYS[0]', () => {
     const result = computeTransition(input('production', 0, 0, true), NOW);
-
-    expect(result.tier).toBe('production');
-    expect(result.tierCorrectCount).toBe(1);
-    expect(result.reviewStage).toBe(0);
-    expect(result.hasPenalty).toBe(false);
-    expect(result.becameLearned).toBe(false);
-    expect(result.wasAdvanced).toBe(false);
-    expect(result.nextReviewAt.getTime()).toBe(
-      addHours(NOW, LEARN_HOURS[1]!).getTime(),
-    );
-  });
-
-  it('count=1 + correct → count=2, stays production, LEARN_HOURS[1] (clamped)', () => {
-    // newCount=2, idx=min(2, len-1=1)=1 → LEARN_HOURS[1] (8h).
-    const result = computeTransition(input('production', 1, 0, true), NOW);
-
-    expect(result.tier).toBe('production');
-    expect(result.tierCorrectCount).toBe(2);
-    expect(result.reviewStage).toBe(0);
-    expect(result.hasPenalty).toBe(false);
-    expect(result.wasAdvanced).toBe(false);
-    expect(result.nextReviewAt.getTime()).toBe(
-      addHours(NOW, LEARN_HOURS[1]!).getTime(),
-    );
-  });
-
-  it('count=2 + correct → advances to review, becameLearned=true, REVIEW_DAYS[0]', () => {
-    const result = computeTransition(input('production', 2, 0, true), NOW);
 
     expect(result.tier).toBe('review');
     expect(result.tierCorrectCount).toBe(0);
@@ -481,13 +434,16 @@ describe('computeTransition — invariants', () => {
       computeTransition(input('production', 2, 0, true), NOW).wasAdvanced,
     ).toBe(true);
 
-    // Same-tier (active/production без advance) или rollback (review wrong) →
-    // wasAdvanced=false.
+    // active correct → wasAdvanced=true (correctToAdvance=1).
+    // Wrong-answer ветки и review → wasAdvanced=false.
     expect(
       computeTransition(input('active', 0, 0, true), NOW).wasAdvanced,
-    ).toBe(false);
+    ).toBe(true);
     expect(
       computeTransition(input('active', 0, 0, false), NOW).wasAdvanced,
+    ).toBe(false);
+    expect(
+      computeTransition(input('production', 0, 0, false), NOW).wasAdvanced,
     ).toBe(false);
     expect(
       computeTransition(input('review', 0, 1, true), NOW).wasAdvanced,
@@ -538,9 +494,10 @@ describe('computeTransition — invariants', () => {
 // тесты ловят сломанную лестницу целиком.
 
 describe('lifecycle — happy path encounter → ... → review', () => {
-  it('1 encounter + 2 active + 3 production correct → review', () => {
-    // После скрытия passive: encounter → active → production → review.
-    // Стартовое состояние новой записи user_word_progress(_word).
+  it('1 encounter + 1 active + 1 production correct → review', () => {
+    // Лестница пилота: encounter → active → production → review.
+    // 3 ответа всего: каждый tier требует 1 правильный.
+    // (production per-meaning — тестируется отдельно через promoteWordToReview.)
     let s: ReturnType<typeof computeTransition> = {
       tier: 'encounter',
       tierCorrectCount: 0,
@@ -559,30 +516,20 @@ describe('lifecycle — happy path encounter → ... → review', () => {
     expect(s.wasAdvanced).toBe(true);
     expect(s.becameLearned).toBe(false);
 
-    // Шаги 2-3: active correct ×2 → production.
-    s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
-    expect(s.tier).toBe('active');
-    expect(s.tierCorrectCount).toBe(1);
-
+    // Шаг 2: active correct → production.
     s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
     expect(s.tier).toBe('production');
     expect(s.tierCorrectCount).toBe(0);
-    expect(s.becameLearned).toBe(false); // production ещё не «выучено»
+    expect(s.wasAdvanced).toBe(true);
+    expect(s.becameLearned).toBe(false); // production не финал — есть meanings
 
-    // Шаги 4-6: production correct ×3 → review (becameLearned=true).
-    s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
-    expect(s.tier).toBe('production');
-    expect(s.tierCorrectCount).toBe(1);
-
-    s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
-    expect(s.tier).toBe('production');
-    expect(s.tierCorrectCount).toBe(2);
-
+    // Шаг 3: production correct → review.
     s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
     expect(s.tier).toBe('review');
     expect(s.tierCorrectCount).toBe(0);
     expect(s.reviewStage).toBe(0);
     expect(s.becameLearned).toBe(true);
+    expect(s.wasAdvanced).toBe(true);
     expect(s.nextReviewAt.getTime()).toBe(addDays(NOW, REVIEW_DAYS[0]!).getTime());
   });
 
@@ -617,7 +564,8 @@ describe('lifecycle — happy path encounter → ... → review', () => {
 });
 
 describe('lifecycle — wrong answers and rollbacks', () => {
-  it('active C-W-C-C: один wrong сбрасывает tcc, дальше 2 correct advance', () => {
+  it('active W-C: ошибка ставит penalty, следующий correct advance', () => {
+    // correctToAdvance=1. Wrong: stays active, penalty=true. Correct: advance.
     let s: ReturnType<typeof computeTransition> = {
       tier: 'active',
       tierCorrectCount: 0,
@@ -629,29 +577,18 @@ describe('lifecycle — wrong answers and rollbacks', () => {
       wasAdvanced: false,
     };
 
-    // C: tcc 0→1, hasPenalty=false.
-    s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
-    expect(s.tier).toBe('active');
-    expect(s.tierCorrectCount).toBe(1);
-    expect(s.hasPenalty).toBe(false);
-
-    // W: tcc 1→0, hasPenalty=true. Слово остаётся на active.
+    // W: stays active, hasPenalty=true.
     s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, false, s.hasPenalty), NOW);
     expect(s.tier).toBe('active');
     expect(s.tierCorrectCount).toBe(0);
     expect(s.hasPenalty).toBe(true);
     expect(s.nextReviewAt.getTime()).toBe(addMinutes(NOW, COOLDOWN_MIN).getTime());
 
-    // C: tcc 0→1, hasPenalty снимается на correct.
-    s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
-    expect(s.tier).toBe('active');
-    expect(s.tierCorrectCount).toBe(1);
-    expect(s.hasPenalty).toBe(false);
-
-    // C: tcc 1→2 ≥ correctToAdvance → advance to production.
+    // C: tcc 0→1 ≥ correctToAdvance=1 → advance to production.
     s = computeTransition(input(s.tier, s.tierCorrectCount, s.reviewStage, true, s.hasPenalty), NOW);
     expect(s.tier).toBe('production');
     expect(s.wasAdvanced).toBe(true);
+    expect(s.hasPenalty).toBe(false);
   });
 
   it('review wrong → откат на active с кулдауном reviewWrongCooldownDays', () => {

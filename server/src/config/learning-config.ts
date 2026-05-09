@@ -56,19 +56,21 @@ export const learningConfig = {
       enabled: true,
     },
     active: {
-      // Active recall — свободный ввод (только free-recall ru→en).
-      // На главной экране ровно один формат «русский стимул → английский ввод»;
-      // dictation/multiple-choice не используются (см. требование «без квизов»).
-      correctToAdvance: 2,
+      // Active recall — свободный ввод ru→en (free-recall).
+      // 1 правильный → переход на production. Стимул на active — список ВСЕХ
+      // переводов слова (через includeMeanings=true), так что одно показывание
+      // покрывает все meanings слова на этом уровне.
+      correctToAdvance: 1,
       allowedExerciseTypes: ['free-recall'] as const,
       enabled: true,
     },
     production: {
       // Production — контекстный recall: предложение с пропуском, без вариантов.
-      // Отличается от active (просто слово→слово) тем, что слово используется
-      // в контексте предложения. Если для meaning'а нет подходящего примера —
-      // generate-for-tier фолбэчит на free-recall.
-      correctToAdvance: 3,
+      // Per-meaning: одно cloze-предложение для каждого meaning слова. Каждый
+      // meaning требует 1 правильного ответа → review. Когда ВСЕ eligible
+      // meanings слова прошли production → word-level переход на review.
+      // Если для meaning'а нет подходящего примера — fallback на free-recall.
+      correctToAdvance: 1,
       allowedExerciseTypes: ['cloze-input'] as const,
       enabled: true,
     },
