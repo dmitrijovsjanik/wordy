@@ -75,3 +75,12 @@ export type PilotFeatureKey = keyof typeof PILOT_FEATURES;
 export function isPilotFeatureEnabled(key: PilotFeatureKey): boolean {
   return PILOT_FEATURES[key];
 }
+
+/**
+ * Порог правильных ответов в день, при достижении которого день
+ * засчитывается для streak'а. В пилоте — 25 (вместо «первый ответ дня»).
+ *
+ * При PILOT_FEATURES.milestones=false порог не используется (старая
+ * логика «первый ответ» возвращается).
+ */
+export const STREAK_DAY_THRESHOLD = 25;

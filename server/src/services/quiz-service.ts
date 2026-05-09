@@ -11,7 +11,7 @@ import {
   XP_CORRECT_ANSWER,
 } from './progression-service.js';
 import { ANSWER_STREAK_MILESTONES, DAILY_CORRECT_MILESTONES } from '../config/gems-config.js';
-import { PILOT_FEATURES } from '../config/pilot-config.js';
+import { PILOT_FEATURES, STREAK_DAY_THRESHOLD } from '../config/pilot-config.js';
 import { getAiExamples, getAiMnemonic } from './ai-content-service.js';
 import {
   generateRandom,
@@ -708,7 +708,8 @@ export async function recordInfiniteAnswer(
     }
 
     let streakGemsFromDay = 0;
-    if (isNewDay) {
+    if (isNewDay && !PILOT_FEATURES.milestones) {
+      // Старая логика: первый ответ дня = зачёт.
       const streakResult = await updateStreakDays(userId);
       streakGemsFromDay = streakResult.gemsEarned;
     }
@@ -734,6 +735,18 @@ export async function recordInfiniteAnswer(
     let milestoneGems = 0;
     const newStreak = streak + 1;
     const newDailyCorrectCount = dailyCorrectCount + 1;
+
+    // Новая логика: streak зачёт при достижении порога правильных ответов.
+    // Срабатывает в момент пересечения порога — ровно один раз за день.
+    if (
+      PILOT_FEATURES.milestones &&
+      isNewDay &&
+      dailyCorrectCount < STREAK_DAY_THRESHOLD &&
+      newDailyCorrectCount >= STREAK_DAY_THRESHOLD
+    ) {
+      const streakResult = await updateStreakDays(userId);
+      streakGemsFromDay = streakResult.gemsEarned;
+    }
 
     if (PILOT_FEATURES.gems) {
       // Гемы за мильники стрика ответов подряд (разово в день)
@@ -1024,7 +1037,7 @@ export async function recordMatchPairsAnswer(
     }
 
     let streakGemsFromDay = 0;
-    if (isNewDay) {
+    if (isNewDay && !PILOT_FEATURES.milestones) {
       const streakResult = await updateStreakDays(userId);
       streakGemsFromDay = streakResult.gemsEarned;
     }
@@ -1049,6 +1062,16 @@ export async function recordMatchPairsAnswer(
     let milestoneGems = 0;
     const finalStreak = currentStreak;
     const newDailyCorrectCount = dailyCorrectCount + correctCount;
+
+    if (
+      PILOT_FEATURES.milestones &&
+      isNewDay &&
+      dailyCorrectCount < STREAK_DAY_THRESHOLD &&
+      newDailyCorrectCount >= STREAK_DAY_THRESHOLD
+    ) {
+      const streakResult = await updateStreakDays(userId);
+      streakGemsFromDay = streakResult.gemsEarned;
+    }
 
     if (PILOT_FEATURES.gems) {
       // Стрик ответов
@@ -1148,7 +1171,7 @@ export async function recordGrammarAnswer(
     }
 
     let streakGemsFromDay = 0;
-    if (isNewDay) {
+    if (isNewDay && !PILOT_FEATURES.milestones) {
       const streakResult = await updateStreakDays(userId);
       streakGemsFromDay = streakResult.gemsEarned;
     }
@@ -1173,6 +1196,16 @@ export async function recordGrammarAnswer(
     let milestoneGems = 0;
     const newStreak = streak + 1;
     const newDailyCorrectCount = dailyCorrectCount + 1;
+
+    if (
+      PILOT_FEATURES.milestones &&
+      isNewDay &&
+      dailyCorrectCount < STREAK_DAY_THRESHOLD &&
+      newDailyCorrectCount >= STREAK_DAY_THRESHOLD
+    ) {
+      const streakResult = await updateStreakDays(userId);
+      streakGemsFromDay = streakResult.gemsEarned;
+    }
 
     if (PILOT_FEATURES.gems) {
       for (const [threshold, gems] of ANSWER_STREAK_MILESTONES) {
