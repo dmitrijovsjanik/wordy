@@ -7,6 +7,7 @@ import { useUserStore } from '@/stores/user-store';
 import { platformBridge } from '@/lib/platform-bridge';
 import { acceptInvite, sendFriendRequest } from '@/lib/api';
 import { lazyWithRetry } from '@/lib/lazy-retry';
+import { PILOT_FEATURES } from '@/lib/pilot-config';
 
 const Dashboard = lazyWithRetry(() => import('@/components/dashboard').then((m) => ({ default: m.Dashboard })));
 const VocabularySection = lazyWithRetry(() => import('@/components/vocabulary-section').then((m) => ({ default: m.VocabularySection })));
@@ -98,19 +99,35 @@ export function App() {
                   <Route path="/collections/create" element={<CollectionCreate />} />
                   <Route path="/collections/:id" element={<CollectionDetail />} />
                   <Route path="/profile" element={<Profile />} />
-                  <Route path="/duel/create" element={<DuelCreate />} />
-                  <Route path="/duel/:id" element={<DuelGame />} />
-                  <Route path="/duel/:id/result" element={<DuelResult />} />
-                  <Route path="/leaderboard" element={<Leaderboard />} />
+                  {PILOT_FEATURES.duels && (
+                    <>
+                      <Route path="/duel/create" element={<DuelCreate />} />
+                      <Route path="/duel/:id" element={<DuelGame />} />
+                      <Route path="/duel/:id/result" element={<DuelResult />} />
+                    </>
+                  )}
+                  {PILOT_FEATURES.leagues && (
+                    <Route path="/leaderboard" element={<Leaderboard />} />
+                  )}
                   <Route path="/modes" element={<Modes />} />
-                  <Route path="/shop" element={<Shop />} />
-                  <Route path="/friends" element={<FriendsPage />} />
+                  {PILOT_FEATURES.gems && (
+                    <Route path="/shop" element={<Shop />} />
+                  )}
+                  {PILOT_FEATURES.friends && (
+                    <Route path="/friends" element={<FriendsPage />} />
+                  )}
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/words" element={<AllWords />} />
-                  <Route path="/grammar" element={<GrammarPage />} />
-                  <Route path="/grammar/articles" element={<ArticlesPage />} />
-                  <Route path="/grammar/tenses" element={<TensesPage />} />
-                  <Route path="/reading" element={<ReadingPage />} />
+                  {PILOT_FEATURES.grammar && (
+                    <>
+                      <Route path="/grammar" element={<GrammarPage />} />
+                      <Route path="/grammar/articles" element={<ArticlesPage />} />
+                      <Route path="/grammar/tenses" element={<TensesPage />} />
+                    </>
+                  )}
+                  {PILOT_FEATURES.reading && (
+                    <Route path="/reading" element={<ReadingPage />} />
+                  )}
                   <Route path="/review" element={<ReviewPage />} />
                   <Route path="/spelling" element={<SpellingPage />} />
                   <Route path="/problems" element={<ProblemsPage />} />

@@ -9,6 +9,7 @@ import { StreakDaysIndicator } from '@/components/ui/streak-days-indicator';
 import { StreakInfoSheet } from '@/components/ui/streak-info-sheet';
 import { BackButton } from '@/components/ui/back-button';
 import { useBackButton } from '@/hooks/use-back-button';
+import { PILOT_FEATURES } from '@/lib/pilot-config';
 
 type Card = {
   key: string;
@@ -72,13 +73,15 @@ export function VocabularySection() {
             onClick={() => navigate('/shop')}
           />
         </div>
-        <button
-          onClick={() => navigate('/leaderboard')}
-          className="shrink-0"
-          aria-label="Рейтинг"
-        >
-          <LeagueBadge tier={tier} size="sm" showLabel={false} />
-        </button>
+        {PILOT_FEATURES.leagues && (
+          <button
+            onClick={() => navigate('/leaderboard')}
+            className="shrink-0"
+            aria-label="Рейтинг"
+          >
+            <LeagueBadge tier={tier} size="sm" showLabel={false} />
+          </button>
+        )}
         <StreakDaysIndicator count={user.streakDays} onClick={() => setStreakSheetOpen(true)} />
         <button onClick={() => navigate('/profile')} className="shrink-0">
           <Avatar src={user.avatarUrl} fallback={user.firstName} size={40} />

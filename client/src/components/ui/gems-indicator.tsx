@@ -3,6 +3,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { Add01Icon } from '@hugeicons/core-free-icons';
 import gemSpinData from '@/assets/gem-spin.json';
 import snowflakeData from '@/assets/snowflake-freeze.json';
+import { PILOT_FEATURES } from '@/lib/pilot-config';
 
 type GemsIndicatorProps = {
   gems: number;
@@ -11,6 +12,8 @@ type GemsIndicatorProps = {
 };
 
 export function GemsIndicator({ gems, freezes, onClick }: GemsIndicatorProps) {
+  if (!PILOT_FEATURES.gems) return null;
+
   return (
     <button
       onClick={onClick}

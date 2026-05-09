@@ -39,6 +39,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Cancel01Icon, Clock01Icon, CheckListIcon, AlertCircleIcon } from '@hugeicons/core-free-icons';
 import { LIVES_ENABLED } from '@/lib/feature-flags';
+import { PILOT_FEATURES } from '@/lib/pilot-config';
 import { xpForLevel } from '@/lib/progression-config';
 import { AnswerHistoryDrawer } from '@/components/answer-history-drawer';
 import { LivesExhaustedDrawer } from '@/components/game/lives-exhausted-drawer';
@@ -432,21 +433,23 @@ export function VocabularyScreen() {
             {/* Streak + Status bar — outside QuizContainer so they don't fade */}
             <div className="shrink-0 flex flex-col items-center">
               <div className="mt-2 flex items-center gap-1.5">
-                {!isLeagueLoading && progress ? (
-                  <div className="flex h-8 items-center gap-1 rounded-full bg-[var(--gray-3)] pl-1 pr-3">
-                    {(() => {
-                      const Icon = LEAGUE_ICONS[progress.tier];
-                      return <Icon size={24} className="shrink-0" />;
-                    })()}
-                    <span className="text-xs font-semibold">{stats?.leaguePoints ?? 0}</span>
-                    <div className="h-3 w-px bg-[var(--gray-6)]" />
-                    <div className="flex items-center gap-0.5 text-[10px] text-[var(--gray-11)]">
-                      <HugeiconsIcon icon={Clock01Icon} size={10} />
-                      <span>{timeLeft || '—'}</span>
+                {PILOT_FEATURES.leagues && (
+                  !isLeagueLoading && progress ? (
+                    <div className="flex h-8 items-center gap-1 rounded-full bg-[var(--gray-3)] pl-1 pr-3">
+                      {(() => {
+                        const Icon = LEAGUE_ICONS[progress.tier];
+                        return <Icon size={24} className="shrink-0" />;
+                      })()}
+                      <span className="text-xs font-semibold">{stats?.leaguePoints ?? 0}</span>
+                      <div className="h-3 w-px bg-[var(--gray-6)]" />
+                      <div className="flex items-center gap-0.5 text-[10px] text-[var(--gray-11)]">
+                        <HugeiconsIcon icon={Clock01Icon} size={10} />
+                        <span>{timeLeft || '—'}</span>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <Skeleton className="h-8 w-24 rounded-full" />
+                  ) : (
+                    <Skeleton className="h-8 w-24 rounded-full" />
+                  )
                 )}
                 <button className="relative flex items-center justify-center shrink-0" style={{ width: lvlRingSize, height: lvlRingSize }}>
                   <svg width={lvlRingSize} height={lvlRingSize} className="absolute inset-0 -rotate-90">

@@ -10,6 +10,7 @@ import { StreakDaysIndicator } from '@/components/ui/streak-days-indicator';
 import { StreakInfoSheet } from '@/components/ui/streak-info-sheet';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { PILOT_FEATURES } from '@/lib/pilot-config';
 
 type SectionStatus = 'active' | 'in-progress' | 'soon';
 
@@ -91,12 +92,16 @@ type OtherSection = {
 };
 
 const OTHER_SECTIONS: OtherSection[] = [
-  {
-    key: 'duel',
-    title: 'Дуэли',
-    description: 'Сразись с другом на скорость и точность.',
-    navigateTo: '/duel/create',
-  },
+  ...(PILOT_FEATURES.duels
+    ? [
+        {
+          key: 'duel',
+          title: 'Дуэли',
+          description: 'Сразись с другом на скорость и точность.',
+          navigateTo: '/duel/create',
+        },
+      ]
+    : []),
   {
     key: 'quiz-legacy',
     title: 'Квиз (legacy)',
@@ -200,13 +205,15 @@ export function Dashboard() {
             onClick={() => navigate('/shop')}
           />
         </div>
-        <button
-          onClick={() => navigate('/leaderboard')}
-          className="shrink-0"
-          aria-label="Рейтинг"
-        >
-          <LeagueBadge tier={tier} size="sm" showLabel={false} />
-        </button>
+        {PILOT_FEATURES.leagues && (
+          <button
+            onClick={() => navigate('/leaderboard')}
+            className="shrink-0"
+            aria-label="Рейтинг"
+          >
+            <LeagueBadge tier={tier} size="sm" showLabel={false} />
+          </button>
+        )}
         <StreakDaysIndicator count={user.streakDays} onClick={() => setStreakSheetOpen(true)} />
       </div>
 
