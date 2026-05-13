@@ -22,6 +22,8 @@ import {
   GEMS_LEVEL_UP,
   GEMS_STREAK_7_DAYS,
 } from '../config/gems-config.js';
+import { PILOT_FEATURES } from '../config/pilot-config.js';
+import { XP_BOOST_MULTIPLIER, PREMIUM_XP_BONUS } from '../config/xp-boost-config.js';
 import {
   addLpForCorrectAnswer as addLpForCorrectAnswerInternal,
   addLpForQuizComplete,
@@ -58,8 +60,20 @@ export type StreakUpdateResult = {
 /**
  * Атомарно добавляет гемы пользователю.
  * Возвращает новое значение gems.
+ *
+ * При выключенном PILOT_FEATURES.gems — no-op: возвращает текущий баланс
+ * без записи. Это отключает всю экономику гемов одной точкой, не трогая
+ * вызовы из milestones/streak/level-up/duels/quiz-streak.
  */
 export async function addGems(userId: number, amount: number): Promise<number> {
+  if (!PILOT_FEATURES.gems) {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: { gems: true },
+    });
+    return user?.gems ?? 0;
+  }
+
   const [result] = await db
     .update(users)
     .set({
@@ -106,7 +120,7 @@ export async function addXp(
 
   // Гемы за level-up
   let gemsEarned = 0;
-  if (levelUp) {
+  if (levelUp && PILOT_FEATURES.gems) {
     await addGems(userId, GEMS_LEVEL_UP);
     gemsEarned = GEMS_LEVEL_UP;
   }
@@ -122,7 +136,30 @@ export async function addXp(
 }
 
 /**
- * Добавляет XP с модификатором streak.
+ * Глобальный множитель XP (Premium + XP Boost).
+ * Складываются аддитивно: base(100) + premium(50) + boost(50) = 200 = x2.
+ */
+async function getGlobalXpMultiplier(userId: number): Promise<number> {
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, userId),
+    columns: { premiumUntil: true, xpBoostUntil: true },
+  });
+
+  let multiplier = 100;
+  const now = new Date();
+
+  if (user?.premiumUntil && user.premiumUntil > now) {
+    multiplier += PREMIUM_XP_BONUS;
+  }
+  if (user?.xpBoostUntil && user.xpBoostUntil > now) {
+    multiplier += XP_BOOST_MULTIPLIER;
+  }
+
+  return multiplier;
+}
+
+/**
+ * Добавляет XP с модификатором streak и глобальным множителем (Premium + Boost).
  */
 export async function addXpWithStreak(
   userId: number,
@@ -130,12 +167,18 @@ export async function addXpWithStreak(
   streak: number,
 ): Promise<XpGainResult> {
   const xpModifier = getXpModifier(streak);
-  const xpEarned = applyModifier(baseAmount, xpModifier);
+  let xpEarned = applyModifier(baseAmount, xpModifier);
+
+  // Глобальный множитель (Premium + XP Boost)
+  const globalMultiplier = await getGlobalXpMultiplier(userId);
+  if (globalMultiplier > 100) {
+    xpEarned = applyModifier(xpEarned, globalMultiplier);
+  }
 
   const result = await addXp(userId, xpEarned);
   return {
     ...result,
-    xpModifier,
+    xpModifier: Math.floor((xpModifier * globalMultiplier) / 100),
   };
 }
 
@@ -265,12 +308,14 @@ export async function updateStreakDays(userId: number): Promise<StreakUpdateResu
     newStreakDays = 1;
   }
 
-  // Гемы за первый квиз за день
-  gemsEarned += GEMS_DAILY_PLAY;
+  if (PILOT_FEATURES.gems) {
+    // Гемы за первый квиз за день
+    gemsEarned += GEMS_DAILY_PLAY;
 
-  // Гемы за мильник стрика (каждые 7 дней)
-  if (newStreakDays > 0 && newStreakDays % 7 === 0 && newStreakDays !== user.streakDays) {
-    gemsEarned += GEMS_STREAK_7_DAYS;
+    // Гемы за мильник стрика (каждые 7 дней)
+    if (newStreakDays > 0 && newStreakDays % 7 === 0 && newStreakDays !== user.streakDays) {
+      gemsEarned += GEMS_STREAK_7_DAYS;
+    }
   }
 
   // Обновляем пользователя

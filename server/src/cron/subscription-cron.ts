@@ -43,7 +43,7 @@ cron.schedule(
             user.id,
             itemType,
             user.savedPaymentMethodId!,
-            Number(user.telegramId),
+            user.telegramId ? Number(user.telegramId) : undefined,
           );
           console.log(`[Subscription Cron] Recurring payment created for user ${user.id}: ${paymentId}`);
         } catch (error) {

@@ -1,5 +1,7 @@
 export type User = {
   id: number;
+  telegramId: string | null;
+  vkId: string | null;
   firstName: string;
   username: string | null;
   avatarUrl: string | null;
@@ -11,11 +13,16 @@ export type User = {
   nativeLanguage: string;
   learningLanguage: string;
   repeatMastered: boolean;
+  ttsVoice: string;
   premiumUntil: string | null;
   premiumPlan: string | null;
   autoRenew: boolean;
   lastActivityAt: string | null;
   createdAt: string;
+  estimatedCefr: CefrLevel | null;
+  lives: number;
+  livesRestoredAt: string | null;
+  xpBoostUntil: string | null;
 };
 
 export type AuthResponse = {
@@ -48,7 +55,419 @@ export type MatchPairsApiQuestion = {
   doubleXpTimeLimitMs?: number;
 };
 
-export type QuizQuestion = QuizQuestionBase | MatchPairsApiQuestion;
+// Cloze question (заполни пропуск в предложении)
+export type ClozeApiQuestion = {
+  type: 'cloze';
+  meaningId: number;
+  sentence: string;
+  sentenceRu: string;
+  options: string[];
+  correctAnswer: string;
+  word: string;
+  transcription: string | null;
+  doubleXpTimeLimitMs?: number;
+};
+
+// Listening question (слушай → выбери перевод)
+export type ListeningApiQuestion = {
+  type: 'listening';
+  meaningId: number;
+  audioWord: string;
+  transcription: string | null;
+  options: string[];
+  correctAnswer: string;
+  doubleXpTimeLimitMs?: number;
+};
+
+// Dictation question (слушай → напиши)
+export type DictationApiQuestion = {
+  type: 'dictation';
+  meaningId: number;
+  audioWord: string;
+  hint: string;
+  correctAnswer: string;
+  acceptableAnswers: string[];
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+  doubleXpTimeLimitMs?: number;
+};
+
+// Информация об одном значении слова — для L1-3 word-level карточек,
+// которые показывают все значения слова списком (encounter, passive-recall,
+// active free-recall).
+export type WordMeaningInfo = {
+  meaningId: number;
+  translation: string;
+  example: { en: string; ru: string } | null;
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+};
+
+// Грамматическая форма слова и её роль (для подсказок и подсветки в примерах).
+// Сервер: server/src/services/word-forms-service.ts.
+export type WordFormInfo = {
+  text: string;
+  label: string;
+};
+
+export type WordFormsInfo = {
+  base: string;
+  partOfSpeech: 'verb' | 'noun' | 'adjective' | 'modal' | 'pronoun' | 'other';
+  forms: WordFormInfo[];
+};
+
+// Free Recall question (напиши перевод без вариантов)
+export type FreeRecallApiQuestion = {
+  type: 'free-recall';
+  meaningId: number;
+  /** Word-level ID — присутствует когда вопрос на L3 active recall (word-level).
+   *  null/undefined для meaning-level (rollback после ошибки на L4). */
+  wordId?: number | null;
+  direction: 'en-ru' | 'ru-en';
+  prompt: string;
+  transcription: string | null;
+  audioWord?: string;
+  acceptableAnswers: string[];
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+  /** Все значения слова (топ-3 по popularity_rank). Заполняется только для
+   *  word-level вопросов; для meaning-level rollback'а пуст или содержит одно. */
+  meanings?: WordMeaningInfo[];
+  /** Грамматические формы слова (L3 word-level). */
+  forms?: WordFormsInfo | null;
+  doubleXpTimeLimitMs?: number;
+};
+
+// ─── Grammar Questions (встроенные в основной квиз) ─────────────────────────
+
+export type GrammarArticleApiQuestion = {
+  type: 'grammar-article';
+  exercise: {
+    sentence: string;
+    blanks: Array<{ position: number; correctAnswer: string; explanation: string }>;
+    difficulty: 1 | 2 | 3;
+    rule: string;
+    ruleCategory: string;
+  };
+  exerciseIndex: number;
+};
+
+export type GrammarTenseApiQuestion = {
+  type: 'grammar-tense';
+  exercise: {
+    sentence: string;
+    sentenceRu: string;
+    subject: string;
+    options: string[];
+    correctAnswer: string;
+    tense: string;
+    signalWords: string[];
+    explanation: string;
+    difficulty: 1 | 2 | 3;
+  };
+  exerciseIndex: number;
+};
+
+export type GrammarCollocationApiQuestion = {
+  type: 'grammar-collocation';
+  collocation: {
+    blank: string;
+    correctAnswer: string;
+    options: string[];
+    type: string;
+    translation: string;
+    difficulty: 1 | 2 | 3;
+  };
+  collocationIndex: number;
+};
+
+export type GrammarFalseFriendApiQuestion = {
+  type: 'grammar-false-friend';
+  word: string;
+  options: string[];
+  correctAnswer: string;
+  wrongFriend: string;
+  example: string;
+  exampleRu: string;
+  questionIndex: number;
+};
+
+export type GrammarTenseMatchApiQuestion = {
+  type: 'grammar-tense-match';
+  pairs: Array<{
+    meaningId: number;
+    word: string;
+    translation: string;
+  }>;
+};
+
+export type GrammarApiQuestion =
+  | GrammarArticleApiQuestion
+  | GrammarTenseApiQuestion
+  | GrammarCollocationApiQuestion
+  | GrammarFalseFriendApiQuestion
+  | GrammarTenseMatchApiQuestion;
+
+// Encounter card — пассивный показ слова на первом уровне лестницы.
+// Без проверки. Клиент рендерит карточку и одну кнопку «Понятно»,
+// которая → answer({isCorrect: true}).
+//
+// Word-level: показывает топ-N значений слова списком. translation/example
+// в корне — backward-compat (representative meaning, первое из meanings).
+export type EncounterCardApiQuestion = {
+  type: 'encounter';
+  /** Representative meaning ID — для legacy code и meaning-level events. */
+  meaningId: number;
+  /** Word-level ID. Присутствует на новых ответах сервера. null если
+   *  сервер не вернул (старая версия) — клиент работает в backward-compat режиме. */
+  wordId?: number | null;
+  word: string;
+  originalForm: string | null;
+  /** Translation representative meaning'а. Используется как fallback для
+   *  компонентов, которые ещё не умеют рендерить meanings list. */
+  translation: string;
+  transcription: string | null;
+  mnemonic: string | null;
+  /** Пример representative meaning'а (для backward-compat). */
+  example: { en: string; ru: string } | null;
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+  direction: 'en-ru';
+  meaningIndex: number;
+  totalMeanings: number;
+  /** Все значения слова (топ-3 по popularity_rank). Заполняется на word-level
+   *  encounter'е. Если undefined — значит ответ от старого сервера, рендерим
+   *  только translation/example как раньше. */
+  meanings?: WordMeaningInfo[];
+  /** Грамматические формы слова (L1 word-level). */
+  forms?: WordFormsInfo | null;
+  doubleXpTimeLimitMs?: number;
+};
+
+// Cloze-input — production-tier: предложение с пропуском без вариантов.
+// Пользователь печатает пропущенное слово.
+export type ClozeInputApiQuestion = {
+  type: 'cloze-input';
+  meaningId: number;
+  sentence: string;       // "I need to _____ a decision"
+  sentenceRu: string;     // "Мне нужно принять решение"
+  correctAnswer: string;
+  acceptableAnswers: string[];
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+  word: string;
+  doubleXpTimeLimitMs?: number;
+};
+
+// Passive recall card — флешкарта с флипом и самооценкой через свайп.
+// Word-level: показывает все значения слова на обратной стороне.
+// Свайп вправо = isCorrect=true, влево = false.
+export type PassiveRecallApiQuestion = {
+  type: 'passive-recall';
+  /** Representative meaning ID. */
+  meaningId: number;
+  /** Word-level ID (новый сервер). null/undefined — старый сервер, fallback на one-meaning UI. */
+  wordId?: number | null;
+  word: string;
+  transcription: string | null;
+  /** Translation representative meaning'а (fallback). */
+  translation: string;
+  /** Пример representative meaning'а (fallback). */
+  example: { en: string; ru: string } | null;
+  mnemonic: string | null;
+  meaningIndex: number;
+  totalMeanings: number;
+  /** Все значения слова (топ-3 по popularity_rank). На word-level — обязательно. */
+  meanings?: WordMeaningInfo[];
+  /** Грамматические формы слова (L2 word-level). */
+  forms?: WordFormsInfo | null;
+  doubleXpTimeLimitMs?: number;
+};
+
+export type LearningTier = 'encounter' | 'passive' | 'active' | 'production' | 'review';
+
+// ─── v2 типы для новой лестницы (pool/passive/active/review/mastered) ───────
+// Параллельны legacy LearningTier. Используются эндпойнтами /api/learning/*.
+// На этапе cleanup (шаг 5) старые типы удаляются, V2 → переименуется без суффикса.
+
+export type LearningTier = 'pool' | 'passive' | 'active' | 'review' | 'mastered';
+export type ReviewGrade = 'again' | 'hard' | 'good' | 'easy';
+export type PoolSwipeAction = 'know' | 'learn' | 'snooze';
+
+// Pool card (L0 v2) — карточка для свайпа в основном потоке.
+export type PoolCardApiQuestion = {
+  type: 'pool-card';
+  wordId: number;
+  meaningId: number;
+  word: string;
+  transcription: string | null;
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+  meanings: WordMeaningInfo[];
+  forms?: WordFormsInfo | null;
+  example: { en: string; ru: string } | null;
+};
+
+export type QuizQuestion =
+  | PoolCardApiQuestion
+  | PassiveRecallApiQuestion  // L1
+  | FreeRecallApiQuestion;    // L2 + L3
+
+export type SessionCompleteReason =
+  | 'all_in_cooldown'
+  | 'collection_exhausted'
+  | 'no_words'
+  | 'daily_limit_done'
+  | 'all_recent';
+
+export type DailyPromotionsInfo = {
+  /** Сколько слов уже перешло active → review за текущий учебный день (после 02:00 MSK). */
+  count: number;
+  /** Максимум, после которого batches не стартуют. */
+  limit: number;
+};
+
+export type LearningNextResponse =
+  | {
+      mode?: undefined;
+      question: QuizQuestion;
+      tier: LearningTier;
+      wordId: number;
+      dailyPromotions: DailyPromotionsInfo;
+      /** true → на этом pickNext maybePromoteBatch стартовал батч. UI показывает
+       *  экран «Ты отобрал N слов» перед первым passive-вопросом. */
+      batchStarted: boolean;
+      /** Размер батча. Релевантно только когда batchStarted=true. */
+      batchSize: number;
+    }
+  | {
+      mode: 'session_complete';
+      reason: SessionCompleteReason;
+      /** Время ближайшего due (для UI «возвращайтесь к …»). null = нет due. */
+      nextDueAt: string | null;
+      counts: {
+        pool: number;
+        passive: number;
+        active: number;
+        review: number;
+        mastered: number;
+      };
+      dailyPromotions: DailyPromotionsInfo;
+    };
+
+export type LearningAnswerRequest = {
+  wordId: number;
+  /** Для L1/L2 — bool. Для L3 — игнорируется (используется grade). */
+  isCorrect?: boolean;
+  /** Для L3 — обязательно. Для L1/L2 — undefined. */
+  grade?: ReviewGrade;
+  questionType?: string;
+  answerTimeMs?: number;
+  streak?: number;
+  /** Свободный ввод: сервер ре-валидирует через нормализатор. */
+  userAnswer?: string;
+  acceptableAnswers?: string[];
+  partOfSpeech?: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+};
+
+export type LearningAnswerResponse = {
+  isCorrect: boolean;
+  /** 'exact' | 'typo' | 'none'. lemma → exact во v2. */
+  normalizedVia: 'exact' | 'typo' | 'none' | null;
+  /** Правильный текст для UI «вот правильное написание» (при typo / wrong). */
+  correctedTo?: string;
+  tierBefore: LearningTier;
+  tierAfter: LearningTier;
+  wasAdvanced: boolean;
+  wasReset: boolean;
+  becameMastered: boolean;
+  nextReviewAt: string | Date;
+  // Награды/жизни — те же поля что в v1
+  xpEarned: number;
+  xpModifier?: number;
+  totalXp?: number;
+  level?: number;
+  levelUp?: number;
+  lpEarned: number;
+  lpModifier?: number;
+  totalLp?: number;
+  gemsEarned: number;
+  lives: number;
+  livesRestoredAt: string | null;
+  livesExhausted: boolean;
+};
+
+export type LearningSwipeRequest = {
+  wordId: number;
+  action: PoolSwipeAction;
+  snoozeDays?: number;
+  /** Опционально: коллекция, в которой произведён swipe. Нужно maybePromoteBatch
+   *  для корректной фильтрации pool по коллекции при триггере батча после swipe. */
+  collectionId?: number;
+};
+
+// Обзор (этап 3): один режим — карточка = слово + все его eligible meanings.
+// Решение (свайп) применяется к слову целиком.
+export type ReviewFeedMeaning = {
+  meaningId: number;
+  translation: string;
+  /** Заполнено только у первого meaning по popularity_rank ASC.
+   *  UI показывает один пример на карточку, под списком переводов. */
+  exampleEn?: string;
+  exampleRu?: string;
+};
+
+export type ReviewFeedWord = {
+  wordId: number;
+  text: string;
+  transcription: string | null;
+  /** POS первого meaning по popularity_rank ASC (одно слово в одной POS-роли). */
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+  meanings: ReviewFeedMeaning[];
+};
+
+export type ReviewFeedResponse = {
+  words: ReviewFeedWord[];
+};
+
+export type LearningSwipeResponse = {
+  ok: boolean;
+  /** true → этот свайп стартовал батч (pool достиг minBatchSize и daily<limit).
+   *  UI показывает экран «Ты отобрал N слов» перед первым passive-вопросом. */
+  batchStarted: boolean;
+  /** Размер стартовавшего батча. Релевантно только когда batchStarted=true. */
+  batchSize: number;
+};
+
+export type LearningAnswerResponse = {
+  isCorrect: boolean;
+  normalizedVia: 'exact' | 'lemma' | 'typo' | 'none' | null;
+  tierBefore: LearningTier;
+  tierAfter: LearningTier;
+  becameLearned: boolean;
+  wasReset: boolean;
+  nextReviewAt: string | Date;
+  xpEarned: number;
+  xpModifier?: number;
+  totalXp?: number;
+  level?: number;
+  levelUp?: number;
+  lpEarned: number;
+  lpModifier?: number;
+  totalLp?: number;
+  gemsEarned: number;
+  lives: number;
+  livesRestoredAt: string | null;
+  livesExhausted: boolean;
+};
+
+// QuizQuestion — типы вопросов, которые могут прийти на главную и в дуэли.
+// Cloze (только production-tier, off) и Grammar (отдельная страница /grammar
+// со своими endpoint'ами) сюда не входят. ClozeApiQuestion/GrammarApiQuestion
+// сохраняются в файле для совместимости со старым quiz-service на сервере.
+export type QuizQuestion =
+  | QuizQuestionBase
+  | MatchPairsApiQuestion
+  | ListeningApiQuestion
+  | DictationApiQuestion
+  | FreeRecallApiQuestion
+  | EncounterCardApiQuestion
+  | PassiveRecallApiQuestion
+  | ClozeInputApiQuestion;
 
 export type QuizStartResponse = {
   sessionId: number;
@@ -193,27 +612,6 @@ export type CollectionDetail = {
   words: CollectionWord[];
 };
 
-export type ErrorsCollectionMeta = {
-  id: 'errors';
-  type: 'auto';
-  title: string;
-  description: string;
-  iconName: string;
-};
-
-export type DifficultWordsResponse = {
-  totalWords: number;
-  words: {
-    meaningId: number;
-    correctCount: number;
-    incorrectCount: number;
-    srsStage: number;
-    word: string;
-    translation: string;
-  }[];
-  collection: ErrorsCollectionMeta;
-};
-
 export type AllWordsResponse = {
   words: {
     id?: number;
@@ -262,6 +660,54 @@ export type InfiniteAnswerResponse = {
   gemsEarned?: number; // гемы за стрик ответов / level-up
   dailyCorrectCount?: number; // правильных ответов за день
   doubleXpApplied?: boolean;
+  examples?: { en: string; ru: string }[]; // примеры предложений для глубокой обработки
+  mnemonic?: string; // мнемоника для запоминания слова
+  milestones?: MilestoneData[]; // достигнутые milestones
+  lives?: number;
+  livesRestoredAt?: string | null;
+  livesExhausted?: boolean;
+};
+
+export type MilestoneData = {
+  id: string;
+  type: string;
+  threshold: number;
+  title: string;
+  description: string;
+  gemsReward: number;
+  icon: string;
+};
+
+// ─── CEFR Progress ─────────────────────────────────────────────────────────
+
+export type CefrProgressLevel = {
+  level: CefrLevel;
+  totalWords: number;
+  learnedWords: number;
+  percent: number;
+};
+
+export type CefrProgressResponse = {
+  levels: CefrProgressLevel[];
+};
+
+export type GrammarAnswerResponse = {
+  isCorrect: boolean;
+  correctAnswer: string;
+  explanation?: string;
+  xpEarned: number;
+  xpModifier?: number;
+  totalXp?: number;
+  level?: number;
+  levelUp?: number;
+  lpEarned: number;
+  lpModifier?: number;
+  totalLp?: number;
+  gemsEarned?: number;
+  dailyCorrectCount?: number;
+  lives?: number;
+  livesRestoredAt?: string | null;
+  livesExhausted?: boolean;
 };
 
 export type MatchPairsAnswerResponse = {
@@ -277,6 +723,9 @@ export type MatchPairsAnswerResponse = {
   levelUp?: number;
   gemsEarned?: number;
   doubleXpApplied?: boolean;
+  lives?: number;
+  livesRestoredAt?: string | null;
+  livesExhausted?: boolean;
 };
 
 // ─── Leagues ─────────────────────────────────────────────────────────────────
@@ -324,6 +773,7 @@ export type LeaderboardEntry = {
   isCurrentUser: boolean;
   lpToday: number;
   positionChange: number;
+  isPremium?: boolean;
 };
 
 export type LeagueNotificationType =

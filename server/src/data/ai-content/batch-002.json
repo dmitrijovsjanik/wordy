@@ -1,0 +1,786 @@
+[
+  {
+    "meaningId": 22165,
+    "word": "have",
+    "translation": "иметь",
+    "examples": { "sentences": [
+      { "en": "I have a cat.", "ru": "У меня есть кот.", "cefr": "a1" },
+      { "en": "She has a lot of experience in marketing.", "ru": "У неё много опыта в маркетинге.", "cefr": "b1" },
+      { "en": "The city has undergone significant transformation over the past decade.", "ru": "Город претерпел значительные изменения за последнее десятилетие.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "HAVE — звучит как «хэв». ХЭВи-метал — надо ИМЕТЬ сильный голос." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Один из самых частых глаголов — означает обладание" },
+      { "level": 2, "text": "4 буквы, начинается на H" },
+      { "level": 3, "text": "H _ _ e" }
+    ]}
+  },
+  {
+    "meaningId": 22261,
+    "word": "say",
+    "translation": "сказать",
+    "examples": { "sentences": [
+      { "en": "She says hello.", "ru": "Она говорит «привет».", "cefr": "a1" },
+      { "en": "He said that the meeting was cancelled.", "ru": "Он сказал, что собрание отменено.", "cefr": "b1" },
+      { "en": "Suffice it to say, the outcome was far from what anyone had anticipated.", "ru": "Достаточно сказать, что результат был далёк от ожиданий.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "SAY — звучит как «сэй». СЭЙлор Мун всегда что-то ГОВОРИТ перед атакой." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол речи, один из самых частых" },
+      { "level": 2, "text": "3 буквы, начинается на S" },
+      { "level": 3, "text": "S _ y" }
+    ]}
+  },
+  {
+    "meaningId": 22269,
+    "word": "go",
+    "translation": "идти",
+    "examples": { "sentences": [
+      { "en": "I go to school.", "ru": "Я хожу в школу.", "cefr": "a1" },
+      { "en": "We are going to the cinema tonight.", "ru": "Мы идём в кино сегодня вечером.", "cefr": "b1" },
+      { "en": "The negotiations went on for hours without reaching a consensus.", "ru": "Переговоры продолжались часами, так и не достигнув консенсуса.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "GO — звучит как «гоу». ГОУ-про камера с тобой, куда бы ты ни ШЁЛ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол движения, самый базовый" },
+      { "level": 2, "text": "2 буквы, начинается на G" },
+      { "level": 3, "text": "G _" }
+    ]}
+  },
+  {
+    "meaningId": 22668,
+    "word": "need",
+    "translation": "требоваться",
+    "examples": { "sentences": [
+      { "en": "I need water.", "ru": "Мне нужна вода.", "cefr": "a1" },
+      { "en": "You need to finish the report by Friday.", "ru": "Тебе нужно закончить отчёт к пятнице.", "cefr": "b1" },
+      { "en": "The infrastructure desperately needs modernisation to cope with demand.", "ru": "Инфраструктура остро нуждается в модернизации для удовлетворения спроса.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "NEED — звучит как «нид». НИДерланды — страна, которой НУЖНЫ плотины от воды." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол, выражающий необходимость" },
+      { "level": 2, "text": "4 буквы, начинается на N" },
+      { "level": 3, "text": "N _ _ d" }
+    ]}
+  },
+  {
+    "meaningId": 53455,
+    "word": "right",
+    "translation": "право",
+    "examples": { "sentences": [
+      { "en": "You have the right to say no.", "ru": "У тебя есть право сказать «нет».", "cefr": "a1" },
+      { "en": "Everyone has the right to a fair trial.", "ru": "Каждый имеет право на справедливый суд.", "cefr": "b1" },
+      { "en": "The constitution enshrines fundamental rights that cannot be infringed upon.", "ru": "Конституция закрепляет основные права, которые не могут быть нарушены.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "RIGHT — звучит как «райт». РАЙт — братья Райт имели ПРАВО на свою мечту летать." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное, связанное с законом и свободами" },
+      { "level": 2, "text": "5 букв, начинается на R" },
+      { "level": 3, "text": "R _ g _ t" }
+    ]}
+  },
+  {
+    "meaningId": 22060,
+    "word": "right",
+    "translation": "правый",
+    "examples": { "sentences": [
+      { "en": "Turn right at the corner.", "ru": "Поверни направо на углу.", "cefr": "a1" },
+      { "en": "She raised her right hand to take the oath.", "ru": "Она подняла правую руку для присяги.", "cefr": "b1" },
+      { "en": "The right flank of the army advanced under heavy fire.", "ru": "Правый фланг армии продвигался под сильным огнём.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "RIGHT — «райт». ПРАВАЯ рука пишет (write ≈ right) — похоже звучат!" },
+    "hints": { "hints": [
+      { "level": 1, "text": "Прилагательное — противоположность «левого»" },
+      { "level": 2, "text": "5 букв, начинается на R, рифмуется с LIGHT" },
+      { "level": 3, "text": "R _ _ h t" }
+    ]}
+  },
+  {
+    "meaningId": 22693,
+    "word": "back",
+    "translation": "спина",
+    "examples": { "sentences": [
+      { "en": "My back hurts.", "ru": "У меня болит спина.", "cefr": "a1" },
+      { "en": "He lay on his back and looked at the sky.", "ru": "Он лёг на спину и смотрел на небо.", "cefr": "b1" },
+      { "en": "Years of poor posture had taken a toll on her back.", "ru": "Годы плохой осанки сказались на её спине.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "BACK — звучит как «бэк». БЭКон лежит на СПИНЕ свиньи." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Часть тела, задняя сторона туловища" },
+      { "level": 2, "text": "4 буквы, начинается на B" },
+      { "level": 3, "text": "B _ c _" }
+    ]}
+  },
+  {
+    "meaningId": 53466,
+    "word": "mean",
+    "translation": "означать",
+    "examples": { "sentences": [
+      { "en": "What does this word mean?", "ru": "Что означает это слово?", "cefr": "a1" },
+      { "en": "I didn't mean to offend you.", "ru": "Я не хотел тебя обидеть.", "cefr": "b1" },
+      { "en": "These findings could mean a paradigm shift in the field.", "ru": "Эти результаты могут означать смену парадигмы в данной области.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "MEAN — звучит как «мин». МИНа — знак, который ОЗНАЧАЕТ «опасно»." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол, связанный со значением слов" },
+      { "level": 2, "text": "4 буквы, начинается на M" },
+      { "level": 3, "text": "M _ _ n" }
+    ]}
+  },
+  {
+    "meaningId": 22736,
+    "word": "last",
+    "translation": "последний",
+    "examples": { "sentences": [
+      { "en": "This is the last bus.", "ru": "Это последний автобус.", "cefr": "a1" },
+      { "en": "The last chapter of the book was the most exciting.", "ru": "Последняя глава книги была самой захватывающей.", "cefr": "b1" },
+      { "en": "Her last performance left an indelible impression on the audience.", "ru": "Её последнее выступление оставило неизгладимое впечатление на публику.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "LAST — звучит как «ласт». ЛАСТ(ы) — ПОСЛЕДНЕЕ, что надеваешь перед нырянием." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Прилагательное — противоположность «первого»" },
+      { "level": 2, "text": "4 буквы, начинается на L" },
+      { "level": 3, "text": "L _ s _" }
+    ]}
+  },
+  {
+    "meaningId": 22874,
+    "word": "long",
+    "translation": "длинный",
+    "examples": { "sentences": [
+      { "en": "She has long hair.", "ru": "У неё длинные волосы.", "cefr": "a1" },
+      { "en": "It's a long way from here to the station.", "ru": "Отсюда до станции далеко.", "cefr": "b1" },
+      { "en": "The protracted negotiations proved to be a long and arduous process.", "ru": "Затяжные переговоры оказались долгим и трудным процессом.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "LONG — звучит как «лонг». ЛОНГборд — ДЛИННАЯ доска для катания." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Прилагательное — противоположность «короткого»" },
+      { "level": 2, "text": "4 буквы, начинается на L" },
+      { "level": 3, "text": "L _ _ g" }
+    ]}
+  },
+  {
+    "meaningId": 22920,
+    "word": "same",
+    "translation": "одинаковый",
+    "examples": { "sentences": [
+      { "en": "We have the same bag.", "ru": "У нас одинаковые сумки.", "cefr": "a1" },
+      { "en": "She made the same mistake twice.", "ru": "Она совершила одну и ту же ошибку дважды.", "cefr": "b1" },
+      { "en": "Applying the same methodology across diverse contexts yielded remarkably consistent results.", "ru": "Применение одной и той же методологии в разных контекстах дало удивительно согласованные результаты.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "SAME — звучит как «сэйм». Все СЭМы (имя) ОДИНАКОВЫЕ? Нет, но звучат одинаково!" },
+    "hints": { "hints": [
+      { "level": 1, "text": "Прилагательное — противоположность «разного»" },
+      { "level": 2, "text": "4 буквы, начинается на S" },
+      { "level": 3, "text": "S _ m _" }
+    ]}
+  },
+  {
+    "meaningId": 22936,
+    "word": "great",
+    "translation": "отличный",
+    "examples": { "sentences": [
+      { "en": "This is a great film!", "ru": "Это отличный фильм!", "cefr": "a1" },
+      { "en": "She did a great job on the presentation.", "ru": "Она отлично поработала над презентацией.", "cefr": "b1" },
+      { "en": "The invention brought about great advances in modern medicine.", "ru": "Изобретение привело к значительным достижениям в современной медицине.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "GREAT — звучит как «грэйт». ГРЕЙТфрут — ОТЛИЧНЫЙ фрукт для здоровья." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Прилагательное, выражающее высокую оценку" },
+      { "level": 2, "text": "5 букв, начинается на G, рифмуется с LATE" },
+      { "level": 3, "text": "G _ _ a t" }
+    ]}
+  },
+  {
+    "meaningId": 22964,
+    "word": "number",
+    "translation": "номер",
+    "examples": { "sentences": [
+      { "en": "What is your phone number?", "ru": "Какой у тебя номер телефона?", "cefr": "a1" },
+      { "en": "A large number of students passed the exam.", "ru": "Большое количество студентов сдали экзамен.", "cefr": "b1" },
+      { "en": "The sheer number of applications exceeded all expectations.", "ru": "Огромное количество заявок превзошло все ожидания.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "NUMBER — звучит как «намбер». НАМ БЕР(ут) НОМЕРОК в очередь." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное, связанное с цифрами и подсчётом" },
+      { "level": 2, "text": "6 букв, начинается на N" },
+      { "level": 3, "text": "N _ m b _ r" }
+    ]}
+  },
+  {
+    "meaningId": 22981,
+    "word": "part",
+    "translation": "часть",
+    "examples": { "sentences": [
+      { "en": "This is part of the plan.", "ru": "Это часть плана.", "cefr": "a1" },
+      { "en": "The best part of the trip was the sunset.", "ru": "Лучшей частью поездки был закат.", "cefr": "b1" },
+      { "en": "She played an integral part in the company's restructuring.", "ru": "Она сыграла ключевую роль в реструктуризации компании.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "PART — звучит как «парт». ПАРТитура — ЧАСТЬ музыкального произведения для каждого инструмента." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — фрагмент целого" },
+      { "level": 2, "text": "4 буквы, начинается на P" },
+      { "level": 3, "text": "P _ r _" }
+    ]}
+  },
+  {
+    "meaningId": 22125,
+    "word": "point",
+    "translation": "точка",
+    "examples": { "sentences": [
+      { "en": "There is a point on the map.", "ru": "На карте есть точка.", "cefr": "a1" },
+      { "en": "What's the point of arguing about it?", "ru": "Какой смысл спорить об этом?", "cefr": "b1" },
+      { "en": "From an economic standpoint, the turning point came in the third quarter.", "ru": "С экономической точки зрения, переломный момент наступил в третьем квартале.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "POINT — звучит как «пойнт». ПОЙНТер (собака) стоит как ТОЧКА, указывая на добычу." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — место или смысл" },
+      { "level": 2, "text": "5 букв, начинается на P" },
+      { "level": 3, "text": "P _ _ n t" }
+    ]}
+  },
+  {
+    "meaningId": 22994,
+    "word": "little",
+    "translation": "маленький",
+    "examples": { "sentences": [
+      { "en": "I have a little dog.", "ru": "У меня маленькая собака.", "cefr": "a1" },
+      { "en": "She spoke with a little smile.", "ru": "Она говорила с лёгкой улыбкой.", "cefr": "b1" },
+      { "en": "There is little evidence to support such a bold claim.", "ru": "Существует мало доказательств в поддержку столь смелого утверждения.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "LITTLE — звучит как «литл». ЛИТЛтон — МАЛЕНЬКИЙ город." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Прилагательное — противоположность «большого»" },
+      { "level": 2, "text": "6 букв, начинается на L, удвоенная T" },
+      { "level": 3, "text": "L _ t t _ e" }
+    ]}
+  },
+  {
+    "meaningId": 23042,
+    "word": "start",
+    "translation": "начать",
+    "examples": { "sentences": [
+      { "en": "Let's start the game.", "ru": "Давай начнём игру.", "cefr": "a1" },
+      { "en": "She started learning Spanish last year.", "ru": "Она начала учить испанский в прошлом году.", "cefr": "b1" },
+      { "en": "The project started off promisingly but soon encountered unforeseen challenges.", "ru": "Проект начался многообещающе, но вскоре столкнулся с непредвиденными трудностями.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "START — звучит как «старт». Прямое заимствование: СТАРТ = НАЧАЛО гонки." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — противоположность «закончить»" },
+      { "level": 2, "text": "5 букв, начинается на S" },
+      { "level": 3, "text": "S t _ r _" }
+    ]}
+  },
+  {
+    "meaningId": 23049,
+    "word": "talk",
+    "translation": "говорить",
+    "examples": { "sentences": [
+      { "en": "Can we talk?", "ru": "Мы можем поговорить?", "cefr": "a1" },
+      { "en": "They talked about their plans for the summer.", "ru": "Они говорили о своих планах на лето.", "cefr": "b1" },
+      { "en": "The diplomat was reluctant to talk about the sensitive negotiations.", "ru": "Дипломат не хотел говорить о деликатных переговорах.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "TALK — звучит как «ток». ТОК-шоу — передача, где много ГОВОРЯТ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол речи, менее формальный чем «say»" },
+      { "level": 2, "text": "4 буквы, начинается на T, L немая" },
+      { "level": 3, "text": "T _ l _" }
+    ]}
+  },
+  {
+    "meaningId": 23061,
+    "word": "put",
+    "translation": "класть",
+    "examples": { "sentences": [
+      { "en": "Put the book on the table.", "ru": "Положи книгу на стол.", "cefr": "a1" },
+      { "en": "She put her keys in the drawer.", "ru": "Она положила ключи в ящик.", "cefr": "b1" },
+      { "en": "The government put forward a controversial proposal to reform the tax system.", "ru": "Правительство выдвинуло спорное предложение о реформе налоговой системы.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "PUT — звучит как «пут». ПУТин(к)а — «ПОЛОЖИ» варенье на путинку." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — разместить что-то куда-то" },
+      { "level": 2, "text": "3 буквы, начинается на P" },
+      { "level": 3, "text": "P _ t" }
+    ]}
+  },
+  {
+    "meaningId": 23084,
+    "word": "become",
+    "translation": "становиться",
+    "examples": { "sentences": [
+      { "en": "She wants to become a doctor.", "ru": "Она хочет стать врачом.", "cefr": "a1" },
+      { "en": "It became clear that we needed a new approach.", "ru": "Стало ясно, что нам нужен новый подход.", "cefr": "b1" },
+      { "en": "The once-remote village has become a thriving tourist destination.", "ru": "Когда-то отдалённая деревня стала процветающим туристическим направлением.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "BECOME — «би-кам». BI-COME: когда к тебе ПРИХОДИТ (come) новая роль — ты ей СТАНОВИШЬСЯ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол перехода из одного состояния в другое" },
+      { "level": 2, "text": "6 букв, начинается на B, содержит COME" },
+      { "level": 3, "text": "B _ c _ m _" }
+    ]}
+  },
+  {
+    "meaningId": 22551,
+    "word": "look",
+    "translation": "взгляд",
+    "examples": { "sentences": [
+      { "en": "She gave me a look.", "ru": "Она бросила на меня взгляд.", "cefr": "a1" },
+      { "en": "He had a worried look on his face.", "ru": "У него был встревоженный взгляд.", "cefr": "b1" },
+      { "en": "The look of disbelief on her face spoke volumes.", "ru": "Взгляд неверия на её лице говорил сам за себя.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "LOOK — звучит как «лук». ЛУК заставляет плакать — ВЗГЛЯД сквозь слёзы." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — то, что делают глаза" },
+      { "level": 2, "text": "4 буквы, начинается на L, двойная O" },
+      { "level": 3, "text": "L _ _ k" }
+    ]}
+  },
+  {
+    "meaningId": 22510,
+    "word": "use",
+    "translation": "использование",
+    "examples": { "sentences": [
+      { "en": "This tool is for everyday use.", "ru": "Этот инструмент для ежедневного использования.", "cefr": "a1" },
+      { "en": "The use of plastic bags has been restricted.", "ru": "Использование пластиковых пакетов было ограничено.", "cefr": "b1" },
+      { "en": "The widespread use of AI raises profound ethical questions.", "ru": "Повсеместное использование ИИ поднимает глубокие этические вопросы.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "USE (сущ.) — звучит как «юс». ЮСтиция — ИСПОЛЬЗОВАНИЕ закона." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — процесс применения чего-то" },
+      { "level": 2, "text": "3 буквы, начинается на U" },
+      { "level": 3, "text": "U _ e" }
+    ]}
+  },
+  {
+    "meaningId": 22863,
+    "word": "change",
+    "translation": "изменение",
+    "examples": { "sentences": [
+      { "en": "There was a big change.", "ru": "Произошло большое изменение.", "cefr": "a1" },
+      { "en": "Climate change is a global problem.", "ru": "Изменение климата — глобальная проблема.", "cefr": "b1" },
+      { "en": "The sudden change in leadership precipitated a period of instability.", "ru": "Внезапная смена руководства спровоцировала период нестабильности.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "CHANGE (сущ.) — «чейндж». Мелочь (change = сдача) — тоже ИЗМЕНЕНИЕ денег." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — когда что-то стало другим" },
+      { "level": 2, "text": "6 букв, начинается на C" },
+      { "level": 3, "text": "C h _ n _ e" }
+    ]}
+  },
+  {
+    "meaningId": 22778,
+    "word": "call",
+    "translation": "вызов",
+    "examples": { "sentences": [
+      { "en": "I got a call from my friend.", "ru": "Мне поступил звонок от друга.", "cefr": "a1" },
+      { "en": "The fire brigade responded to an emergency call.", "ru": "Пожарная бригада ответила на экстренный вызов.", "cefr": "b1" },
+      { "en": "It was a tough call, but the manager decided to postpone the launch.", "ru": "Это было непростое решение, но менеджер решил отложить запуск.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "CALL (сущ.) — «кол». КОЛ(л)-центр — место, где принимают ВЫЗОВЫ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — звонок или обращение" },
+      { "level": 2, "text": "4 буквы, начинается на C, двойная L" },
+      { "level": 3, "text": "C _ l l" }
+    ]}
+  },
+  {
+    "meaningId": 22838,
+    "word": "show",
+    "translation": "шоу",
+    "examples": { "sentences": [
+      { "en": "Let's watch a show!", "ru": "Давай посмотрим шоу!", "cefr": "a1" },
+      { "en": "The TV show attracted millions of viewers.", "ru": "Телевизионное шоу привлекло миллионы зрителей.", "cefr": "b1" },
+      { "en": "The art show featured works from emerging contemporary artists.", "ru": "Художественная выставка представила работы начинающих современных художников.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "SHOW (сущ.) — прямое заимствование в русский: ШОУ = представление." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — представление, программа" },
+      { "level": 2, "text": "4 буквы, начинается на S" },
+      { "level": 3, "text": "S h _ w" }
+    ]}
+  },
+  {
+    "meaningId": 22667,
+    "word": "need",
+    "translation": "необходимость",
+    "examples": { "sentences": [
+      { "en": "There is a need for water.", "ru": "Есть необходимость в воде.", "cefr": "a1" },
+      { "en": "The need for renewable energy is growing.", "ru": "Необходимость в возобновляемой энергии растёт.", "cefr": "b1" },
+      { "en": "The pressing need for infrastructure investment can no longer be ignored.", "ru": "Острую необходимость в инвестициях в инфраструктуру больше нельзя игнорировать.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "NEED (сущ.) — «нид». Когда есть НЕОБХОДИМОСТЬ, ты НИД-ёшь (ищешь) решение." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — когда что-то обязательно нужно" },
+      { "level": 2, "text": "4 буквы, начинается на N" },
+      { "level": 3, "text": "N _ _ d" }
+    ]}
+  },
+  {
+    "meaningId": 23040,
+    "word": "start",
+    "translation": "начало",
+    "examples": { "sentences": [
+      { "en": "It's a good start.", "ru": "Это хорошее начало.", "cefr": "a1" },
+      { "en": "From the start, we knew it would be difficult.", "ru": "С самого начала мы знали, что будет трудно.", "cefr": "b1" },
+      { "en": "The rocky start to the project belied its eventual success.", "ru": "Трудное начало проекта не предвещало его конечного успеха.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "START (сущ.) — СТАРТ забега = его НАЧАЛО." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — противоположность «конца»" },
+      { "level": 2, "text": "5 букв, начинается на S" },
+      { "level": 3, "text": "S t _ r _" }
+    ]}
+  },
+  {
+    "meaningId": 23055,
+    "word": "talk",
+    "translation": "разговор",
+    "examples": { "sentences": [
+      { "en": "We had a long talk.", "ru": "У нас был долгий разговор.", "cefr": "a1" },
+      { "en": "She gave an inspiring talk at the conference.", "ru": "Она выступила с вдохновляющим докладом на конференции.", "cefr": "b1" },
+      { "en": "Peace talks between the two nations resumed after a lengthy stalemate.", "ru": "Мирные переговоры между двумя странами возобновились после длительного застоя.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "TALK (сущ.) — «ток». ТОК-шоу — телевизионный РАЗГОВОР." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — беседа, обсуждение" },
+      { "level": 2, "text": "4 буквы, начинается на T, L немая" },
+      { "level": 3, "text": "T _ l _" }
+    ]}
+  },
+  {
+    "meaningId": 22926,
+    "word": "lot",
+    "translation": "масса",
+    "examples": { "sentences": [
+      { "en": "I have a lot of books.", "ru": "У меня масса книг.", "cefr": "a1" },
+      { "en": "A lot of people came to the concert.", "ru": "На концерт пришло множество людей.", "cefr": "b1" },
+      { "en": "The company invested a lot of resources in cutting-edge research.", "ru": "Компания вложила массу ресурсов в передовые исследования.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "LOT — звучит как «лот». ЛОТ на аукционе — целая МАССА вещей." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — большое количество, «a ___ of»" },
+      { "level": 2, "text": "3 буквы, начинается на L" },
+      { "level": 3, "text": "L _ t" }
+    ]}
+  },
+  {
+    "meaningId": 22698,
+    "word": "back",
+    "translation": "возвращать",
+    "examples": { "sentences": [
+      { "en": "Give the book back.", "ru": "Верни книгу.", "cefr": "a1" },
+      { "en": "The company backed the project with additional funding.", "ru": "Компания поддержала проект дополнительным финансированием.", "cefr": "b1" },
+      { "en": "Several prominent investors backed out of the deal at the last minute.", "ru": "Несколько крупных инвесторов отступили от сделки в последний момент.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "BACK (глагол) — «бэк». Кнопка BACK в браузере ВОЗВРАЩАЕТ назад." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — вернуть или поддержать" },
+      { "level": 2, "text": "4 буквы, начинается на B" },
+      { "level": 3, "text": "B _ c _" }
+    ]}
+  },
+  {
+    "meaningId": 22740,
+    "word": "last",
+    "translation": "длиться",
+    "examples": { "sentences": [
+      { "en": "The film lasts two hours.", "ru": "Фильм длится два часа.", "cefr": "a1" },
+      { "en": "How long will the meeting last?", "ru": "Как долго будет длиться собрание?", "cefr": "b1" },
+      { "en": "The effects of the medication are designed to last up to twelve hours.", "ru": "Действие лекарства рассчитано на двенадцать часов.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "LAST (глагол) — «ласт». ПОСЛЕДНИЙ (last) марафонец всё ещё ДЛИТСЯ по трассе." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — продолжаться во времени" },
+      { "level": 2, "text": "4 буквы, начинается на L, то же слово что «последний»" },
+      { "level": 3, "text": "L _ s _" }
+    ]}
+  },
+  {
+    "meaningId": 23080,
+    "word": "another",
+    "translation": "новый",
+    "examples": { "sentences": [
+      { "en": "Can I have another cup?", "ru": "Можно мне ещё одну чашку?", "cefr": "a1" },
+      { "en": "That's another matter entirely.", "ru": "Это совсем другое дело.", "cefr": "b1" },
+      { "en": "The emergence of another competitor has disrupted the market balance.", "ru": "Появление нового конкурента нарушило баланс рынка.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "ANOTHER — «эназер». Ещё ONE + OTHER = ДРУГОЙ, НОВЫЙ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Прилагательное — ещё один, другой" },
+      { "level": 2, "text": "7 букв, содержит OTHER" },
+      { "level": 3, "text": "A n _ t h _ r" }
+    ]}
+  },
+  {
+    "meaningId": 22661,
+    "word": "should",
+    "translation": "следует",
+    "examples": { "sentences": [
+      { "en": "You should rest.", "ru": "Тебе следует отдохнуть.", "cefr": "a1" },
+      { "en": "We should leave before it gets dark.", "ru": "Нам следует уехать до наступления темноты.", "cefr": "b1" },
+      { "en": "Policymakers should consider the long-term implications of such a decision.", "ru": "Законодателям следует учитывать долгосрочные последствия такого решения.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "SHOULD — звучит как «шуд». ШУД(ро) — СЛЕДУЕТ быть щедрым." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Модальный глагол — совет или рекомендация" },
+      { "level": 2, "text": "6 букв, начинается на S, L немая" },
+      { "level": 3, "text": "S h _ _ l d" }
+    ]}
+  },
+  {
+    "meaningId": 22429,
+    "word": "people",
+    "translation": "народ",
+    "examples": { "sentences": [
+      { "en": "Many people live here.", "ru": "Здесь живёт много людей.", "cefr": "a1" },
+      { "en": "The people of this country are very friendly.", "ru": "Народ этой страны очень дружелюбный.", "cefr": "b1" },
+      { "en": "Throughout history, the will of the people has shaped the course of nations.", "ru": "На протяжении истории воля народа формировала судьбы государств.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "PEOPLE — звучит как «пипл». Apple для ПИПЛа — ЛЮДИ любят яблочную технику." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — группа лиц, общество" },
+      { "level": 2, "text": "6 букв, начинается на P, неправильное множественное" },
+      { "level": 3, "text": "P _ _ p l e" }
+    ]}
+  },
+  {
+    "meaningId": 22952,
+    "word": "try",
+    "translation": "попытка",
+    "examples": { "sentences": [
+      { "en": "Give it a try!", "ru": "Попробуй!", "cefr": "a1" },
+      { "en": "After several tries, she finally passed the test.", "ru": "После нескольких попыток она наконец сдала тест.", "cefr": "b1" },
+      { "en": "His first try at entrepreneurship was met with skepticism.", "ru": "Его первая попытка заняться предпринимательством была встречена скептицизмом.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "TRY (сущ.) — «трай». ТРАЙатлон — три ПОПЫТКИ в разных видах спорта." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — усилие сделать что-то" },
+      { "level": 2, "text": "3 буквы, начинается на T" },
+      { "level": 3, "text": "T _ y" }
+    ]}
+  },
+  {
+    "meaningId": 22961,
+    "word": "leave",
+    "translation": "отпуск",
+    "examples": { "sentences": [
+      { "en": "She is on leave.", "ru": "Она в отпуске.", "cefr": "a1" },
+      { "en": "He took two weeks of sick leave.", "ru": "Он взял две недели больничного.", "cefr": "b1" },
+      { "en": "The company offers generous parental leave policies.", "ru": "Компания предлагает щедрую политику родительского отпуска.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "LEAVE (сущ.) — «лив». Когда ты ЛИВАЕШЬ (уходишь) с работы — это ОТПУСК." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — разрешённое отсутствие на работе" },
+      { "level": 2, "text": "5 букв, начинается на L" },
+      { "level": 3, "text": "L _ _ v e" }
+    ]}
+  },
+  {
+    "meaningId": 23008,
+    "word": "help",
+    "translation": "помощь",
+    "examples": { "sentences": [
+      { "en": "I need help!", "ru": "Мне нужна помощь!", "cefr": "a1" },
+      { "en": "Thank you for your help with the project.", "ru": "Спасибо за помощь с проектом.", "cefr": "b1" },
+      { "en": "Without the help of international organisations, the recovery would have been impossible.", "ru": "Без помощи международных организаций восстановление было бы невозможным.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "HELP (сущ.) — «хэлп». Кнопка ХЭЛП = кнопка ПОМОЩИ на клавиатуре." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — содействие, поддержка" },
+      { "level": 2, "text": "4 буквы, начинается на H" },
+      { "level": 3, "text": "H _ l _" }
+    ]}
+  },
+  {
+    "meaningId": 23095,
+    "word": "interest",
+    "translation": "процентный",
+    "examples": { "sentences": [
+      { "en": "The interest rate is 5%.", "ru": "Процентная ставка — 5%.", "cefr": "a1" },
+      { "en": "She earned interest on her savings account.", "ru": "Она заработала проценты на своём сберегательном счёте.", "cefr": "b1" },
+      { "en": "Compound interest can significantly accelerate wealth accumulation over time.", "ru": "Сложные проценты могут значительно ускорить накопление капитала со временем.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "INTEREST — «интерест». ИНТЕРЕСТный (процент) — банк платит за ИНТЕРЕС к твоим деньгам." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Прилагательное, связанное с финансами и банками" },
+      { "level": 2, "text": "8 букв, начинается на I" },
+      { "level": 3, "text": "I n t _ r _ s t" }
+    ]}
+  },
+  {
+    "meaningId": 23454,
+    "word": "hand",
+    "translation": "рука",
+    "examples": { "sentences": [
+      { "en": "Give me your hand.", "ru": "Дай мне руку.", "cefr": "a1" },
+      { "en": "She raised her hand to ask a question.", "ru": "Она подняла руку, чтобы задать вопрос.", "cefr": "b1" },
+      { "en": "On the one hand, automation increases efficiency; on the other, it displaces workers.", "ru": "С одной стороны, автоматизация повышает эффективность; с другой — вытесняет рабочих.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "HAND — звучит как «хэнд». ХЭНДмейд — сделано РУКАМИ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Часть тела — от запястья до кончиков пальцев" },
+      { "level": 2, "text": "4 буквы, начинается на H" },
+      { "level": 3, "text": "H _ n _" }
+    ]}
+  },
+  {
+    "meaningId": 23307,
+    "word": "keep",
+    "translation": "держать",
+    "examples": { "sentences": [
+      { "en": "Keep the door open.", "ru": "Держи дверь открытой.", "cefr": "a1" },
+      { "en": "She keeps her room tidy.", "ru": "Она держит свою комнату в порядке.", "cefr": "b1" },
+      { "en": "The company has managed to keep its competitive edge despite market turbulence.", "ru": "Компании удалось удержать конкурентное преимущество несмотря на рыночные потрясения.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "KEEP — звучит как «кип». КИПа бумаг — ДЕРЖИ их вместе." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — сохранять, не отпускать" },
+      { "level": 2, "text": "4 буквы, начинается на K, двойная E" },
+      { "level": 3, "text": "K _ _ p" }
+    ]}
+  },
+  {
+    "meaningId": 22056,
+    "word": "run",
+    "translation": "бежать",
+    "examples": { "sentences": [
+      { "en": "He can run fast.", "ru": "Он может бежать быстро.", "cefr": "a1" },
+      { "en": "She runs every morning before work.", "ru": "Она бегает каждое утро перед работой.", "cefr": "b1" },
+      { "en": "The program runs seamlessly across multiple operating systems.", "ru": "Программа работает без сбоев на нескольких операционных системах.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "RUN — звучит как «ран». РАНо утром надо БЕЖАТЬ на работу." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол быстрого движения ногами" },
+      { "level": 2, "text": "3 буквы, начинается на R" },
+      { "level": 3, "text": "R _ n" }
+    ]}
+  },
+  {
+    "meaningId": 23478,
+    "word": "move",
+    "translation": "двигаться",
+    "examples": { "sentences": [
+      { "en": "Don't move!", "ru": "Не двигайся!", "cefr": "a1" },
+      { "en": "We moved to a new apartment last month.", "ru": "В прошлом месяце мы переехали в новую квартиру.", "cefr": "b1" },
+      { "en": "The company is moving towards a more sustainable business model.", "ru": "Компания движется к более устойчивой бизнес-модели.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "MOVE — звучит как «мув». МУВи (фильм) — картинки, которые ДВИГАЮТСЯ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — менять положение в пространстве" },
+      { "level": 2, "text": "4 буквы, начинается на M" },
+      { "level": 3, "text": "M _ v _" }
+    ]}
+  },
+  {
+    "meaningId": 23157,
+    "word": "live",
+    "translation": "жить",
+    "examples": { "sentences": [
+      { "en": "I live in Moscow.", "ru": "Я живу в Москве.", "cefr": "a1" },
+      { "en": "She lives alone in a small flat.", "ru": "Она живёт одна в маленькой квартире.", "cefr": "b1" },
+      { "en": "To live authentically requires courage and self-awareness.", "ru": "Чтобы жить подлинно, нужны смелость и самосознание.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "LIVE — звучит как «лив». ЛИВерпуль — город, где ЖИВУТ ливерпульцы." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — существовать, обитать где-то" },
+      { "level": 2, "text": "4 буквы, начинается на L" },
+      { "level": 3, "text": "L _ v _" }
+    ]}
+  },
+  {
+    "meaningId": 23659,
+    "word": "believe",
+    "translation": "верить",
+    "examples": { "sentences": [
+      { "en": "I believe you.", "ru": "Я тебе верю.", "cefr": "a1" },
+      { "en": "She believes in the power of education.", "ru": "Она верит в силу образования.", "cefr": "b1" },
+      { "en": "It is widely believed that early intervention yields the best outcomes.", "ru": "Широко считается, что раннее вмешательство даёт наилучшие результаты.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "BELIEVE — «билив». БИЛ ЛИВень — ты ВЕРИШЬ, что он закончится." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — принимать что-то за правду" },
+      { "level": 2, "text": "7 букв, начинается на B, содержит LIE" },
+      { "level": 3, "text": "B _ l _ e v e" }
+    ]}
+  },
+  {
+    "meaningId": 23431,
+    "word": "bring",
+    "translation": "приносить",
+    "examples": { "sentences": [
+      { "en": "Bring your book to class.", "ru": "Принеси книгу на урок.", "cefr": "a1" },
+      { "en": "The new law will bring significant changes.", "ru": "Новый закон принесёт значительные изменения.", "cefr": "b1" },
+      { "en": "The discovery brought unprecedented attention to the once-obscure field.", "ru": "Открытие принесло беспрецедентное внимание к когда-то малоизвестной области.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "BRING — звучит как «бринг». Телефон ЗВОНит (бринг-бринг) — ПРИНЕСИ его сюда!" },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — доставить что-то откуда-то" },
+      { "level": 2, "text": "5 букв, начинается на B" },
+      { "level": 3, "text": "B r _ n _" }
+    ]}
+  },
+  {
+    "meaningId": 23737,
+    "word": "happen",
+    "translation": "случаться",
+    "examples": { "sentences": [
+      { "en": "What happened?", "ru": "Что случилось?", "cefr": "a1" },
+      { "en": "Accidents happen when people are careless.", "ru": "Несчастные случаи происходят, когда люди неосторожны.", "cefr": "b1" },
+      { "en": "If it were to happen again, the consequences would be far more severe.", "ru": "Если бы это случилось снова, последствия были бы гораздо серьёзнее.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "HAPPEN — звучит как «хэпен». ХЭППИ энд СЛУЧАЕТСЯ в хорошем кино." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — произойти, свершиться" },
+      { "level": 2, "text": "6 букв, начинается на H, двойная P" },
+      { "level": 3, "text": "H _ p p _ n" }
+    ]}
+  },
+  {
+    "meaningId": 22057,
+    "word": "play",
+    "translation": "играть",
+    "examples": { "sentences": [
+      { "en": "Children play in the park.", "ru": "Дети играют в парке.", "cefr": "a1" },
+      { "en": "He plays the guitar every evening.", "ru": "Он играет на гитаре каждый вечер.", "cefr": "b1" },
+      { "en": "Technology plays an increasingly pivotal role in modern education.", "ru": "Технологии играют всё более ключевую роль в современном образовании.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "PLAY — звучит как «плэй». ПЛЭЙстейшн — приставка для ИГР." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — развлекаться, участвовать в игре" },
+      { "level": 2, "text": "4 буквы, начинается на P" },
+      { "level": 3, "text": "P l _ y" }
+    ]}
+  },
+  {
+    "meaningId": 23934,
+    "word": "learn",
+    "translation": "учиться",
+    "examples": { "sentences": [
+      { "en": "I want to learn English.", "ru": "Я хочу учить английский.", "cefr": "a1" },
+      { "en": "She learned to swim when she was six.", "ru": "Она научилась плавать, когда ей было шесть.", "cefr": "b1" },
+      { "en": "One must learn from past mistakes to avoid repeating them.", "ru": "Нужно учиться на прошлых ошибках, чтобы не повторять их.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "LEARN — звучит как «лёрн». ЛЁРНинг — УЧЁБА, что может быть проще!" },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — получать знания или навыки" },
+      { "level": 2, "text": "5 букв, начинается на L" },
+      { "level": 3, "text": "L _ _ r n" }
+    ]}
+  },
+  {
+    "meaningId": 23915,
+    "word": "head",
+    "translation": "голова",
+    "examples": { "sentences": [
+      { "en": "My head hurts.", "ru": "У меня болит голова.", "cefr": "a1" },
+      { "en": "She shook her head in disagreement.", "ru": "Она покачала головой в знак несогласия.", "cefr": "b1" },
+      { "en": "The idea had been forming in the back of his head for months.", "ru": "Идея формировалась в глубине его сознания в течение нескольких месяцев.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "HEAD — звучит как «хэд». ХЭДбэнд (повязка) — носят на ГОЛОВЕ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Часть тела — верхняя, с мозгом внутри" },
+      { "level": 2, "text": "4 буквы, начинается на H" },
+      { "level": 3, "text": "H _ _ d" }
+    ]}
+  }
+]

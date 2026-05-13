@@ -1,0 +1,626 @@
+[
+  {
+    "meaningId": 22325,
+    "word": "know",
+    "translation": "знать",
+    "examples": { "sentences": [
+      { "en": "I know your name.", "ru": "Я знаю твоё имя.", "cefr": "a1" },
+      { "en": "Do you know where the station is?", "ru": "Вы знаете, где находится станция?", "cefr": "b1" },
+      { "en": "Having known her for decades, I can attest to her integrity.", "ru": "Зная её десятилетиями, я могу подтвердить её честность.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "KNOW — буква K не читается, звучит как «ноу». Ноу-хау — это то, что ты ЗНАЕШЬ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол, связанный с информацией в голове" },
+      { "level": 2, "text": "Начинается на K (немая буква), рифмуется с NO" },
+      { "level": 3, "text": "K _ _ w" }
+    ]}
+  },
+  {
+    "meaningId": 22339,
+    "word": "get",
+    "translation": "получить",
+    "examples": { "sentences": [
+      { "en": "I get a letter every day.", "ru": "Я получаю письмо каждый день.", "cefr": "a1" },
+      { "en": "She got a promotion at work last month.", "ru": "Она получила повышение на работе в прошлом месяце.", "cefr": "b1" },
+      { "en": "The company managed to get approval despite fierce opposition.", "ru": "Компании удалось получить одобрение, несмотря на сильное противодействие.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "GET — звучит как «гет». ГЕТры — то, что нужно ПОЛУЧИТЬ для ног." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Один из самых частых английских глаголов" },
+      { "level": 2, "text": "3 буквы, начинается на G" },
+      { "level": 3, "text": "G _ t" }
+    ]}
+  },
+  {
+    "meaningId": 22351,
+    "word": "like",
+    "translation": "любить",
+    "examples": { "sentences": [
+      { "en": "I like cats.", "ru": "Я люблю кошек.", "cefr": "a1" },
+      { "en": "My sister likes reading books before bed.", "ru": "Моя сестра любит читать книги перед сном.", "cefr": "b1" },
+      { "en": "While I've never particularly liked formal events, this one proved enjoyable.", "ru": "Хотя я никогда особо не любил формальные мероприятия, это оказалось приятным.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "LIKE — звучит как «лайк». Когда ставишь ЛАЙК — значит, ЛЮБИШЬ!" },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол, выражающий положительное отношение" },
+      { "level": 2, "text": "4 буквы, начинается на L, как в социальных сетях" },
+      { "level": 3, "text": "L _ k e" }
+    ]}
+  },
+  {
+    "meaningId": 22364,
+    "word": "think",
+    "translation": "думать",
+    "examples": { "sentences": [
+      { "en": "I think it is good.", "ru": "Я думаю, это хорошо.", "cefr": "a1" },
+      { "en": "What do you think about this idea?", "ru": "Что ты думаешь об этой идее?", "cefr": "b1" },
+      { "en": "Critical thinkers tend to think beyond surface-level assumptions.", "ru": "Критически мыслящие люди склонны думать за пределами поверхностных предположений.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "THINK — звучит как «синк». Представь, что мысли СИНКхронизируются в голове, когда ты ДУМАЕШЬ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Умственный процесс, связанный с головой" },
+      { "level": 2, "text": "5 букв, начинается на TH" },
+      { "level": 3, "text": "T h _ _ k" }
+    ]}
+  },
+  {
+    "meaningId": 22370,
+    "word": "make",
+    "translation": "делать",
+    "examples": { "sentences": [
+      { "en": "I make breakfast every morning.", "ru": "Я делаю завтрак каждое утро.", "cefr": "a1" },
+      { "en": "This factory makes cars and trucks.", "ru": "Этот завод делает машины и грузовики.", "cefr": "b1" },
+      { "en": "The decision was made to restructure the entire department.", "ru": "Было принято решение реструктуризировать весь отдел.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "MAKE — звучит как «мэйк». МЕЙКап — то, что ты ДЕЛАЕШЬ с лицом." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол создания, производства" },
+      { "level": 2, "text": "4 буквы, начинается на M" },
+      { "level": 3, "text": "M _ k e" }
+    ]}
+  },
+  {
+    "meaningId": 22074,
+    "word": "time",
+    "translation": "время",
+    "examples": { "sentences": [
+      { "en": "What time is it?", "ru": "Который час?", "cefr": "a1" },
+      { "en": "I don't have enough time to finish this project.", "ru": "У меня нет достаточно времени, чтобы закончить этот проект.", "cefr": "b1" },
+      { "en": "Time constraints forced us to prioritize the most critical tasks.", "ru": "Временные ограничения вынудили нас расставить приоритеты.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "TIME — звучит как «тайм». ТАЙМер отсчитывает ВРЕМЯ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — то, что показывают часы" },
+      { "level": 2, "text": "4 буквы, начинается на T" },
+      { "level": 3, "text": "T _ m e" }
+    ]}
+  },
+  {
+    "meaningId": 22378,
+    "word": "see",
+    "translation": "видеть",
+    "examples": { "sentences": [
+      { "en": "I can see the cat.", "ru": "Я вижу кошку.", "cefr": "a1" },
+      { "en": "Can you see the mountains from your window?", "ru": "Ты видишь горы из своего окна?", "cefr": "b1" },
+      { "en": "Having seen the evidence, the jury could not ignore the implications.", "ru": "Увидев доказательства, присяжные не смогли игнорировать последствия.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "SEE — звучит как «си». Ноту «СИ» можно УВИДЕТЬ на нотном стане." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол восприятия, связанный с глазами" },
+      { "level": 2, "text": "3 буквы, начинается на S" },
+      { "level": 3, "text": "S _ e" }
+    ]}
+  },
+  {
+    "meaningId": 22417,
+    "word": "good",
+    "translation": "хороший",
+    "examples": { "sentences": [
+      { "en": "This is a good book.", "ru": "Это хорошая книга.", "cefr": "a1" },
+      { "en": "She is good at playing the piano.", "ru": "Она хорошо играет на пианино.", "cefr": "b1" },
+      { "en": "A good understanding of cultural nuances is essential for international business.", "ru": "Хорошее понимание культурных нюансов необходимо для международного бизнеса.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "GOOD — звучит как «гуд». «ГУД бай» — ХОРОШИЕ проводы." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Прилагательное с положительным значением" },
+      { "level": 2, "text": "4 буквы, начинается на G, антоним bad" },
+      { "level": 3, "text": "G _ _ d" }
+    ]}
+  },
+  {
+    "meaningId": 22434,
+    "word": "year",
+    "translation": "год",
+    "examples": { "sentences": [
+      { "en": "I am ten years old.", "ru": "Мне десять лет.", "cefr": "a1" },
+      { "en": "She has been working here for five years.", "ru": "Она работает здесь уже пять лет.", "cefr": "b1" },
+      { "en": "Year-over-year growth exceeded expectations by a significant margin.", "ru": "Рост по сравнению с прошлым годом значительно превысил ожидания.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "YEAR — звучит как «йир». ЙИР... Как скрип нового ГОДА!" },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — период из 12 месяцев" },
+      { "level": 2, "text": "4 буквы, начинается на Y" },
+      { "level": 3, "text": "Y _ _ r" }
+    ]}
+  },
+  {
+    "meaningId": 22439,
+    "word": "take",
+    "translation": "принять",
+    "examples": { "sentences": [
+      { "en": "Take this book, please.", "ru": "Возьми эту книгу, пожалуйста.", "cefr": "a1" },
+      { "en": "You should take the medicine twice a day.", "ru": "Вам следует принимать лекарство два раза в день.", "cefr": "b1" },
+      { "en": "The board decided to take drastic measures to cut costs.", "ru": "Правление решило принять радикальные меры для сокращения расходов.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "TAKE — звучит как «тейк». ТЕЙКaway — еда, которую БЕРЁШЬ с собой." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Базовый глагол действия с рукой" },
+      { "level": 2, "text": "4 буквы, начинается на T" },
+      { "level": 3, "text": "T _ k e" }
+    ]}
+  },
+  {
+    "meaningId": 22486,
+    "word": "come",
+    "translation": "приходить",
+    "examples": { "sentences": [
+      { "en": "Come here, please.", "ru": "Подойди сюда, пожалуйста.", "cefr": "a1" },
+      { "en": "Spring has come early this year.", "ru": "Весна пришла рано в этом году.", "cefr": "b1" },
+      { "en": "The realization came to her gradually over the course of several months.", "ru": "Осознание пришло к ней постепенно в течение нескольких месяцев.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "COME — звучит как «кам». КАМень ПРИШЁЛ в движение — покатился." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол перемещения в сторону говорящего" },
+      { "level": 2, "text": "4 буквы, начинается на C, антоним go" },
+      { "level": 3, "text": "C _ m e" }
+    ]}
+  },
+  {
+    "meaningId": 22502,
+    "word": "work",
+    "translation": "работать",
+    "examples": { "sentences": [
+      { "en": "I work in a school.", "ru": "Я работаю в школе.", "cefr": "a1" },
+      { "en": "He works from home three days a week.", "ru": "Он работает из дома три дня в неделю.", "cefr": "b1" },
+      { "en": "The new policy works in tandem with existing regulations.", "ru": "Новая политика работает совместно с существующими правилами.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "WORK — звучит как «ворк». ВОРКовать — голуби РАБОТАЮТ горлом." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол, связанный с трудом и профессией" },
+      { "level": 2, "text": "4 буквы, начинается на W" },
+      { "level": 3, "text": "W _ r k" }
+    ]}
+  },
+  {
+    "meaningId": 22499,
+    "word": "work",
+    "translation": "работа",
+    "examples": { "sentences": [
+      { "en": "I go to work at nine.", "ru": "Я иду на работу в девять.", "cefr": "a1" },
+      { "en": "Finding work in this city can be challenging.", "ru": "Найти работу в этом городе может быть сложно.", "cefr": "b1" },
+      { "en": "Her work on climate change has been widely recognized by the scientific community.", "ru": "Её работа по изменению климата получила широкое признание.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "WORK — звучит как «ворк». ВОРКшоп — место для РАБОТЫ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — то, куда ходят каждый день" },
+      { "level": 2, "text": "4 буквы, начинается на W" },
+      { "level": 3, "text": "W _ r k" }
+    ]}
+  },
+  {
+    "meaningId": 22506,
+    "word": "use",
+    "translation": "использовать",
+    "examples": { "sentences": [
+      { "en": "I use a pen to write.", "ru": "Я использую ручку, чтобы писать.", "cefr": "a1" },
+      { "en": "You can use this app to learn new words.", "ru": "Вы можете использовать это приложение для изучения новых слов.", "cefr": "b1" },
+      { "en": "The technology was used to streamline operations across multiple departments.", "ru": "Технология использовалась для оптимизации операций в нескольких отделах.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "USE — звучит как «юз». ЮЗер — тот, кто ИСПОЛЬЗУЕТ компьютер." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — применять что-то на практике" },
+      { "level": 2, "text": "3 буквы, начинается на U" },
+      { "level": 3, "text": "U _ e" }
+    ]}
+  },
+  {
+    "meaningId": 22544,
+    "word": "look",
+    "translation": "смотреть",
+    "examples": { "sentences": [
+      { "en": "Look at the sky!", "ru": "Посмотри на небо!", "cefr": "a1" },
+      { "en": "She looked at the map to find the right street.", "ru": "Она посмотрела на карту, чтобы найти нужную улицу.", "cefr": "b1" },
+      { "en": "Looking at the data objectively, one cannot deny the trend.", "ru": "Если объективно смотреть на данные, нельзя отрицать тенденцию.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "LOOK — звучит как «лук». Когда режешь ЛУК — СМОТРИШЬ сквозь слёзы." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол восприятия, связанный с глазами" },
+      { "level": 2, "text": "4 буквы, начинается на L, двойная O" },
+      { "level": 3, "text": "L _ _ k" }
+    ]}
+  },
+  {
+    "meaningId": 22553,
+    "word": "want",
+    "translation": "хотеть",
+    "examples": { "sentences": [
+      { "en": "I want water.", "ru": "Я хочу воды.", "cefr": "a1" },
+      { "en": "Do you want to go to the cinema tonight?", "ru": "Ты хочешь пойти в кино сегодня вечером?", "cefr": "b1" },
+      { "en": "What consumers want has fundamentally changed in the digital age.", "ru": "То, что хотят потребители, фундаментально изменилось в цифровую эпоху.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "WANT — звучит как «вонт». ВОНт — это ХОТЕТЬ, как фОНТан желаний." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол желания" },
+      { "level": 2, "text": "4 буквы, начинается на W" },
+      { "level": 3, "text": "W _ n t" }
+    ]}
+  },
+  {
+    "meaningId": 22559,
+    "word": "give",
+    "translation": "дать",
+    "examples": { "sentences": [
+      { "en": "Give me the ball.", "ru": "Дай мне мяч.", "cefr": "a1" },
+      { "en": "She gave him a present for his birthday.", "ru": "Она дала ему подарок на день рождения.", "cefr": "b1" },
+      { "en": "The opportunity was given to those who demonstrated exceptional leadership.", "ru": "Возможность была дана тем, кто продемонстрировал выдающееся лидерство.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "GIVE — звучит как «гив». ГИВИ — щедрое грузинское имя, ДАЁТ от души." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол передачи чего-то другому" },
+      { "level": 2, "text": "4 буквы, начинается на G" },
+      { "level": 3, "text": "G _ v e" }
+    ]}
+  },
+  {
+    "meaningId": 22580,
+    "word": "new",
+    "translation": "новый",
+    "examples": { "sentences": [
+      { "en": "I have a new bag.", "ru": "У меня новая сумка.", "cefr": "a1" },
+      { "en": "They moved to a new apartment last week.", "ru": "Они переехали в новую квартиру на прошлой неделе.", "cefr": "b1" },
+      { "en": "The new regulations will have far-reaching implications for the industry.", "ru": "Новые правила будут иметь далеко идущие последствия для отрасли.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "NEW — звучит как «нью». НЬЮ-Йорк — НОВЫЙ Йорк." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Прилагательное — недавно появившийся" },
+      { "level": 2, "text": "3 буквы, начинается на N, антоним old" },
+      { "level": 3, "text": "N _ w" }
+    ]}
+  },
+  {
+    "meaningId": 22585,
+    "word": "way",
+    "translation": "путь",
+    "examples": { "sentences": [
+      { "en": "This is the way home.", "ru": "Это путь домой.", "cefr": "a1" },
+      { "en": "There are many ways to solve this problem.", "ru": "Есть много путей решения этой проблемы.", "cefr": "b1" },
+      { "en": "The way forward requires collaboration among all stakeholders.", "ru": "Путь вперёд требует сотрудничества всех заинтересованных сторон.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "WAY — звучит как «вэй». ВЭЙ — «путь» по-китайски тоже, как в Дао (путь)." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — дорога, направление" },
+      { "level": 2, "text": "3 буквы, начинается на W" },
+      { "level": 3, "text": "W _ y" }
+    ]}
+  },
+  {
+    "meaningId": 22594,
+    "word": "find",
+    "translation": "находить",
+    "examples": { "sentences": [
+      { "en": "I find my keys.", "ru": "Я нахожу свои ключи.", "cefr": "a1" },
+      { "en": "Can you help me find a good restaurant nearby?", "ru": "Можешь помочь мне найти хороший ресторан поблизости?", "cefr": "b1" },
+      { "en": "Researchers found a strong correlation between sleep quality and cognitive performance.", "ru": "Исследователи нашли сильную корреляцию между качеством сна и когнитивными способностями.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "FIND — звучит как «файнд». ФАЙНДер — приложение, которое НАХОДИТ файлы." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — обнаружить что-то потерянное" },
+      { "level": 2, "text": "4 буквы, начинается на F" },
+      { "level": 3, "text": "F _ n d" }
+    ]}
+  },
+  {
+    "meaningId": 22629,
+    "word": "day",
+    "translation": "день",
+    "examples": { "sentences": [
+      { "en": "Today is a good day.", "ru": "Сегодня хороший день.", "cefr": "a1" },
+      { "en": "I study English every day for thirty minutes.", "ru": "Я учу английский каждый день по тридцать минут.", "cefr": "b1" },
+      { "en": "Day-to-day operations require meticulous attention to detail.", "ru": "Повседневные операции требуют скрупулёзного внимания к деталям.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "DAY — звучит как «дэй». БёрзДЭЙ — ДЕНЬ рождения." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — период в 24 часа" },
+      { "level": 2, "text": "3 буквы, начинается на D, антоним night" },
+      { "level": 3, "text": "D _ y" }
+    ]}
+  },
+  {
+    "meaningId": 22637,
+    "word": "thing",
+    "translation": "вещь",
+    "examples": { "sentences": [
+      { "en": "What is this thing?", "ru": "Что это за вещь?", "cefr": "a1" },
+      { "en": "The most important thing is to stay calm.", "ru": "Самая важная вещь — сохранять спокойствие.", "cefr": "b1" },
+      { "en": "Things took an unexpected turn when the evidence was revealed.", "ru": "Вещи приняли неожиданный оборот, когда были раскрыты доказательства.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "THING — звучит как «синг». СИНГулярная ВЕЩЬ — единственная в своём роде." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — любой предмет" },
+      { "level": 2, "text": "5 букв, начинается на TH" },
+      { "level": 3, "text": "T h _ _ g" }
+    ]}
+  },
+  {
+    "meaningId": 22745,
+    "word": "child",
+    "translation": "ребенок",
+    "examples": { "sentences": [
+      { "en": "The child is playing.", "ru": "Ребёнок играет.", "cefr": "a1" },
+      { "en": "Every child deserves a good education.", "ru": "Каждый ребёнок заслуживает хорошее образование.", "cefr": "b1" },
+      { "en": "Child development studies have shown the critical importance of early learning.", "ru": "Исследования развития ребёнка показали критическую важность раннего обучения.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "CHILD — звучит как «чайлд». ЧАЙ ЛаДно РЕБЁНКУ не давать — горячий!" },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — маленький человек" },
+      { "level": 2, "text": "5 букв, начинается на CH, мн. число children" },
+      { "level": 3, "text": "C h _ _ d" }
+    ]}
+  },
+  {
+    "meaningId": 22754,
+    "word": "tell",
+    "translation": "рассказывать",
+    "examples": { "sentences": [
+      { "en": "Tell me your name.", "ru": "Расскажи мне своё имя.", "cefr": "a1" },
+      { "en": "She told us an interesting story about her trip.", "ru": "Она рассказала нам интересную историю о своей поездке.", "cefr": "b1" },
+      { "en": "Statistics can tell us a great deal about societal trends.", "ru": "Статистика может рассказать нам многое о тенденциях общества.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "TELL — звучит как «тэлл». ТЭЛЛефон — чтобы РАССКАЗЫВАТЬ новости." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол передачи информации словами" },
+      { "level": 2, "text": "4 буквы, начинается на T, двойная L" },
+      { "level": 3, "text": "T _ l l" }
+    ]}
+  },
+  {
+    "meaningId": 22781,
+    "word": "call",
+    "translation": "призывать",
+    "examples": { "sentences": [
+      { "en": "Call your mom.", "ru": "Позвони маме.", "cefr": "a1" },
+      { "en": "The teacher called the students to attention.", "ru": "Учитель призвал учеников к вниманию.", "cefr": "b1" },
+      { "en": "The president called upon citizens to unite in the face of adversity.", "ru": "Президент призвал граждан объединиться перед лицом трудностей.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "CALL — звучит как «кол». КОЛ-центр — место, где ЗВОНЯТ и ПРИЗЫВАЮТ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол, связанный с голосом и телефоном" },
+      { "level": 2, "text": "4 буквы, начинается на C, двойная L" },
+      { "level": 3, "text": "C _ l l" }
+    ]}
+  },
+  {
+    "meaningId": 22802,
+    "word": "company",
+    "translation": "компания",
+    "examples": { "sentences": [
+      { "en": "He works for a big company.", "ru": "Он работает в большой компании.", "cefr": "a1" },
+      { "en": "The company announced its plans to expand internationally.", "ru": "Компания объявила о своих планах международного расширения.", "cefr": "b1" },
+      { "en": "The company's market capitalization exceeded expectations following the merger.", "ru": "Рыночная капитализация компании превысила ожидания после слияния.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "COMPANY — звучит как «кампани». КОМПАНИЯ друзей — хорошая КОМПАНИЯ!" },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — организация, бизнес" },
+      { "level": 2, "text": "7 букв, начинается на C" },
+      { "level": 3, "text": "C o m p _ _ y" }
+    ]}
+  },
+  {
+    "meaningId": 22832,
+    "word": "show",
+    "translation": "показывать",
+    "examples": { "sentences": [
+      { "en": "Show me your picture.", "ru": "Покажи мне свою картинку.", "cefr": "a1" },
+      { "en": "The graph shows a steady increase in sales.", "ru": "График показывает стабильный рост продаж.", "cefr": "b1" },
+      { "en": "Recent studies show that mindfulness practices can significantly reduce stress levels.", "ru": "Недавние исследования показывают, что практики осознанности значительно снижают уровень стресса.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "SHOW — звучит как «шоу». ШОУ — это то, что ПОКАЗЫВАЮТ на сцене." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — продемонстрировать" },
+      { "level": 2, "text": "4 буквы, начинается на SH" },
+      { "level": 3, "text": "S h _ w" }
+    ]}
+  },
+  {
+    "meaningId": 22841,
+    "word": "life",
+    "translation": "жизнь",
+    "examples": { "sentences": [
+      { "en": "Life is beautiful.", "ru": "Жизнь прекрасна.", "cefr": "a1" },
+      { "en": "She decided to change her life completely.", "ru": "Она решила полностью изменить свою жизнь.", "cefr": "b1" },
+      { "en": "Quality of life indicators vary significantly across different socioeconomic groups.", "ru": "Показатели качества жизни значительно различаются в разных социально-экономических группах.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "LIFE — звучит как «лайф». ЛАЙФхак — хитрости для ЖИЗНИ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — существование" },
+      { "level": 2, "text": "4 буквы, начинается на L, антоним death" },
+      { "level": 3, "text": "L _ f e" }
+    ]}
+  },
+  {
+    "meaningId": 22852,
+    "word": "man",
+    "translation": "мужчина",
+    "examples": { "sentences": [
+      { "en": "The man is tall.", "ru": "Мужчина высокий.", "cefr": "a1" },
+      { "en": "A man in a blue jacket asked for directions.", "ru": "Мужчина в синей куртке спросил дорогу.", "cefr": "b1" },
+      { "en": "The man responsible for the discovery was awarded the Nobel Prize.", "ru": "Мужчина, ответственный за открытие, был удостоен Нобелевской премии.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "MAN — звучит как «мэн». СуперМЭН — супер МУЖЧИНА." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — взрослый человек мужского пола" },
+      { "level": 2, "text": "3 буквы, начинается на M, мн. число men" },
+      { "level": 3, "text": "M _ n" }
+    ]}
+  },
+  {
+    "meaningId": 22860,
+    "word": "change",
+    "translation": "менять",
+    "examples": { "sentences": [
+      { "en": "I want to change my shirt.", "ru": "Я хочу поменять рубашку.", "cefr": "a1" },
+      { "en": "Technology has changed the way we communicate.", "ru": "Технологии изменили то, как мы общаемся.", "cefr": "b1" },
+      { "en": "The legislation aims to change the regulatory framework fundamentally.", "ru": "Законодательство направлено на то, чтобы фундаментально изменить нормативную базу.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "CHANGE — звучит как «чейндж». Обменный пункт ЧЕЙНДЖ — где МЕНЯЮТ валюту." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — сделать другим" },
+      { "level": 2, "text": "6 букв, начинается на CH" },
+      { "level": 3, "text": "C h _ _ g e" }
+    ]}
+  },
+  {
+    "meaningId": 22865,
+    "word": "place",
+    "translation": "место",
+    "examples": { "sentences": [
+      { "en": "This is a nice place.", "ru": "Это хорошее место.", "cefr": "a1" },
+      { "en": "We need to find a quiet place to study.", "ru": "Нам нужно найти тихое место для учёбы.", "cefr": "b1" },
+      { "en": "The place holds deep historical significance dating back centuries.", "ru": "Это место имеет глубокое историческое значение, уходящее в века.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "PLACE — звучит как «плейс». ПЛЕЙСтейшн — МЕСТО для игр." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — определённая точка, локация" },
+      { "level": 2, "text": "5 букв, начинается на PL" },
+      { "level": 3, "text": "P l _ c e" }
+    ]}
+  },
+  {
+    "meaningId": 22889,
+    "word": "feel",
+    "translation": "чувствовать",
+    "examples": { "sentences": [
+      { "en": "I feel happy today.", "ru": "Я чувствую себя счастливым сегодня.", "cefr": "a1" },
+      { "en": "She felt nervous before the exam.", "ru": "Она чувствовала нервозность перед экзаменом.", "cefr": "b1" },
+      { "en": "One cannot help but feel a sense of awe when confronted with such beauty.", "ru": "Невозможно не чувствовать благоговение при встрече с такой красотой.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "FEEL — звучит как «фил». ФИЛьм вызывает ФИЛинги — ЧУВСТВА." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол, связанный с эмоциями и ощущениями" },
+      { "level": 2, "text": "4 буквы, начинается на F, двойная E" },
+      { "level": 3, "text": "F _ _ l" }
+    ]}
+  },
+  {
+    "meaningId": 22909,
+    "word": "problem",
+    "translation": "проблема",
+    "examples": { "sentences": [
+      { "en": "This is a big problem.", "ru": "Это большая проблема.", "cefr": "a1" },
+      { "en": "We need to solve this problem before it gets worse.", "ru": "Нам нужно решить эту проблему, пока она не усугубилась.", "cefr": "b1" },
+      { "en": "The problem lies not in the technology itself but in how it is implemented.", "ru": "Проблема заключается не в самой технологии, а в том, как она реализуется.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "PROBLEM — звучит почти как русское «проблема». Однокоренные!" },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — трудность, которую нужно решить" },
+      { "level": 2, "text": "7 букв, начинается на PR" },
+      { "level": 3, "text": "P r _ b l _ m" }
+    ]}
+  },
+  {
+    "meaningId": 22914,
+    "word": "write",
+    "translation": "писать",
+    "examples": { "sentences": [
+      { "en": "I write a letter.", "ru": "Я пишу письмо.", "cefr": "a1" },
+      { "en": "She writes articles for an online magazine.", "ru": "Она пишет статьи для онлайн-журнала.", "cefr": "b1" },
+      { "en": "The author wrote extensively about the socioeconomic factors influencing urbanization.", "ru": "Автор подробно писал о социально-экономических факторах, влияющих на урбанизацию.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "WRITE — буква W немая, звучит как «райт». РАЙТер — тот, кто ПИШЕТ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол, связанный с ручкой и бумагой" },
+      { "level": 2, "text": "5 букв, начинается на W (немая), рифмуется с right" },
+      { "level": 3, "text": "W r _ t e" }
+    ]}
+  },
+  {
+    "meaningId": 22945,
+    "word": "try",
+    "translation": "пробовать",
+    "examples": { "sentences": [
+      { "en": "Try this cake!", "ru": "Попробуй этот торт!", "cefr": "a1" },
+      { "en": "I tried to call you but your phone was off.", "ru": "Я пробовал тебе позвонить, но твой телефон был выключен.", "cefr": "b1" },
+      { "en": "The government is trying to implement reforms that address income inequality.", "ru": "Правительство пытается реализовать реформы, направленные на борьбу с неравенством доходов.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "TRY — звучит как «трай». ТРАЙатлон — нужно ПОПРОБОВАТЬ три вида спорта." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — сделать попытку" },
+      { "level": 2, "text": "3 буквы, начинается на TR" },
+      { "level": 3, "text": "T r _" }
+    ]}
+  },
+  {
+    "meaningId": 22953,
+    "word": "leave",
+    "translation": "покидать",
+    "examples": { "sentences": [
+      { "en": "I leave home at eight.", "ru": "Я покидаю дом в восемь.", "cefr": "a1" },
+      { "en": "He left the party early because he was tired.", "ru": "Он покинул вечеринку рано, потому что устал.", "cefr": "b1" },
+      { "en": "Leaving behind a successful career, she pursued her passion for art.", "ru": "Покинув успешную карьеру, она последовала своей страсти к искусству.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "LEAVE — звучит как «лив». ЛИВерпуль — город, который Битлз ПОКИНУЛИ ради славы." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — уйти откуда-то" },
+      { "level": 2, "text": "5 букв, начинается на L" },
+      { "level": 3, "text": "L _ _ v e" }
+    ]}
+  },
+  {
+    "meaningId": 23013,
+    "word": "help",
+    "translation": "помогать",
+    "examples": { "sentences": [
+      { "en": "Can you help me?", "ru": "Ты можешь мне помочь?", "cefr": "a1" },
+      { "en": "This book helped me understand grammar better.", "ru": "Эта книга помогла мне лучше понять грамматику.", "cefr": "b1" },
+      { "en": "Volunteering helps build a stronger sense of community among participants.", "ru": "Волонтёрство помогает формировать более сильное чувство общности среди участников.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "HELP — звучит как «хэлп». ХЭЛПдеск — служба ПОМОЩИ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — содействовать кому-то" },
+      { "level": 2, "text": "4 буквы, начинается на H" },
+      { "level": 3, "text": "H _ l p" }
+    ]}
+  },
+  {
+    "meaningId": 23017,
+    "word": "ask",
+    "translation": "спрашивать",
+    "examples": { "sentences": [
+      { "en": "Ask your teacher.", "ru": "Спроси учителя.", "cefr": "a1" },
+      { "en": "She asked me about my plans for the weekend.", "ru": "Она спросила меня о моих планах на выходные.", "cefr": "b1" },
+      { "en": "Asking the right questions is often more valuable than having the right answers.", "ru": "Задавать правильные вопросы часто ценнее, чем иметь правильные ответы.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "ASK — звучит как «аск». АСКетичный монах СПРАШИВАЕТ о смысле жизни." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — задать вопрос" },
+      { "level": 2, "text": "3 буквы, начинается на A" },
+      { "level": 3, "text": "A _ k" }
+    ]}
+  },
+  {
+    "meaningId": 23029,
+    "word": "meet",
+    "translation": "встречать",
+    "examples": { "sentences": [
+      { "en": "Nice to meet you!", "ru": "Рад вас встретить!", "cefr": "a1" },
+      { "en": "Let's meet at the café at three o'clock.", "ru": "Давай встретимся в кафе в три часа.", "cefr": "b1" },
+      { "en": "The committee met to discuss the implications of the proposed legislation.", "ru": "Комитет встретился для обсуждения последствий предлагаемого законодательства.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "MEET — звучит как «мит». МИТинг — ВСТРЕЧА людей." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — увидеть кого-то лично" },
+      { "level": 2, "text": "4 буквы, начинается на M, двойная E" },
+      { "level": 3, "text": "M _ _ t" }
+    ]}
+  }
+]

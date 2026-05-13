@@ -25,3 +25,22 @@ export function getMskTodayStart(now: Date = new Date()): Date {
 export function toMskDayStart(date: Date): Date {
   return getMskTodayStart(date);
 }
+
+/**
+ * Начало текущего «учебного дня» по МСК (02:00 MSK).
+ *
+ * Сдвиг от полуночи на 2 часа защищает поздних пользователей: тот, кто
+ * учится до 01:30 МСК, должен относиться к «вчерашнему» учебному дню,
+ * иначе дневной лимит обнуляется в середине сессии.
+ *
+ * Если now < 02:00 МСК — возвращает 02:00 предыдущего календарного дня.
+ * Если now >= 02:00 МСК — возвращает 02:00 текущего календарного дня.
+ */
+export function getMskDailyResetStart(now: Date = new Date()): Date {
+  const mskTodayStart = getMskTodayStart(now);
+  const todayReset = new Date(mskTodayStart.getTime() + 2 * 3600_000);
+  if (now.getTime() < todayReset.getTime()) {
+    return new Date(todayReset.getTime() - 24 * 3600_000);
+  }
+  return todayReset;
+}

@@ -84,6 +84,48 @@ const migrations: Migration[] = [
       await db.execute(sql`UPDATE user_custom_word_progress SET incorrect_count = 0 WHERE incorrect_count > 0`);
     },
   },
+  {
+    key: 'add-platform-id-check-constraint',
+    description: 'CHECK constraint: у пользователя должен быть хотя бы один platform ID (telegram_id или vk_id)',
+    run: async () => {
+      await db.execute(sql`
+        ALTER TABLE users ADD CONSTRAINT users_has_platform_id
+          CHECK (telegram_id IS NOT NULL OR vk_id IS NOT NULL)
+      `);
+    },
+  },
+  {
+    key: 'set-default-cefr-a2',
+    description: 'Дефолт estimated_cefr=a2 для пользователей с null (после удаления Onboarding/Placement)',
+    run: async () => {
+      await db.execute(sql`
+        UPDATE users SET estimated_cefr = 'a2' WHERE estimated_cefr IS NULL
+      `);
+    },
+  },
+  {
+    key: 'drop-onboarding-completed-at',
+    description: 'Удаление колонки users.onboarding_completed_at (после удаления Onboarding/Placement)',
+    run: async () => {
+      await db.execute(sql`
+        ALTER TABLE users DROP COLUMN IF EXISTS onboarding_completed_at
+      `);
+    },
+  },
+  {
+    key: 'drop-placement-results',
+    description: 'Удаление таблицы placement_results (после удаления Onboarding/Placement)',
+    run: async () => {
+      await db.execute(sql`DROP TABLE IF EXISTS placement_results`);
+    },
+  },
+  {
+    key: 'add-pending-pool-state',
+    description: "Добавление значения 'pending_pool' в enum learning_state (буфер свайпов «не знаю» из обзора)",
+    run: async () => {
+      await db.execute(sql`ALTER TYPE learning_state ADD VALUE IF NOT EXISTS 'pending_pool'`);
+    },
+  },
 ];
 
 export async function runStartupMigrations(): Promise<void> {

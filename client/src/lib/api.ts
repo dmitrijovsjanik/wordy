@@ -1,22 +1,11 @@
 import type {
   AuthResponse,
-  QuizStartResponse,
-  QuizAnswerRequest,
-  QuizAnswerResponse,
-  QuizResultResponse,
-  DuelCreateResponse,
-  Duel,
-  DuelFinishResponse,
   User,
   UserStats,
   CollectionGroup,
   LibraryCollection,
   CollectionDetail,
-  DifficultWordsResponse,
   AllWordsResponse,
-  QuizQuestion,
-  InfiniteAnswerResponse,
-  MatchPairsAnswerResponse,
   DictionaryLookupResult,
   LeagueStatusResponse,
   LeaderboardEntry,
@@ -25,6 +14,12 @@ import type {
   FriendInfo,
   FriendRequestInfo,
   StreakCalendarResponse,
+  CefrProgressResponse,
+  LearningNextResponse,
+  LearningAnswerRequest,
+  LearningAnswerResponse,
+  LearningSwipeRequest,
+  LearningSwipeResponse,
 } from '@/types/api';
 
 const TOKEN_KEY = 'wordy_token';
@@ -82,43 +77,45 @@ export function authInit(initData: string) {
   return fetchApi<AuthResponse>('POST', '/api/auth/init', { initData });
 }
 
+export function authVkInit(launchParams: string) {
+  return fetchApi<AuthResponse>('POST', '/api/auth/vk-init', { launchParams });
+}
+
 export function authDev() {
   return fetchApi<AuthResponse>('GET', '/api/auth/dev');
 }
 
-// Quiz
-export function quizStart() {
-  return fetchApi<QuizStartResponse>('POST', '/api/quiz/start');
+export function linkAccount(platform: 'telegram' | 'vk', initData: string) {
+  return fetchApi<{ success: boolean; message: string }>('POST', '/api/auth/link', { platform, initData });
 }
 
-export function quizAnswer(data: QuizAnswerRequest) {
-  return fetchApi<QuizAnswerResponse>('POST', '/api/quiz/answer', data);
+// Quiz API удалён (legacy /api/quiz/*). Архив: archive/v1-learning-flow/.
+
+// ─── Learning API (лестница: pool/passive/active/review/mastered) ──────────
+
+const LEARNING_BASE = '/api/learning';
+
+export function learningNext(opts: {
+  collectionId?: number;
+  /** Anti-repeat: последние N показанных wordId. Клиент шлёт окно 3, сервер cap'ает до 10. */
+  excludeWordIds?: number[];
+} = {}) {
+  const params = new URLSearchParams();
+  if (opts.collectionId !== undefined) params.set('collectionId', String(opts.collectionId));
+  if (opts.excludeWordIds?.length) params.set('excludeWordIds', opts.excludeWordIds.join(','));
+  const qs = params.toString();
+  return fetchApi<LearningNextResponse>('GET', `${LEARNING_BASE}/next${qs ? '?' + qs : ''}`);
 }
 
-export function quizFinish(sessionId: number) {
-  return fetchApi<QuizResultResponse>('POST', '/api/quiz/finish', { sessionId });
+export function learningAnswer(input: LearningAnswerRequest) {
+  return fetchApi<LearningAnswerResponse>('POST', `${LEARNING_BASE}/answer`, input);
 }
 
-// Duels
-export function duelCreate() {
-  return fetchApi<DuelCreateResponse>('POST', '/api/duels/create');
+export function learningSwipe(input: LearningSwipeRequest) {
+  return fetchApi<LearningSwipeResponse>('POST', `${LEARNING_BASE}/swipe`, input);
 }
 
-export function duelJoin(id: number) {
-  return fetchApi<Duel>('POST', `/api/duels/${id}/join`);
-}
-
-export function duelGet(id: number) {
-  return fetchApi<Duel>('GET', `/api/duels/${id}`);
-}
-
-export function duelStart(id: number) {
-  return fetchApi<QuizStartResponse>('POST', `/api/duels/${id}/start`);
-}
-
-export function duelFinish(id: number) {
-  return fetchApi<DuelFinishResponse>('POST', `/api/duels/${id}/finish`);
-}
+// Duels API удалён (legacy /api/duels/*). Архив: archive/v1-learning-flow/.
 
 // User
 export function getMe() {
@@ -150,8 +147,8 @@ export function updateLanguages(nativeLanguage: string, learningLanguage: string
   );
 }
 
-export function updateSettings(settings: { repeatMastered?: boolean }) {
-  return fetchApi<{ repeatMastered?: boolean }>('PATCH', '/api/users/me/settings', settings);
+export function updateSettings(settings: { repeatMastered?: boolean; ttsVoice?: string }) {
+  return fetchApi<{ repeatMastered?: boolean; ttsVoice?: string }>('PATCH', '/api/users/me/settings', settings);
 }
 
 export function purchaseStreakFreeze(days: number) {
@@ -191,6 +188,20 @@ export function unlinkCard() {
 
 export function getStreakCalendar(months = 6) {
   return fetchApi<StreakCalendarResponse>('GET', `/api/users/me/streak-calendar?months=${months}`);
+}
+
+// Lives
+export function getLivesStatus() {
+  return fetchApi<{ lives: number; livesRestoredAt: string | null; isInfinite: boolean }>('GET', '/api/users/me/lives');
+}
+
+export function refillLives() {
+  return fetchApi<{ lives: number; gems: number }>('POST', '/api/users/me/lives/refill');
+}
+
+// XP Boost
+export function purchaseXpBoost() {
+  return fetchApi<{ success: boolean; until: string; gems: number }>('POST', '/api/users/me/xp-boost/purchase');
 }
 
 // Collections
@@ -238,10 +249,6 @@ export function deleteCollection(id: number) {
   return fetchApi<{ success: boolean }>('DELETE', `/api/collections/${id}`);
 }
 
-export function getDifficultWords() {
-  return fetchApi<DifficultWordsResponse>('GET', '/api/collections/difficult');
-}
-
 export function getAllWords() {
   return fetchApi<AllWordsResponse>('GET', '/api/collections/words');
 }
@@ -263,55 +270,12 @@ export function removeCollectionWord(collectionId: number, wordId: number, type:
   return fetchApi<{ success: boolean; deleted: number }>('DELETE', `/api/collections/${collectionId}/words/${wordId}?type=${type}`);
 }
 
-// Виртуальный ID для коллекции ошибок
-export const ERRORS_COLLECTION_ID = 'errors' as const;
+// Legacy infinite-quiz/grammar/match-pairs/hint endpoints удалены.
+// Архив: archive/v1-learning-flow/.
 
-// Infinite Quiz
-export function quizNext(
-  excludeIds: number[] = [],
-  collectionId?: number | typeof ERRORS_COLLECTION_ID,
-  generatorMode?: string,
-  recentGenerators: string[] = [],
-) {
-  const params = new URLSearchParams();
-  if (excludeIds.length > 0) params.set('exclude', excludeIds.join(','));
-  if (collectionId) params.set('collectionId', String(collectionId));
-
-  // Определяем параметры генерации
-  if (generatorMode === 'spelling' || generatorMode === 'match-pairs') {
-    params.set('type', generatorMode);
-  } else if (generatorMode && generatorMode !== 'auto') {
-    // en-ru или ru-en — устанавливаем направление
-    params.set('lang', generatorMode);
-  }
-
-  // История генераторов для авто-ротации (только в auto режиме)
-  if (recentGenerators.length > 0 && (!generatorMode || generatorMode === 'auto')) {
-    params.set('generators', recentGenerators.join(','));
-  }
-
-  const query = params.toString() ? `?${params.toString()}` : '';
-  return fetchApi<{ question: QuizQuestion | null }>('GET', `/api/quiz/next${query}`);
-}
-
-export function quizAnswerInfinite(meaningId: number, selectedMeaningId: number | null, streak: number, doubleXpClaimed = false) {
-  return fetchApi<InfiniteAnswerResponse>('POST', '/api/quiz/answer-infinite', {
-    meaningId,
-    selectedMeaningId,
-    streak,
-    doubleXpClaimed,
-  });
-}
-
-export function quizAnswerMatchPairs(results: Array<{ meaningId: number; isCorrect: boolean }>, streak: number, doubleXpClaimed = false) {
-  return fetchApi<MatchPairsAnswerResponse>('POST', '/api/quiz/answer-match-pairs', {
-    results,
-    streak,
-    doubleXpClaimed,
-  });
-}
-
-// Leagues
+// Leagues — endpoints оставлены, потому что league-виджеты в dashboard/profile
+// всё ещё используют их (но скрыты PILOT_FEATURES.leagues = false). Удалить
+// можно когда виджеты выпилим.
 export function getLeagueStatus() {
   return fetchApi<LeagueStatusResponse>('GET', '/api/leagues/me');
 }
@@ -368,3 +332,10 @@ export function acceptInvite(token: string) {
 export function removeFriend(friendId: number) {
   return fetchApi<{ success: boolean }>('DELETE', `/api/friends/${friendId}`);
 }
+
+// CEFR Progress
+export function getCefrProgress() {
+  return fetchApi<CefrProgressResponse>('GET', '/api/users/me/cefr-progress');
+}
+
+// Grammar и Reading endpoints удалены. Архив: archive/v1-learning-flow/.

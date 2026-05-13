@@ -62,6 +62,46 @@ export const PAYMENT_ITEMS: Record<string, PaymentItem> = {
     description: 'Подписка Wordy Premium на 12 месяцев — Wordy',
     vatCode: 1,
   },
+  gem_pack_100: {
+    itemType: 'gem_pack_100',
+    title: 'Пак кристаллов (100)',
+    amount: 4900,
+    rubPrice: 49,
+    description: 'Пак 100 кристаллов — Wordy',
+    vatCode: 1,
+  },
+  gem_pack_500: {
+    itemType: 'gem_pack_500',
+    title: 'Пак кристаллов (550)',
+    amount: 19900,
+    rubPrice: 199,
+    description: 'Пак 550 кристаллов — Wordy',
+    vatCode: 1,
+  },
+  gem_pack_1500: {
+    itemType: 'gem_pack_1500',
+    title: 'Пак кристаллов (1800)',
+    amount: 49900,
+    rubPrice: 499,
+    description: 'Пак 1800 кристаллов — Wordy',
+    vatCode: 1,
+  },
+  lives_refill: {
+    itemType: 'lives_refill',
+    title: 'Восстановление жизней',
+    amount: 4900,
+    rubPrice: 49,
+    description: 'Полное восстановление жизней — Wordy',
+    vatCode: 1,
+  },
+  xp_boost_24h: {
+    itemType: 'xp_boost_24h',
+    title: 'Ускорение опыта (24 часа)',
+    amount: 6900,
+    rubPrice: 69,
+    description: 'x1.5 опыт на 24 часа — Wordy',
+    vatCode: 1,
+  },
 };
 
 /** Email для чеков 54-ФЗ */

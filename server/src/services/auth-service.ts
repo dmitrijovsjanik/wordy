@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { users } from '../db/schema.js';
+import { REVERSE_TRIAL_MS } from '../config/premium-config.js';
 
 type TelegramUserData = {
   id: bigint;
@@ -62,6 +63,9 @@ export async function upsertUser(data: TelegramUserData) {
       username: data.username ?? null,
       firstName: data.first_name,
       avatarUrl: data.photo_url ?? null,
+      premiumUntil: new Date(Date.now() + REVERSE_TRIAL_MS),
+      premiumPlan: 'trial',
+      estimatedCefr: 'a2',
     })
     .returning();
   return created!;
@@ -82,6 +86,7 @@ export async function getOrCreateDevUser() {
       telegramId: devTelegramId,
       firstName: 'Dev User',
       username: 'dev_user',
+      estimatedCefr: 'a2',
     })
     .returning();
   return created!;

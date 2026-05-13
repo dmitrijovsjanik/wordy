@@ -1,45 +1,49 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { speakText, speakLongText, stopAudio } from '@/lib/tts';
+import { useUserStore } from '@/stores/user-store';
 
 type UseSpeechOptions = {
   lang?: string;
   rate?: number;
   pitch?: number;
+  voice?: string;
 };
 
 type UseSpeechReturn = {
   speak: (text: string) => void;
+  speakLong: (text: string) => void;
   stop: () => void;
   isSpeaking: boolean;
-  // Прогресс от 0 до 1 для karaoke-эффекта
+  isLoading: boolean;
   progress: number;
-  // Opacity от 1 до 0 для плавного затухания после окончания
   opacity: number;
-  isSupported: boolean;
+  error: string | null;
+  isSupported: true;
 };
 
-/**
- * Хук для озвучивания текста через Web Speech API
- * с поддержкой прогресса для karaoke-эффекта
- */
+const ERROR_CLEAR_MS = 3000;
+
 export function useSpeech(options: UseSpeechOptions = {}): UseSpeechReturn {
-  const { lang = 'en-US', rate = 0.9, pitch = 1 } = options;
+  const { rate = 0.9, voice: explicitVoice } = options;
+  const userVoice = useUserStore((s) => s.user?.ttsVoice);
+  const voice = explicitVoice ?? userVoice;
 
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [opacity, setOpacity] = useState(0);
   const [isFading, setIsFading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const fadeAnimationRef = useRef<number | null>(null);
-  const endTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startTimeRef = useRef<number>(0);
   const durationRef = useRef<number>(0);
-  const fadeStartTimeRef = useRef<number>(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const mountedRef = useRef(true);
 
-  const isSupported = typeof window !== 'undefined' && 'speechSynthesis' in window;
-
-  // Анимация прогресса через useEffect
+  // Karaoke progress animation
   useEffect(() => {
     if (!isSpeaking) return;
 
@@ -64,14 +68,14 @@ export function useSpeech(options: UseSpeechOptions = {}): UseSpeechReturn {
     };
   }, [isSpeaking]);
 
-  // Анимация затухания
+  // Fade-out animation
   useEffect(() => {
     if (!isFading) return;
 
-    const fadeDuration = 600; // мс
+    const fadeDuration = 600;
 
     const animateFade = () => {
-      const elapsed = Date.now() - fadeStartTimeRef.current;
+      const elapsed = Date.now() - startTimeRef.current;
       const newOpacity = Math.max(1 - elapsed / fadeDuration, 0);
       setOpacity(newOpacity);
 
@@ -83,6 +87,7 @@ export function useSpeech(options: UseSpeechOptions = {}): UseSpeechReturn {
       }
     };
 
+    startTimeRef.current = Date.now();
     fadeAnimationRef.current = requestAnimationFrame(animateFade);
 
     return () => {
@@ -92,118 +97,139 @@ export function useSpeech(options: UseSpeechOptions = {}): UseSpeechReturn {
     };
   }, [isFading]);
 
-  // Очистка при размонтировании
+  // Cleanup on unmount
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      if (fadeAnimationRef.current) {
-        cancelAnimationFrame(fadeAnimationRef.current);
-      }
-      if (endTimeoutRef.current) {
-        clearTimeout(endTimeoutRef.current);
-      }
-      if (isSupported) {
-        window.speechSynthesis.cancel();
-      }
+      mountedRef.current = false;
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      if (fadeAnimationRef.current) cancelAnimationFrame(fadeAnimationRef.current);
+      if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+      stopAudio();
     };
-  }, [isSupported]);
+  }, []);
 
   const finishSpeaking = useCallback(() => {
+    if (!mountedRef.current) return;
     setIsSpeaking(false);
     setProgress(1);
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
-    if (endTimeoutRef.current) {
-      clearTimeout(endTimeoutRef.current);
-      endTimeoutRef.current = null;
-    }
-    // Запускаем плавное затухание
-    fadeStartTimeRef.current = Date.now();
+    audioRef.current = null;
+    // Start fade-out
     setIsFading(true);
+  }, []);
+
+  const showError = useCallback((msg: string) => {
+    if (!mountedRef.current) return;
+    setError(msg);
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+    errorTimerRef.current = setTimeout(() => {
+      if (mountedRef.current) setError(null);
+    }, ERROR_CLEAR_MS);
   }, []);
 
   const speak = useCallback(
     (text: string) => {
-      if (!isSupported) return;
+      // Reset state
+      stopAudio();
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      if (fadeAnimationRef.current) cancelAnimationFrame(fadeAnimationRef.current);
+      audioRef.current = null;
 
-      // Останавливаем предыдущее воспроизведение
-      window.speechSynthesis.cancel();
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      if (endTimeoutRef.current) {
-        clearTimeout(endTimeoutRef.current);
-        endTimeoutRef.current = null;
-      }
-
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = lang;
-      utterance.rate = rate;
-      utterance.pitch = pitch;
-
-      // Оценка длительности: ~80мс на символ при rate=1
-      // Корректируем на rate
-      const estimatedDuration = (text.length * 80) / rate;
-      durationRef.current = estimatedDuration;
-
-      // iOS Safari часто НЕ вызывает onstart — запускаем анимацию сразу
-      setIsSpeaking(true);
+      setIsLoading(true);
+      setIsSpeaking(false);
       setProgress(0);
       setOpacity(1);
       setIsFading(false);
-      startTimeRef.current = Date.now();
+      setError(null);
 
-      // Fallback таймер: если onend не сработает (бывает на iOS), завершаем сами
-      endTimeoutRef.current = setTimeout(() => {
-        finishSpeaking();
-      }, estimatedDuration + 500);
+      speakText(text, rate, voice)
+        .then((audio) => {
+          if (!mountedRef.current) return;
+          setIsLoading(false);
+          audioRef.current = audio;
 
-      utterance.onend = () => {
-        finishSpeaking();
-      };
+          // Get real duration or estimate
+          const realDuration = audio.duration;
+          const estimatedMs = text.length * 80;
+          durationRef.current = (realDuration && isFinite(realDuration) && realDuration > 0)
+            ? realDuration * 1000
+            : estimatedMs;
 
-      utterance.onerror = () => {
-        setIsSpeaking(false);
-        setProgress(0);
-        setOpacity(0);
-        setIsFading(false);
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-        }
-        if (endTimeoutRef.current) {
-          clearTimeout(endTimeoutRef.current);
-          endTimeoutRef.current = null;
-        }
-      };
+          setIsSpeaking(true);
+          startTimeRef.current = Date.now();
 
-      utteranceRef.current = utterance;
-      window.speechSynthesis.speak(utterance);
+          // Update duration when metadata loads (for more accurate progress)
+          audio.addEventListener('loadedmetadata', () => {
+            if (audio.duration && isFinite(audio.duration) && audio.duration > 0) {
+              durationRef.current = audio.duration * 1000;
+            }
+          });
+
+          audio.addEventListener('ended', () => {
+            finishSpeaking();
+          });
+        })
+        .catch((err) => {
+          if (!mountedRef.current) return;
+          setIsLoading(false);
+          setIsSpeaking(false);
+          setProgress(0);
+          setOpacity(0);
+          // Don't show error for intentional abort
+          if (err instanceof DOMException && err.name === 'AbortError') return;
+          showError('Не удалось загрузить озвучку');
+        });
     },
-    [isSupported, lang, rate, pitch, finishSpeaking],
+    [rate, voice, finishSpeaking, showError],
+  );
+
+  const speakLong = useCallback(
+    (text: string) => {
+      // Reset state
+      stopAudio();
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      if (fadeAnimationRef.current) cancelAnimationFrame(fadeAnimationRef.current);
+      audioRef.current = null;
+
+      setIsLoading(true);
+      setIsSpeaking(false);
+      setProgress(0);
+      setOpacity(1);
+      setIsFading(false);
+      setError(null);
+
+      speakLongText(text, rate, {
+        onSentenceStart: (idx, total) => {
+          if (!mountedRef.current) return;
+          setIsLoading(false);
+          setIsSpeaking(true);
+          setProgress(idx / total);
+        },
+        onSentenceEnd: (idx, total) => {
+          if (!mountedRef.current) return;
+          setProgress((idx + 1) / total);
+        },
+        onFinish: () => finishSpeaking(),
+        onError: () => showError('Не удалось загрузить озвучку'),
+      }, voice);
+    },
+    [rate, voice, finishSpeaking, showError],
   );
 
   const stop = useCallback(() => {
-    if (!isSupported) return;
-
-    window.speechSynthesis.cancel();
+    stopAudio();
+    audioRef.current = null;
+    setIsLoading(false);
     setIsSpeaking(false);
     setProgress(0);
     setOpacity(0);
     setIsFading(false);
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
-    if (fadeAnimationRef.current) {
-      cancelAnimationFrame(fadeAnimationRef.current);
-    }
-    if (endTimeoutRef.current) {
-      clearTimeout(endTimeoutRef.current);
-      endTimeoutRef.current = null;
-    }
-  }, [isSupported]);
+    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    if (fadeAnimationRef.current) cancelAnimationFrame(fadeAnimationRef.current);
+  }, []);
 
-  return { speak, stop, isSpeaking, progress, opacity, isSupported };
+  return { speak, speakLong, stop, isSpeaking, isLoading, progress, opacity, error, isSupported: true };
 }

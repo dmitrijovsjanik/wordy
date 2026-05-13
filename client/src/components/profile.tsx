@@ -17,7 +17,6 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import {
   Tick01Icon,
   ZapIcon,
-  Settings02Icon,
   UserGroupIcon,
   ArrowRight01Icon,
   StarIcon,
@@ -25,8 +24,10 @@ import {
 import { useFriendStore } from '@/stores/friend-store';
 import { Avatar } from '@/components/ui/avatar';
 import { xpForLevel } from '@/lib/progression-config';
+import { PILOT_FEATURES } from '@/lib/pilot-config';
 import Lottie from 'lottie-react';
 import fireStreakData from '@/assets/fire-streak.json';
+import { CefrProgress } from '@/components/profile/cefr-progress';
 
 const MONTHS_RU = [
   'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
@@ -51,8 +52,8 @@ export function Profile() {
 
   useEffect(() => {
     getMyStats().then(setStats).catch(() => {});
-    fetchRequests();
-    fetchStatus();
+    if (PILOT_FEATURES.friends) fetchRequests();
+    if (PILOT_FEATURES.leagues) fetchStatus();
   }, [fetchRequests, fetchStatus]);
 
   if (!user) return null;
@@ -65,16 +66,8 @@ export function Profile() {
 
   return (
     <div className="flex flex-col px-4 pt-4 pb-4">
-      {/* Header: Back + Settings */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center">
         <BackButton to="/" variant="ghost" />
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => navigate('/settings')}
-        >
-          <HugeiconsIcon strokeWidth={2} icon={Settings02Icon} size={20} className="text-[var(--gray-11)]" />
-        </Button>
       </div>
 
       {/* Avatar + Name */}
@@ -89,10 +82,12 @@ export function Profile() {
       {/* Current Info Pills */}
       <div className="mt-5 flex justify-center gap-1.5">
         <StreakDaysIndicator count={user.streakDays} />
-        <div className="flex h-8 items-center gap-1.5 rounded-full bg-[var(--gray-3)] pl-1 pr-3">
-          <LeagueBadge tier={currentTier} size="sm" showLabel={false} />
-          <span className="text-xs font-semibold">{getLeagueName(currentTier)}</span>
-        </div>
+        {PILOT_FEATURES.leagues && (
+          <div className="flex h-8 items-center gap-1.5 rounded-full bg-[var(--gray-3)] pl-1 pr-3">
+            <LeagueBadge tier={currentTier} size="sm" showLabel={false} />
+            <span className="text-xs font-semibold">{getLeagueName(currentTier)}</span>
+          </div>
+        )}
       </div>
 
       {/* XP Progress */}
@@ -106,17 +101,19 @@ export function Profile() {
       {/* Records Grid */}
       {stats ? (
         <div className="mt-5 grid grid-cols-2 gap-3">
-          <Card className="flex flex-col items-center py-3 px-2">
-            {stats.maxLeagueTier ? (
-              <LeagueBadge tier={stats.maxLeagueTier} size="sm" showLabel={false} />
-            ) : (
-              <HugeiconsIcon strokeWidth={2} icon={StarIcon} size={20} className="text-[var(--gray-9)]" />
-            )}
-            <span className="mt-1.5 text-sm font-bold">
-              {stats.maxLeagueTier ? getLeagueName(stats.maxLeagueTier) : '—'}
-            </span>
-            <span className="text-[10px] text-[var(--gray-11)]">Макс. лига</span>
-          </Card>
+          {PILOT_FEATURES.leagues && (
+            <Card className="flex flex-col items-center py-3 px-2">
+              {stats.maxLeagueTier ? (
+                <LeagueBadge tier={stats.maxLeagueTier} size="sm" showLabel={false} />
+              ) : (
+                <HugeiconsIcon strokeWidth={2} icon={StarIcon} size={20} className="text-[var(--gray-9)]" />
+              )}
+              <span className="mt-1.5 text-sm font-bold">
+                {stats.maxLeagueTier ? getLeagueName(stats.maxLeagueTier) : '—'}
+              </span>
+              <span className="text-[10px] text-[var(--gray-11)]">Макс. лига</span>
+            </Card>
+          )}
 
           <Card className="flex flex-col items-center py-3 px-2">
             <div className="h-6 w-6 shrink-0">
@@ -140,7 +137,7 @@ export function Profile() {
         </div>
       ) : (
         <div className="mt-5 grid grid-cols-2 gap-3">
-          {Array.from({ length: 4 }).map((_, i) => (
+          {Array.from({ length: PILOT_FEATURES.leagues ? 4 : 3 }).map((_, i) => (
             <Skeleton key={i} className="h-24 w-full rounded-2xl" />
           ))}
         </div>
@@ -164,6 +161,9 @@ export function Profile() {
           </div>
         </button>
       </Card>
+
+      {/* CEFR Progress */}
+      <CefrProgress className="mt-5" />
 
       {/* Join date */}
       <p className="mt-6 text-center text-xs text-[var(--gray-10)]">

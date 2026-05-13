@@ -52,6 +52,8 @@ export type PooledMeaning = {
   alternativeTranslations: string[] | null;
   difficulty: 'easy' | 'medium' | 'hard';
   partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+  synonyms?: string[] | null;
+  examples?: { text: string; translation: string }[] | null;
   word: {
     id: number;
     text: string;
@@ -84,12 +86,165 @@ export function reversePair(pair: LanguagePair): LanguagePair {
 
 // ─── Generator Rotation ────────────────────────────────────────────────────
 
-export type GeneratorType = 'en-ru' | 'ru-en' | 'spelling' | 'match-pairs';
+export type GeneratorType = 'en-ru' | 'ru-en' | 'spelling' | 'match-pairs' | 'cloze' | 'cloze-input' | 'listening' | 'dictation' | 'free-recall' | 'encounter' | 'passive-recall';
+
+// Encounter card — пассивный показ слова на первом уровне лестницы.
+// Без проверки: пользователь нажимает «Понятно» → recordAnswer({isCorrect: true}) → tier=passive.
+// Информация об одном значении слова — для L1-3 word-level карточек.
+export type WordMeaningInfo = {
+  meaningId: number;
+  translation: string;
+  example: { en: string; ru: string } | null;
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+};
+
+// Грамматическая форма слова и её роль (для подсказок и подсветки в примерах).
+// Подробно: server/src/services/word-forms-service.ts.
+export type WordFormInfo = {
+  text: string;     // напр. "took", "takes"
+  label: string;    // напр. "прошедшее время", "3 лицо ед.ч., наст."
+};
+
+export type WordFormsInfo = {
+  base: string;     // лемма
+  partOfSpeech: 'verb' | 'noun' | 'adjective' | 'modal' | 'pronoun' | 'other';
+  forms: WordFormInfo[];
+};
+
+export type EncounterCardQuestion = {
+  type: 'encounter';
+  meaningId: number;
+  /** Word-level ID. Заполняется на word-level вопросах (L1-3). */
+  wordId?: number | null;
+  word: string;
+  originalForm: string | null;
+  translation: string;                          // representative meaning (fallback)
+  transcription: string | null;
+  mnemonic: string | null;                      // AI-mnemonic, если есть
+  example: { en: string; ru: string } | null;   // representative meaning (fallback)
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+  direction: 'en-ru';
+  meaningIndex: number;
+  totalMeanings: number;
+  /** Топ-3 значения слова для UI. */
+  meanings?: WordMeaningInfo[];
+  /** Грамматические формы слова (для подсказок и подсветки). L1-L3 only. */
+  forms?: WordFormsInfo | null;
+};
+
+// Passive recall card — второй уровень лестницы. Флешкарта с флипом и
+// самооценкой через свайп. На лицевой — слово и пример. На обратной —
+// перевод, перевод примера и кнопка раскрытия мнемоники. Свайп вправо =
+// «знал» (isCorrect=true), свайп влево = «не знал» (isCorrect=false).
+// Подробности UI: см. PassiveRecallCard на клиенте.
+export type PassiveRecallCardQuestion = {
+  type: 'passive-recall';
+  meaningId: number;
+  wordId?: number | null;
+  word: string;
+  transcription: string | null;
+  translation: string;               // representative meaning (fallback)
+  example: { en: string; ru: string } | null;  // representative meaning (fallback)
+  mnemonic: string | null;
+  meaningIndex: number;
+  totalMeanings: number;
+  /** Топ-3 значения слова. На обратной стороне карточки рендерим списком. */
+  meanings?: WordMeaningInfo[];
+  /** Грамматические формы слова. L1-L3 only. */
+  forms?: WordFormsInfo | null;
+};
 
 // Match-pairs question (соединение пар)
 export type MatchPairsQuestion = {
   type: 'match-pairs';
   pairs: Array<{ meaningId: number; word: string; translation: string }>;
+  doubleXpTimeLimitMs?: number;
+};
+
+// Cloze question (заполни пропуск в предложении)
+export type ClozeQuestion = {
+  type: 'cloze';
+  meaningId: number;
+  sentence: string;        // "I need to _____ a decision"
+  sentenceRu: string;      // "Мне нужно принять решение"
+  options: string[];        // ["make", "do", "take", "get"]
+  correctAnswer: string;    // "make"
+  word: string;             // целевое слово (для feedback)
+  transcription: string | null;
+  doubleXpTimeLimitMs?: number;
+};
+
+// Cloze-input question — то же что cloze, но без вариантов: пользователь
+// печатает пропущенное слово. Формат для production-tier (контекстный recall).
+export type ClozeInputQuestion = {
+  type: 'cloze-input';
+  meaningId: number;
+  sentence: string;        // "I need to _____ a decision"
+  sentenceRu: string;      // "Мне нужно принять решение"
+  correctAnswer: string;    // "make"
+  acceptableAnswers: string[]; // для typo-tolerance
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+  word: string;
+  doubleXpTimeLimitMs?: number;
+};
+
+// Listening question (слушай → выбери перевод)
+export type ListeningQuestion = {
+  type: 'listening';
+  meaningId: number;
+  audioWord: string;           // слово для TTS на клиенте
+  transcription: string | null;
+  options: string[];           // варианты переводов (русские)
+  correctAnswer: string;       // правильный перевод
+  doubleXpTimeLimitMs?: number;
+};
+
+// Dictation question (слушай → напиши)
+export type DictationQuestion = {
+  type: 'dictation';
+  meaningId: number;
+  audioWord: string;           // слово для TTS
+  hint: string;                // перевод (подсказка)
+  correctAnswer: string;       // правильное написание
+  acceptableAnswers: string[]; // допустимые варианты
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+  doubleXpTimeLimitMs?: number;
+};
+
+// Pool card (L0 v2) — карточка для свайпа в основном потоке. Слово + переводы.
+// Юзер жмёт «Знаю» / «Изучаю» / «Отложить» → applyPoolSwipe.
+export type PoolCardQuestion = {
+  type: 'pool-card';
+  /** Word-level ID. Per-meaning информация — внутри meanings. */
+  wordId: number;
+  /** Representative meaningId — для legacy событий и backward-compat. */
+  meaningId: number;
+  word: string;
+  transcription: string | null;
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+  /** Все meanings слова (топ-3 по popularity_rank). */
+  meanings: WordMeaningInfo[];
+  forms?: WordFormsInfo | null;
+  /** Пример representative meaning (для UI). */
+  example: { en: string; ru: string } | null;
+};
+
+// Free Recall question (напиши перевод без вариантов)
+export type FreeRecallQuestion = {
+  type: 'free-recall';
+  meaningId: number;
+  wordId?: number | null;
+  direction: 'en-ru' | 'ru-en';
+  prompt: string;              // слово/перевод для показа
+  transcription: string | null; // только для en→ru
+  audioWord?: string;          // для TTS (en слово)
+  acceptableAnswers: string[]; // все допустимые ответы
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+  /** На L3 word-level: все значения для отображения списка переводов как
+   *  стимула. На meaning-level rollback'е может быть undefined / 1 элемент. */
+  meanings?: WordMeaningInfo[];
+  /** Грамматические формы слова. L1-L3 only. */
+  forms?: WordFormsInfo | null;
   doubleXpTimeLimitMs?: number;
 };
 

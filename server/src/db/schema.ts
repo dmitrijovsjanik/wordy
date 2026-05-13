@@ -53,6 +53,14 @@ export const leagueTierEnum = pgEnum('league_tier', [
   'legend',
 ]);
 
+export const aiContentTypeEnum = pgEnum('ai_content_type', [
+  'examples',
+  'mnemonic',
+  'hints',
+  'grammar',
+  'common_errors',
+]);
+
 export const leagueNotificationTypeEnum = pgEnum('league_notification_type', [
   'season_started',
   'safe_zone_reached',
@@ -66,11 +74,69 @@ export const leagueNotificationTypeEnum = pgEnum('league_notification_type', [
   'maintained',
 ]);
 
+// Уровень освоения слова: pool (L0) / passive (L1) / active (L2) / review (L3) / mastered.
+// known_external — пользователь свайпнул «Знаю» в обзоре, слово изъято
+// из учебного потока (не показывается в pickNext, не идёт в SRS). В UI
+// отображается как mastered (полный ринг прогресса).
+export const learningTierEnum = pgEnum('learning_tier', [
+  'pool',
+  'passive',
+  'active',
+  'review',
+  'mastered',
+  'known_external',
+]);
+
+// Состояние записи user_word_progress_word:
+//   active        — в обучении (любой тир кроме pool_snoozed/mastered)
+//   pool_snoozed  — отложено из L0 через «Отложить», вернётся после snoozed_until
+export const learningStateEnum = pgEnum('learning_state', [
+  'active',
+  'pool_snoozed',
+]);
+
+// Оценка ответа на L3 (review). 'again' = откат на L2, остальные — модификаторы интервала.
+export const reviewGradeEnum = pgEnum('review_grade', [
+  'again',
+  'hard',
+  'good',
+  'easy',
+]);
+
+// Append-only лог обучающих событий. Источник правды для retention/funnel-аналитики.
+export const learningEventTypeEnum = pgEnum('learning_event_type', [
+  // Сессии (текущие — solo/duel; в будущем — learning-session из learning-service)
+  'session_started',
+  'session_finished',
+  // Жизненный цикл вопроса
+  'question_shown',
+  'question_answered',
+  'question_skipped',
+  // Лестница (заработают после фазы 2)
+  'tier_advanced',
+  'tier_reset',
+  'meaning_learned',
+  'meaning_relearn',
+  // Свайпы в обзоре (заработают после фазы 4)
+  'review_swiped_known',
+  'review_swiped_unknown',
+  'review_swiped_snooze',
+  // Откат свайпа в обзоре (жест «вниз»). payload.original_action хранит
+  // что именно откатили: 'known' | 'unknown' | 'snooze'.
+  'review_undo',
+  // Раскрытие мнемоники по кнопке на passive-recall карточке. Пишем для
+  // оценки полезности AI-мнемоник (доля раскрытий vs показов).
+  'mnemonic_revealed',
+  // Онбординг (плейсмент-тест)
+  'onboarding_step',
+]);
+
 // ─── Users ───────────────────────────────────────────────────────────────────
 
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
-  telegramId: bigint('telegram_id', { mode: 'bigint' }).unique().notNull(),
+  telegramId: bigint('telegram_id', { mode: 'bigint' }).unique(),
+  vkId: bigint('vk_id', { mode: 'bigint' }).unique(),
   username: varchar('username', { length: 255 }),
   firstName: varchar('first_name', { length: 255 }).notNull(),
   avatarUrl: varchar('avatar_url', { length: 1024 }),
@@ -84,6 +150,7 @@ export const users = pgTable('users', {
   nativeLanguage: varchar('native_language', { length: 10 }).default('ru').notNull(),
   learningLanguage: varchar('learning_language', { length: 10 }).default('en').notNull(),
   repeatMastered: boolean('repeat_mastered').default(false).notNull(),
+  ttsVoice: varchar('tts_voice', { length: 64 }).default('en-US-EmmaMultilingualNeural').notNull(),
   friendCode: varchar('friend_code', { length: 12 }).unique(),
   lastActivityAt: timestamp('last_activity_at'),
   lastLoginDate: timestamp('last_login_date'), // Дата последнего входа для streak (без времени)
@@ -91,10 +158,28 @@ export const users = pgTable('users', {
   dailyCorrectDate: timestamp('daily_correct_date'), // Дата для сброса счётчика правильных ответов за день
   dailyStreakMilestonesDone: varchar('daily_streak_milestones_done', { length: 255 }).default('').notNull(),
   dailyCorrectMilestonesDone: varchar('daily_correct_milestones_done', { length: 255 }).default('').notNull(),
+  shownMilestones: jsonb('shown_milestones').$type<string[]>().default([]).notNull(),
+  estimatedCefr: cefrLevelEnum('estimated_cefr'),
   premiumUntil: timestamp('premium_until'),
   premiumPlan: varchar('premium_plan', { length: 20 }),
   autoRenew: boolean('auto_renew').default(false).notNull(),
   savedPaymentMethodId: varchar('saved_payment_method_id', { length: 64 }),
+  // Жизни (Hearts)
+  lives: integer('lives').default(5).notNull(),
+  livesRestoredAt: timestamp('lives_restored_at'), // null = жизни полные (5)
+  // XP Boost
+  xpBoostUntil: timestamp('xp_boost_until'), // null = нет активного буста
+  // Дневной лимит изучения. Считает переходы active → review за день.
+  // Сбрасывается на следующем pickNext после 02:00 MSK.
+  dailyPromotionsCount: integer('daily_promotions_count').default(0).notNull(),
+  // Дата (нормализованная к началу учебного дня = 02:00 MSK), к которой
+  // относится dailyPromotionsCount. null = ещё ни одного перехода.
+  dailyPromotionsDate: timestamp('daily_promotions_date'),
+  // Виртуальная коллекция «Все слова» — глобальный пул всех wordMeanings (rank≤3).
+  // Не хранится в `collections` (там не было бы списка слов — он бы строился
+  // динамически из всех wordMeanings). Подписка живёт прямо здесь.
+  allWordsSubscribed: boolean('all_words_subscribed').default(false).notNull(),
+  allWordsActive: boolean('all_words_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -324,33 +409,56 @@ export const userCollections = pgTable(
   ],
 );
 
-// ─── User Word Progress ─────────────────────────────────────────────────────
+// ─── User Word Progress (word-level) ────────────────────────────────────────
+//
+// Единица обучения на всех тирах — Word (не WordSense). При L0/L1/L2/L3 → mastered
+// слово трекается одной строкой; meaning-level прогресс не хранится.
 
-export const userWordProgress = pgTable(
-  'user_word_progress',
+export const userWordProgressWord = pgTable(
+  'user_word_progress_word',
   {
     id: serial('id').primaryKey(),
     userId: integer('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
-    meaningId: integer('meaning_id')
-      .references(() => wordMeanings.id, { onDelete: 'cascade' })
+    wordId: integer('word_id')
+      .references(() => words.id, { onDelete: 'cascade' })
       .notNull(),
     correctCount: integer('correct_count').default(0).notNull(),
     incorrectCount: integer('incorrect_count').default(0).notNull(),
-    srsStage: integer('srs_stage').default(0).notNull(), // 0-3 learning progress (3 = learned)
     hasPenalty: boolean('has_penalty').default(false).notNull(),
-    reviewStage: integer('review_stage').default(0).notNull(), // index into review intervals after learned
+    reviewStage: integer('review_stage').default(0).notNull(),
     nextReviewAt: timestamp('next_review_at'),
-    masteredAt: timestamp('mastered_at'), // set when srsStage reaches 3 (learned)
+    masteredAt: timestamp('mastered_at'),
+    fromPlacement: boolean('from_placement').default(false).notNull(),
     lastSeenAt: timestamp('last_seen_at').defaultNow().notNull(),
+    learningTier: learningTierEnum('learning_tier'),
+    tierCorrectCount: integer('tier_correct_count').default(0).notNull(),
+    state: learningStateEnum('state'),
+    snoozedUntil: timestamp('snoozed_until'),
+    /** Счётчик подряд good/easy на финальном stage review (для перехода в mastered). */
+    consecutiveEasyOrGood: integer('consecutive_easy_or_good').default(0).notNull(),
+    /** Последняя кнопка grade на L3. Для аналитики и UI «последняя оценка». */
+    lastGrade: reviewGradeEnum('last_grade'),
+    /** E-Factor для SM-2 × 100 (int, чтобы не возиться с numeric в drizzle).
+     *  Default 250 = 2.50. На первой итерации НЕ используется в формуле — только
+     *  сетка + grade-modifier. Поле оставлено чтобы подключить EF без миграции. */
+    efFactorX100: integer('ef_factor').default(250).notNull(),
+    /** Маркер «свайпнут как Изучаю в обзоре». NULL → слово либо never свайпнуто,
+     *  либо вернулось из pool_snoozed (нужна повторная разметка). NOT NULL +
+     *  tier='pool' + state='active' → готово к промоушну в батч. */
+    poolSwipedLearnAt: timestamp('pool_swiped_learn_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex('user_word_progress_uniq').on(table.userId, table.meaningId),
-    index('user_word_progress_user_idx').on(table.userId),
-    index('user_word_progress_review_idx').on(table.userId, table.nextReviewAt),
+    uniqueIndex('user_word_progress_word_uniq').on(table.userId, table.wordId),
+    index('user_word_progress_word_user_idx').on(table.userId),
+    index('user_word_progress_word_review_idx').on(table.userId, table.nextReviewAt),
+    index('user_word_progress_word_state_idx').on(table.userId, table.state),
+    index('user_word_progress_word_snoozed_idx').on(table.userId, table.snoozedUntil),
+    index('user_word_progress_word_tier_idx').on(table.userId, table.learningTier),
+    index('user_word_progress_word_pool_swiped_idx').on(table.userId, table.poolSwipedLearnAt),
   ],
 );
 
@@ -487,6 +595,9 @@ export const paymentItemTypeEnum = pgEnum('payment_item_type', [
   'freeze_14',
   'premium_month',
   'premium_year',
+  'gem_pack_100',
+  'gem_pack_500',
+  'gem_pack_1500',
 ]);
 
 export const payments = pgTable(
@@ -515,6 +626,60 @@ export const payments = pgTable(
   ],
 );
 
+// ─── AI Content ─────────────────────────────────────────────────────────────
+
+export const wordAiContent = pgTable(
+  'word_ai_content',
+  {
+    id: serial('id').primaryKey(),
+    meaningId: integer('meaning_id')
+      .references(() => wordMeanings.id, { onDelete: 'cascade' })
+      .notNull(),
+    contentType: aiContentTypeEnum('content_type').notNull(),
+    content: jsonb('content').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('word_ai_content_meaning_type_uniq').on(table.meaningId, table.contentType),
+    index('word_ai_content_meaning_idx').on(table.meaningId),
+  ],
+);
+
+// ─── Learning Events ────────────────────────────────────────────────────────
+
+// Append-only event log для аналитики обучающего потока.
+// Никогда не редактируется. Один источник правды для D1/D7 retention,
+// funnel первой сессии и распределения типов вопросов.
+export const learningEvents = pgTable(
+  'learning_events',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    eventType: learningEventTypeEnum('event_type').notNull(),
+    // meaningId — для событий per-meaning (production, rollback). nullable.
+    meaningId: integer('meaning_id').references(() => wordMeanings.id, { onDelete: 'set null' }),
+    // wordId — для событий per-word (encounter, passive, active, review при
+    // word-level прохождении). nullable. Один из meaning_id/word_id всегда
+    // заполнен в зависимости от типа учебной единицы.
+    wordId: integer('word_id').references(() => words.id, { onDelete: 'set null' }),
+    tierBefore: learningTierEnum('tier_before'),
+    tierAfter: learningTierEnum('tier_after'),
+    questionType: varchar('question_type', { length: 32 }),
+    isCorrect: boolean('is_correct'),
+    answerTimeMs: integer('answer_time_ms'),
+    payload: jsonb('payload').$type<Record<string, unknown>>(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('learning_events_user_created_idx').on(table.userId, table.createdAt),
+    index('learning_events_type_created_idx').on(table.eventType, table.createdAt),
+    index('learning_events_meaning_idx').on(table.meaningId),
+    index('learning_events_word_idx').on(table.wordId),
+  ],
+);
+
 // ─── Relations ──────────────────────────────────────────────────────────────
 
 export const wordsRelations = relations(words, ({ many }) => ({
@@ -524,6 +689,11 @@ export const wordsRelations = relations(words, ({ many }) => ({
 export const wordMeaningsRelations = relations(wordMeanings, ({ one, many }) => ({
   word: one(words, { fields: [wordMeanings.wordId], references: [words.id] }),
   topics: many(wordMeaningTopics),
+  aiContent: many(wordAiContent),
+}));
+
+export const wordAiContentRelations = relations(wordAiContent, ({ one }) => ({
+  meaning: one(wordMeanings, { fields: [wordAiContent.meaningId], references: [wordMeanings.id] }),
 }));
 
 export const topicsRelations = relations(topics, ({ many }) => ({
@@ -589,9 +759,9 @@ export const userCollectionsRelations = relations(userCollections, ({ one }) => 
   collection: one(collections, { fields: [userCollections.collectionId], references: [collections.id] }),
 }));
 
-export const userWordProgressRelations = relations(userWordProgress, ({ one }) => ({
-  user: one(users, { fields: [userWordProgress.userId], references: [users.id] }),
-  meaning: one(wordMeanings, { fields: [userWordProgress.meaningId], references: [wordMeanings.id] }),
+export const userWordProgressWordRelations = relations(userWordProgressWord, ({ one }) => ({
+  user: one(users, { fields: [userWordProgressWord.userId], references: [users.id] }),
+  word: one(words, { fields: [userWordProgressWord.wordId], references: [words.id] }),
 }));
 
 export const userCustomWordsRelations = relations(userCustomWords, ({ one, many }) => ({

@@ -1,9 +1,9 @@
 import { useEffect } from 'react';
-import { telegram } from '@/lib/telegram';
+import { platformBridge } from '@/lib/platform-bridge';
 
 export function useBackButton(onBack: () => void) {
   useEffect(() => {
-    if (!telegram.isAvailable) return;
+    if (!platformBridge.hasNativeBackButton) return;
 
     const btn = window.Telegram.WebApp.BackButton;
     btn.onClick(onBack);

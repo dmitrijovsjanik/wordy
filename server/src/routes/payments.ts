@@ -5,8 +5,17 @@ import { users } from '../db/schema.js';
 import { createPayment, handleWebhook } from '../services/payment-service.js';
 import { getPremiumStatus } from '../services/premium-service.js';
 import { PAYMENT_ITEMS, RETURN_URL_WEBAPP } from '../config/payment-config.js';
+import { PILOT_FEATURES } from '../config/pilot-config.js';
 
 export default async function paymentRoutes(app: FastifyInstance) {
+  app.addHook('onRequest', async (request, reply) => {
+    // Webhook от платёжного провайдера должен работать (для существующих
+    // платежей до пилота) — пропускаем только endpoint оформления.
+    if (!PILOT_FEATURES.payments && request.routeOptions.url === '/api/payments/create') {
+      return reply.code(403).send({ error: 'Платежи недоступны', code: 'PAYMENTS_DISABLED' });
+    }
+  });
+
   // Создать платёж (из Mini App)
   app.post<{
     Body: { itemType: string };

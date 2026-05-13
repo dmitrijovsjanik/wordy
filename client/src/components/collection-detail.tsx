@@ -35,7 +35,8 @@ import {
   Cancel01Icon,
 } from '@hugeicons/core-free-icons';
 import { dictionaryLookup, addCollectionWords, removeCollectionWord } from '@/lib/api';
-import { useHomeStore } from '@/stores/home-store';
+import { PILOT_FEATURES } from '@/lib/pilot-config';
+import { useUnifiedGameStore } from '@/stores/unified-game-store';
 import { PremiumDrawer } from '@/components/ui/premium-drawer';
 import type { DictionaryLookupResult } from '@/types/api';
 
@@ -51,7 +52,7 @@ export function CollectionDetail() {
   const unsubscribe = useCollectionStore((s) => s.unsubscribe);
   const update = useCollectionStore((s) => s.update);
   const remove = useCollectionStore((s) => s.remove);
-  const setCollectionId = useHomeStore((s) => s.setCollectionId);
+  const setCollectionId = useUnifiedGameStore((s) => s.setCollectionId);
 
   useBackButton(() => navigate('/collections'));
 
@@ -115,7 +116,7 @@ export function CollectionDetail() {
 
       // Проверяем лимит слов для user-коллекций (бесплатный план)
       const currentWordCount = currentDetail?.words.length ?? 0;
-      if (currentDetail?.collection.type === 'user' && currentWordCount >= MAX_FREE_WORDS) {
+      if (PILOT_FEATURES.payments && currentDetail?.collection.type === 'user' && currentWordCount >= MAX_FREE_WORDS) {
         setShowPremiumDrawer(true);
         return;
       }
@@ -278,7 +279,7 @@ export function CollectionDetail() {
       <div className="mt-6 flex flex-1 flex-col gap-3">
         <div className="flex items-center justify-between">
           <span className="text-sm text-[var(--gray-11)]">
-            {collection.type === 'user'
+            {collection.type === 'user' && PILOT_FEATURES.payments
               ? `${countUniqueWords(words)}/${MAX_FREE_WORDS} слов`
               : `${countUniqueWords(words)} слов`}
           </span>
@@ -417,7 +418,7 @@ export function CollectionDetail() {
                 <Button
                   variant="secondary"
                   onClick={() => {
-                    if (collection.type === 'user' && words.length >= MAX_FREE_WORDS) {
+                    if (PILOT_FEATURES.payments && collection.type === 'user' && words.length >= MAX_FREE_WORDS) {
                       setShowPremiumDrawer(true);
                     } else {
                       setIsAddingMode(true);

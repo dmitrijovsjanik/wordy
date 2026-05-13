@@ -9,3 +9,7 @@ export const PREMIUM_DURATIONS = {
   month: 30 * 24 * 60 * 60 * 1000,
   year: 365 * 24 * 60 * 60 * 1000,
 } as const;
+
+// Reverse trial для новых пользователей
+export const REVERSE_TRIAL_DAYS = 7;
+export const REVERSE_TRIAL_MS = REVERSE_TRIAL_DAYS * 24 * 60 * 60 * 1000;

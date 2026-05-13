@@ -13,8 +13,14 @@ import {
   saveDailySnapshot,
   getTodayStartSnapshot,
 } from '../services/league-service.js';
+import { PILOT_FEATURES } from '../config/pilot-config.js';
 
 export default async function leagueRoutes(app: FastifyInstance) {
+  app.addHook('onRequest', async (_request, reply) => {
+    if (!PILOT_FEATURES.leagues) {
+      return reply.code(404).send({ error: 'Not Found' });
+    }
+  });
   app.addHook('onRequest', app.authenticate);
 
   // Получить текущий статус пользователя в лиге

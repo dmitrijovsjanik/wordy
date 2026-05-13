@@ -1,0 +1,706 @@
+[
+  {
+    "meaningId": 23096,
+    "word": "country",
+    "translation": "страна",
+    "examples": { "sentences": [
+      { "en": "I love my country.", "ru": "Я люблю свою страну.", "cefr": "a1" },
+      { "en": "The country is facing an economic crisis.", "ru": "Страна переживает экономический кризис.", "cefr": "b1" },
+      { "en": "Developing countries often struggle to attract foreign investment.", "ru": "Развивающиеся страны часто с трудом привлекают иностранные инвестиции.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "COUNTRY — «кантри». Кантри-музыка — музыка СТРАНЫ (деревенской Америки)." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — государство, территория" },
+      { "level": 2, "text": "7 букв, начинается на C" },
+      { "level": 3, "text": "C _ _ n t r y" }
+    ]}
+  },
+  {
+    "meaningId": 23099,
+    "word": "old",
+    "translation": "старый",
+    "examples": { "sentences": [
+      { "en": "This is an old house.", "ru": "Это старый дом.", "cefr": "a1" },
+      { "en": "My grandfather is 85 years old.", "ru": "Моему дедушке 85 лет.", "cefr": "b1" },
+      { "en": "The old traditions are slowly giving way to modern practices.", "ru": "Старые традиции постепенно уступают место современным практикам.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "OLD — звучит как «олд». ОЛДскул — СТАРАЯ школа." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Прилагательное — противоположность «нового» или «молодого»" },
+      { "level": 2, "text": "3 буквы, начинается на O" },
+      { "level": 3, "text": "O _ d" }
+    ]}
+  },
+  {
+    "meaningId": 22080,
+    "word": "school",
+    "translation": "школа",
+    "examples": { "sentences": [
+      { "en": "I go to school every day.", "ru": "Я хожу в школу каждый день.", "cefr": "a1" },
+      { "en": "She teaches at a primary school in London.", "ru": "Она преподаёт в начальной школе в Лондоне.", "cefr": "b1" },
+      { "en": "The school of thought emphasizes empirical evidence over theoretical assumptions.", "ru": "Эта школа мысли делает упор на эмпирические данные, а не на теоретические допущения.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "SCHOOL — «скул». СКУЛьптуру лепят в ШКОЛЕ искусств." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — место, где учатся дети" },
+      { "level": 2, "text": "6 букв, начинается на S, двойная O" },
+      { "level": 3, "text": "S c h _ _ l" }
+    ]}
+  },
+  {
+    "meaningId": 23110,
+    "word": "late",
+    "translation": "поздний",
+    "examples": { "sentences": [
+      { "en": "It's late, go to bed.", "ru": "Уже поздно, иди спать.", "cefr": "a1" },
+      { "en": "Sorry, I was late for the meeting.", "ru": "Извините, я опоздал на собрание.", "cefr": "b1" },
+      { "en": "The late submission of the report resulted in a penalty.", "ru": "Поздняя подача отчёта привела к штрафу.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "LATE — звучит как «лэйт». ЛЭЙТенант опоздал — он ПОЗДНИЙ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Прилагательное — противоположность «раннего»" },
+      { "level": 2, "text": "4 буквы, начинается на L" },
+      { "level": 3, "text": "L _ t _" }
+    ]}
+  },
+  {
+    "meaningId": 23121,
+    "word": "high",
+    "translation": "высокий",
+    "examples": { "sentences": [
+      { "en": "The building is very high.", "ru": "Здание очень высокое.", "cefr": "a1" },
+      { "en": "She has high expectations for her students.", "ru": "У неё высокие ожидания к ученикам.", "cefr": "b1" },
+      { "en": "The high cost of living in major cities drives many residents to the suburbs.", "ru": "Высокая стоимость жизни в крупных городах вынуждает многих жителей переезжать в пригороды.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "HIGH — звучит как «хай». ХАЙ-тек — ВЫСОКИЕ технологии." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Прилагательное — противоположность «низкого»" },
+      { "level": 2, "text": "4 буквы, начинается на H" },
+      { "level": 3, "text": "H _ g h" }
+    ]}
+  },
+  {
+    "meaningId": 23129,
+    "word": "different",
+    "translation": "различный",
+    "examples": { "sentences": [
+      { "en": "We have different ideas.", "ru": "У нас разные идеи.", "cefr": "a1" },
+      { "en": "Life in the city is very different from life in the countryside.", "ru": "Жизнь в городе сильно отличается от жизни в деревне.", "cefr": "b1" },
+      { "en": "The study compared outcomes across different demographic groups.", "ru": "Исследование сравнивало результаты среди различных демографических групп.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "DIFFERENT — «диферент». ДИФФЕРЕНТциал в математике — РАЗНИЦА между величинами." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Прилагательное — не такой же, отличающийся" },
+      { "level": 2, "text": "9 букв, начинается на D" },
+      { "level": 3, "text": "D _ f f _ r _ n t" }
+    ]}
+  },
+  {
+    "meaningId": 23140,
+    "word": "next",
+    "translation": "следующий",
+    "examples": { "sentences": [
+      { "en": "See you next week.", "ru": "Увидимся на следующей неделе.", "cefr": "a1" },
+      { "en": "The next step is to submit your application.", "ru": "Следующий шаг — подать заявку.", "cefr": "b1" },
+      { "en": "The next generation of technology promises to revolutionize healthcare.", "ru": "Следующее поколение технологий обещает совершить революцию в здравоохранении.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "NEXT — «некст». Кнопка НЕКСТ — переключить на СЛЕДУЮЩИЙ трек." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Прилагательное — идущий сразу после текущего" },
+      { "level": 2, "text": "4 буквы, начинается на N" },
+      { "level": 3, "text": "N _ x _" }
+    ]}
+  },
+  {
+    "meaningId": 23149,
+    "word": "end",
+    "translation": "конец",
+    "examples": { "sentences": [
+      { "en": "This is the end of the story.", "ru": "Это конец истории.", "cefr": "a1" },
+      { "en": "By the end of the year, we had saved enough money.", "ru": "К концу года мы накопили достаточно денег.", "cefr": "b1" },
+      { "en": "The ceasefire marked the end of a prolonged and devastating conflict.", "ru": "Перемирие ознаменовало конец затяжного и разрушительного конфликта.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "END — «энд». The END — КОНЕЦ фильма (знакомая надпись)." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — противоположность «начала»" },
+      { "level": 2, "text": "3 буквы, начинается на E" },
+      { "level": 3, "text": "E _ d" }
+    ]}
+  },
+  {
+    "meaningId": 23178,
+    "word": "world",
+    "translation": "мир",
+    "examples": { "sentences": [
+      { "en": "The world is big.", "ru": "Мир большой.", "cefr": "a1" },
+      { "en": "She has travelled all over the world.", "ru": "Она путешествовала по всему миру.", "cefr": "b1" },
+      { "en": "Globalisation has profoundly reshaped the economic landscape of the modern world.", "ru": "Глобализация кардинально изменила экономический ландшафт современного мира.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "WORLD — «ворлд». Ворлд-чемпионат — чемпионат МИРА." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — планета Земля и всё на ней" },
+      { "level": 2, "text": "5 букв, начинается на W" },
+      { "level": 3, "text": "W _ r l _" }
+    ]}
+  },
+  {
+    "meaningId": 23183,
+    "word": "week",
+    "translation": "неделя",
+    "examples": { "sentences": [
+      { "en": "I work five days a week.", "ru": "Я работаю пять дней в неделю.", "cefr": "a1" },
+      { "en": "We're going on holiday next week.", "ru": "Мы едем в отпуск на следующей неделе.", "cefr": "b1" },
+      { "en": "The project deadline was moved forward by a week.", "ru": "Дедлайн проекта перенесли на неделю раньше.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "WEEK — звучит как «уик». УИКенд — конец НЕДЕЛИ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — период из 7 дней" },
+      { "level": 2, "text": "4 буквы, начинается на W, двойная E" },
+      { "level": 3, "text": "W _ _ k" }
+    ]}
+  },
+  {
+    "meaningId": 23225,
+    "word": "include",
+    "translation": "включать",
+    "examples": { "sentences": [
+      { "en": "The price includes breakfast.", "ru": "Цена включает завтрак.", "cefr": "a1" },
+      { "en": "The course includes both theory and practice.", "ru": "Курс включает и теорию, и практику.", "cefr": "b1" },
+      { "en": "The report includes a comprehensive analysis of market trends.", "ru": "Отчёт включает всесторонний анализ рыночных тенденций.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "INCLUDE — «инклюд». ИНКЛЮДить — ВКЛЮЧАТЬ в список (как инклюзия)." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — содержать в себе, охватывать" },
+      { "level": 2, "text": "7 букв, начинается на I" },
+      { "level": 3, "text": "I n c l _ d _" }
+    ]}
+  },
+  {
+    "meaningId": 22071,
+    "word": "house",
+    "translation": "дом",
+    "examples": { "sentences": [
+      { "en": "This is my house.", "ru": "Это мой дом.", "cefr": "a1" },
+      { "en": "They bought a house near the sea.", "ru": "Они купили дом у моря.", "cefr": "b1" },
+      { "en": "The old house had been standing vacant for years before it was finally restored.", "ru": "Старый дом пустовал годами, прежде чем его наконец отреставрировали.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "HOUSE — звучит как «хаус». Dr. ХАУС живёт в ДОМе (house)." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — здание, где живут люди" },
+      { "level": 2, "text": "5 букв, начинается на H" },
+      { "level": 3, "text": "H _ _ s e" }
+    ]}
+  },
+  {
+    "meaningId": 23256,
+    "word": "group",
+    "translation": "группа",
+    "examples": { "sentences": [
+      { "en": "A group of students came in.", "ru": "Вошла группа студентов.", "cefr": "a1" },
+      { "en": "The research group published their findings.", "ru": "Исследовательская группа опубликовала свои выводы.", "cefr": "b1" },
+      { "en": "The focus group identified several critical flaws in the proposed design.", "ru": "Фокус-группа выявила несколько критических недостатков в предложенном дизайне.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "GROUP — «групп». ГРУППА — прямое заимствование из английского!" },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — несколько людей или предметов вместе" },
+      { "level": 2, "text": "5 букв, начинается на G" },
+      { "level": 3, "text": "G r _ _ p" }
+    ]}
+  },
+  {
+    "meaningId": 23265,
+    "word": "case",
+    "translation": "дело",
+    "examples": { "sentences": [
+      { "en": "It's a difficult case.", "ru": "Это трудное дело.", "cefr": "a1" },
+      { "en": "In that case, we should change our plans.", "ru": "В таком случае нам стоит изменить планы.", "cefr": "b1" },
+      { "en": "The landmark case set a precedent for future rulings.", "ru": "Историческое дело создало прецедент для будущих решений.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "CASE — звучит как «кэйс». КЕЙСы в бизнес-школе — ДЕЛА из реальной практики." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — ситуация или судебное разбирательство" },
+      { "level": 2, "text": "4 буквы, начинается на C" },
+      { "level": 3, "text": "C _ s _" }
+    ]}
+  },
+  {
+    "meaningId": 23279,
+    "word": "woman",
+    "translation": "женщина",
+    "examples": { "sentences": [
+      { "en": "She is a kind woman.", "ru": "Она добрая женщина.", "cefr": "a1" },
+      { "en": "The woman sitting next to me was reading a book.", "ru": "Женщина, сидящая рядом со мной, читала книгу.", "cefr": "b1" },
+      { "en": "She became the first woman to lead the organisation.", "ru": "Она стала первой женщиной, возглавившей организацию.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "WOMAN — «вумен». ВУМен — от WO(е) + MAN: ЖЕНЩИНА как горе мужчине (шутка)." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — взрослый человек женского пола" },
+      { "level": 2, "text": "5 букв, начинается на W" },
+      { "level": 3, "text": "W _ m _ n" }
+    ]}
+  },
+  {
+    "meaningId": 22054,
+    "word": "book",
+    "translation": "книга",
+    "examples": { "sentences": [
+      { "en": "I read a book every week.", "ru": "Я читаю книгу каждую неделю.", "cefr": "a1" },
+      { "en": "She published her first book last year.", "ru": "Она опубликовала свою первую книгу в прошлом году.", "cefr": "b1" },
+      { "en": "The book offers a nuanced perspective on globalisation.", "ru": "Книга предлагает тонкий взгляд на глобализацию.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "BOOK — звучит как «бук». БУКинист — продавец старых КНИГ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — печатное произведение со страницами" },
+      { "level": 2, "text": "4 буквы, начинается на B, двойная O" },
+      { "level": 3, "text": "B _ _ k" }
+    ]}
+  },
+  {
+    "meaningId": 22079,
+    "word": "family",
+    "translation": "семья",
+    "examples": { "sentences": [
+      { "en": "My family is big.", "ru": "Моя семья большая.", "cefr": "a1" },
+      { "en": "She spends weekends with her family.", "ru": "Она проводит выходные с семьёй.", "cefr": "b1" },
+      { "en": "Balancing a demanding career with family obligations remains a persistent challenge.", "ru": "Совмещение напряжённой карьеры с семейными обязанностями остаётся постоянной проблемой.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "FAMILY — «фэмили». ФЭМили-пак — упаковка для всей СЕМЬИ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — родители и дети вместе" },
+      { "level": 2, "text": "6 букв, начинается на F" },
+      { "level": 3, "text": "F _ m _ l y" }
+    ]}
+  },
+  {
+    "meaningId": 23288,
+    "word": "seem",
+    "translation": "казаться",
+    "examples": { "sentences": [
+      { "en": "She seems happy.", "ru": "Она кажется счастливой.", "cefr": "a1" },
+      { "en": "The problem seemed impossible at first.", "ru": "Поначалу проблема казалась невозможной.", "cefr": "b1" },
+      { "en": "What seemed like a minor issue eventually escalated into a full-blown crisis.", "ru": "То, что казалось мелкой проблемой, в итоге переросло в полномасштабный кризис.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "SEEM — звучит как «сим». СИМулятор создаёт то, что КАЖЕТСЯ реальным." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — выглядеть определённым образом, производить впечатление" },
+      { "level": 2, "text": "4 буквы, начинается на S, двойная E" },
+      { "level": 3, "text": "S _ _ m" }
+    ]}
+  },
+  {
+    "meaningId": 23291,
+    "word": "let",
+    "translation": "позволять",
+    "examples": { "sentences": [
+      { "en": "Let me help you.", "ru": "Позволь мне помочь тебе.", "cefr": "a1" },
+      { "en": "Her parents don't let her stay out late.", "ru": "Родители не позволяют ей гулять допоздна.", "cefr": "b1" },
+      { "en": "The relaxed regulations let companies innovate more freely.", "ru": "Смягчённые правила позволяют компаниям свободнее внедрять инновации.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "LET — звучит как «лэт». ЛЕТАТЬ тебе ПОЗВОЛЯЮТ только с билетом." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — разрешить, дать возможность" },
+      { "level": 2, "text": "3 буквы, начинается на L" },
+      { "level": 3, "text": "L _ t" }
+    ]}
+  },
+  {
+    "meaningId": 22066,
+    "word": "kind",
+    "translation": "добрый",
+    "examples": { "sentences": [
+      { "en": "She is a kind person.", "ru": "Она добрый человек.", "cefr": "a1" },
+      { "en": "It was kind of you to help me.", "ru": "Было добро с твоей стороны помочь мне.", "cefr": "b1" },
+      { "en": "Her kind words had a profound effect on the grieving family.", "ru": "Её добрые слова глубоко повлияли на скорбящую семью.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "KIND — звучит как «кайнд». КАЙНДер-сюрприз — ДОБРЫЙ подарок для детей." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Прилагательное — отзывчивый, щедрый, хороший к людям" },
+      { "level": 2, "text": "4 буквы, начинается на K" },
+      { "level": 3, "text": "K _ n _" }
+    ]}
+  },
+  {
+    "meaningId": 23234,
+    "word": "course",
+    "translation": "курс",
+    "examples": { "sentences": [
+      { "en": "I'm taking an English course.", "ru": "Я прохожу курс английского.", "cefr": "a1" },
+      { "en": "Of course, you can come with us.", "ru": "Конечно, ты можешь пойти с нами.", "cefr": "b1" },
+      { "en": "The course of events took an unexpected turn.", "ru": "Ход событий принял неожиданный оборот.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "COURSE — «корс». КОРСет для фигуры — как КУРС для знаний: формирует." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — программа обучения или направление" },
+      { "level": 2, "text": "6 букв, начинается на C" },
+      { "level": 3, "text": "C _ _ r s e" }
+    ]}
+  },
+  {
+    "meaningId": 23393,
+    "word": "important",
+    "translation": "важный",
+    "examples": { "sentences": [
+      { "en": "This is very important.", "ru": "Это очень важно.", "cefr": "a1" },
+      { "en": "It's important to eat healthy food.", "ru": "Важно есть здоровую пищу.", "cefr": "b1" },
+      { "en": "The report highlights several important implications for public policy.", "ru": "Отчёт выделяет несколько важных последствий для государственной политики.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "IMPORTANT — «импортант». ИМПОРТ — ВАЖНАЯ часть экономики." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Прилагательное — имеющее большое значение" },
+      { "level": 2, "text": "9 букв, начинается на I" },
+      { "level": 3, "text": "I m p _ r t _ n t" }
+    ]}
+  },
+  {
+    "meaningId": 22076,
+    "word": "big",
+    "translation": "большой",
+    "examples": { "sentences": [
+      { "en": "The dog is big.", "ru": "Собака большая.", "cefr": "a1" },
+      { "en": "We need a bigger room for the meeting.", "ru": "Нам нужна комната побольше для собрания.", "cefr": "b1" },
+      { "en": "The merger created the biggest company in the industry.", "ru": "Слияние создало крупнейшую компанию в отрасли.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "BIG — звучит как «биг». БИГМАК — БОЛЬШОЙ бургер." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Прилагательное — противоположность «маленького»" },
+      { "level": 2, "text": "3 буквы, начинается на B" },
+      { "level": 3, "text": "B _ g" }
+    ]}
+  },
+  {
+    "meaningId": 23415,
+    "word": "turn",
+    "translation": "поворачивать",
+    "examples": { "sentences": [
+      { "en": "Turn left here.", "ru": "Поверни налево здесь.", "cefr": "a1" },
+      { "en": "She turned the key in the lock.", "ru": "Она повернула ключ в замке.", "cefr": "b1" },
+      { "en": "The conversation took an unexpected turn when she mentioned her resignation.", "ru": "Разговор принял неожиданный поворот, когда она упомянула об отставке.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "TURN — звучит как «тёрн». ТЁРНистый путь — много ПОВОРОТОВ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — менять направление" },
+      { "level": 2, "text": "4 буквы, начинается на T" },
+      { "level": 3, "text": "T _ r n" }
+    ]}
+  },
+  {
+    "meaningId": 23379,
+    "word": "follow",
+    "translation": "следовать",
+    "examples": { "sentences": [
+      { "en": "Follow me, please.", "ru": "Следуйте за мной, пожалуйста.", "cefr": "a1" },
+      { "en": "You should follow the instructions carefully.", "ru": "Ты должен внимательно следовать инструкциям.", "cefr": "b1" },
+      { "en": "The reforms that followed the crisis fundamentally altered the regulatory landscape.", "ru": "Реформы, последовавшие за кризисом, кардинально изменили регуляторный ландшафт.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "FOLLOW — «фоллоу». ФОЛОВЕРЫ в соцсетях — те, кто СЛЕДУЕТ за тобой." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — идти за кем-то или придерживаться чего-то" },
+      { "level": 2, "text": "6 букв, начинается на F, двойная L" },
+      { "level": 3, "text": "F _ l l _ w" }
+    ]}
+  },
+  {
+    "meaningId": 23361,
+    "word": "small",
+    "translation": "маленький",
+    "examples": { "sentences": [
+      { "en": "I have a small cat.", "ru": "У меня маленький кот.", "cefr": "a1" },
+      { "en": "She grew up in a small town.", "ru": "Она выросла в маленьком городе.", "cefr": "b1" },
+      { "en": "Even a small change in policy can have far-reaching consequences.", "ru": "Даже небольшое изменение в политике может иметь далеко идущие последствия.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "SMALL — звучит как «смол». СМОЛл-ток — МАЛЕНЬКИЙ разговор (ни о чём)." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Прилагательное — противоположность «большого»" },
+      { "level": 2, "text": "5 букв, начинается на S, двойная L" },
+      { "level": 3, "text": "S m _ l l" }
+    ]}
+  },
+  {
+    "meaningId": 23562,
+    "word": "open",
+    "translation": "открывать",
+    "examples": { "sentences": [
+      { "en": "Open the door, please.", "ru": "Откройте дверь, пожалуйста.", "cefr": "a1" },
+      { "en": "The shop opens at nine o'clock.", "ru": "Магазин открывается в девять часов.", "cefr": "b1" },
+      { "en": "The CEO opened the conference with an inspiring keynote address.", "ru": "Генеральный директор открыл конференцию вдохновляющей программной речью.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "OPEN — «оупен». ОУПЕНинг — ОТКРЫТИЕ нового магазина." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — противоположность «закрывать»" },
+      { "level": 2, "text": "4 буквы, начинается на O" },
+      { "level": 3, "text": "O p _ n" }
+    ]}
+  },
+  {
+    "meaningId": 23768,
+    "word": "close",
+    "translation": "закрывать",
+    "examples": { "sentences": [
+      { "en": "Close the window.", "ru": "Закрой окно.", "cefr": "a1" },
+      { "en": "The library closes at six on Saturdays.", "ru": "Библиотека закрывается в шесть по субботам.", "cefr": "b1" },
+      { "en": "The authorities decided to close the investigation due to insufficient evidence.", "ru": "Власти решили закрыть расследование из-за недостатка доказательств.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "CLOSE — «клоуз». КЛОУЗ-ап (крупный план) — камера ЗАКРЫВАЕТ расстояние." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — противоположность «открывать»" },
+      { "level": 2, "text": "5 букв, начинается на C" },
+      { "level": 3, "text": "C l _ s _" }
+    ]}
+  },
+  {
+    "meaningId": 23445,
+    "word": "early",
+    "translation": "ранний",
+    "examples": { "sentences": [
+      { "en": "I get up early.", "ru": "Я встаю рано.", "cefr": "a1" },
+      { "en": "In the early stages of the project, everything went smoothly.", "ru": "На ранних стадиях проекта всё шло гладко.", "cefr": "b1" },
+      { "en": "Early detection of the disease significantly improves survival rates.", "ru": "Раннее обнаружение заболевания значительно повышает шансы на выживание.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "EARLY — «ёрли». Ёрли бёрд (ранняя пташка) — кто РАНО встаёт." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Прилагательное — противоположность «позднего»" },
+      { "level": 2, "text": "5 букв, начинается на E" },
+      { "level": 3, "text": "E _ r l _" }
+    ]}
+  },
+  {
+    "meaningId": 23992,
+    "word": "night",
+    "translation": "ночь",
+    "examples": { "sentences": [
+      { "en": "Good night!", "ru": "Спокойной ночи!", "cefr": "a1" },
+      { "en": "They drove through the night to reach the coast.", "ru": "Они ехали всю ночь, чтобы добраться до побережья.", "cefr": "b1" },
+      { "en": "Working the night shift takes a considerable toll on one's health.", "ru": "Работа в ночную смену существенно сказывается на здоровье.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "NIGHT — звучит как «найт». Рыцарь (knight) сражается НОЧЬЮ (night) — одинаково звучат!" },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — тёмное время суток" },
+      { "level": 2, "text": "5 букв, начинается на N" },
+      { "level": 3, "text": "N _ g h t" }
+    ]}
+  },
+  {
+    "meaningId": 22070,
+    "word": "water",
+    "translation": "вода",
+    "examples": { "sentences": [
+      { "en": "Can I have some water?", "ru": "Можно мне воды?", "cefr": "a1" },
+      { "en": "The water in the lake was crystal clear.", "ru": "Вода в озере была кристально чистой.", "cefr": "b1" },
+      { "en": "Access to clean drinking water remains a critical issue in many regions.", "ru": "Доступ к чистой питьевой воде остаётся критической проблемой во многих регионах.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "WATER — звучит как «вотер». ВОТЕРпруф — защита от ВОДЫ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — прозрачная жидкость H₂O" },
+      { "level": 2, "text": "5 букв, начинается на W" },
+      { "level": 3, "text": "W _ t _ r" }
+    ]}
+  },
+  {
+    "meaningId": 23491,
+    "word": "money",
+    "translation": "деньги",
+    "examples": { "sentences": [
+      { "en": "I don't have much money.", "ru": "У меня мало денег.", "cefr": "a1" },
+      { "en": "She saves money every month.", "ru": "Она откладывает деньги каждый месяц.", "cefr": "b1" },
+      { "en": "The misallocation of public money led to widespread criticism.", "ru": "Нецелевое расходование государственных денег вызвало широкую критику.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "MONEY — звучит как «мани». МАНИкюр стоит ДЕНЕГ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — средство оплаты, валюта" },
+      { "level": 2, "text": "5 букв, начинается на M" },
+      { "level": 3, "text": "M _ n _ y" }
+    ]}
+  },
+  {
+    "meaningId": 23873,
+    "word": "room",
+    "translation": "комната",
+    "examples": { "sentences": [
+      { "en": "My room is small.", "ru": "Моя комната маленькая.", "cefr": "a1" },
+      { "en": "There's no room for another chair.", "ru": "Для ещё одного стула нет места.", "cefr": "b1" },
+      { "en": "The meeting room was equipped with state-of-the-art video conferencing technology.", "ru": "Переговорная была оснащена новейшими технологиями видеоконференцсвязи.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "ROOM — звучит как «рум». РУМянец на щеках — хорошо выспался в КОМНАТЕ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — помещение в здании" },
+      { "level": 2, "text": "4 буквы, начинается на R, двойная O" },
+      { "level": 3, "text": "R _ _ m" }
+    ]}
+  },
+  {
+    "meaningId": 23497,
+    "word": "fact",
+    "translation": "факт",
+    "examples": { "sentences": [
+      { "en": "It's a fact.", "ru": "Это факт.", "cefr": "a1" },
+      { "en": "In fact, she was the one who started it.", "ru": "На самом деле, это она всё начала.", "cefr": "b1" },
+      { "en": "The fact that the evidence was suppressed calls into question the integrity of the trial.", "ru": "Тот факт, что улики были скрыты, ставит под сомнение объективность суда.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "FACT — прямое заимствование: ФАКТ — это ФАКТ." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — достоверная информация, истина" },
+      { "level": 2, "text": "4 буквы, начинается на F" },
+      { "level": 3, "text": "F _ c _" }
+    ]}
+  },
+  {
+    "meaningId": 23335,
+    "word": "question",
+    "translation": "вопрос",
+    "examples": { "sentences": [
+      { "en": "Can I ask a question?", "ru": "Можно задать вопрос?", "cefr": "a1" },
+      { "en": "That's a good question.", "ru": "Это хороший вопрос.", "cefr": "b1" },
+      { "en": "The ethical questions raised by genetic engineering demand careful consideration.", "ru": "Этические вопросы, поднимаемые генной инженерией, требуют тщательного рассмотрения.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "QUESTION — «квесчен». КВЕСТион — квест начинается с ВОПРОСА." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — запрос информации" },
+      { "level": 2, "text": "8 букв, начинается на Q" },
+      { "level": 3, "text": "Q _ _ s t i _ n" }
+    ]}
+  },
+  {
+    "meaningId": 23536,
+    "word": "business",
+    "translation": "бизнес",
+    "examples": { "sentences": [
+      { "en": "He has his own business.", "ru": "У него свой бизнес.", "cefr": "a1" },
+      { "en": "Business is good this year.", "ru": "Бизнес идёт хорошо в этом году.", "cefr": "b1" },
+      { "en": "The business model proved unsustainable in the long run.", "ru": "Бизнес-модель оказалась нежизнеспособной в долгосрочной перспективе.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "BUSINESS — «бизнес». Прямое заимствование в русский: БИЗНЕС = дело." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — коммерческое предприятие" },
+      { "level": 2, "text": "8 букв, начинается на B" },
+      { "level": 3, "text": "B _ s _ n e s s" }
+    ]}
+  },
+  {
+    "meaningId": 22078,
+    "word": "food",
+    "translation": "еда",
+    "examples": { "sentences": [
+      { "en": "The food is delicious.", "ru": "Еда вкусная.", "cefr": "a1" },
+      { "en": "We need to buy food for the party.", "ru": "Нам нужно купить еду для вечеринки.", "cefr": "b1" },
+      { "en": "The global food supply chain faces unprecedented disruptions.", "ru": "Глобальная цепочка поставок продовольствия сталкивается с беспрецедентными сбоями.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "FOOD — звучит как «фуд». ФУД-корт — зона ЕДЫ в торговом центре." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — то, что мы едим" },
+      { "level": 2, "text": "4 буквы, начинается на F, двойная O" },
+      { "level": 3, "text": "F _ _ d" }
+    ]}
+  },
+  {
+    "meaningId": 23987,
+    "word": "city",
+    "translation": "город",
+    "examples": { "sentences": [
+      { "en": "Moscow is a big city.", "ru": "Москва — большой город.", "cefr": "a1" },
+      { "en": "The city centre is always busy.", "ru": "Центр города всегда оживлённый.", "cefr": "b1" },
+      { "en": "The rapid growth of the city has strained its infrastructure to the limit.", "ru": "Быстрый рост города довёл его инфраструктуру до предела.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "CITY — звучит как «сити». СИТИ — деловой ГОРОДСКОЙ центр (как Москва-Сити)." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — крупный населённый пункт" },
+      { "level": 2, "text": "4 буквы, начинается на C" },
+      { "level": 3, "text": "C _ t _" }
+    ]}
+  },
+  {
+    "meaningId": 23856,
+    "word": "idea",
+    "translation": "идея",
+    "examples": { "sentences": [
+      { "en": "I have an idea!", "ru": "У меня есть идея!", "cefr": "a1" },
+      { "en": "That's a great idea for a birthday present.", "ru": "Это отличная идея для подарка на день рождения.", "cefr": "b1" },
+      { "en": "The idea of universal basic income has gained traction in recent years.", "ru": "Идея безусловного базового дохода набрала популярность в последние годы.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "IDEA — прямое заимствование: ИДЕЯ = мысль, замысел." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — мысль, замысел" },
+      { "level": 2, "text": "4 буквы, начинается на I" },
+      { "level": 3, "text": "I d _ _" }
+    ]}
+  },
+  {
+    "meaningId": 24244,
+    "word": "story",
+    "translation": "история",
+    "examples": { "sentences": [
+      { "en": "Tell me a story.", "ru": "Расскажи мне историю.", "cefr": "a1" },
+      { "en": "The story was based on real events.", "ru": "История была основана на реальных событиях.", "cefr": "b1" },
+      { "en": "The story behind the discovery is as fascinating as the discovery itself.", "ru": "История этого открытия столь же увлекательна, как и само открытие.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "STORY — «стори». СТОРИ в Инстаграме — короткая ИСТОРИЯ из жизни." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — рассказ, повествование" },
+      { "level": 2, "text": "5 букв, начинается на S" },
+      { "level": 3, "text": "S t _ r _" }
+    ]}
+  },
+  {
+    "meaningId": 24429,
+    "word": "power",
+    "translation": "власть",
+    "examples": { "sentences": [
+      { "en": "Knowledge is power.", "ru": "Знание — сила.", "cefr": "a1" },
+      { "en": "The president has a lot of power.", "ru": "У президента много власти.", "cefr": "b1" },
+      { "en": "The concentration of power in the hands of the few undermines democratic principles.", "ru": "Концентрация власти в руках немногих подрывает демократические принципы.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "POWER — «пауэр». ПАУЭРбанк — запас СИЛЫ (энергии) для телефона." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Существительное — сила, могущество, контроль" },
+      { "level": 2, "text": "5 букв, начинается на P" },
+      { "level": 3, "text": "P _ w _ r" }
+    ]}
+  },
+  {
+    "meaningId": 23520,
+    "word": "read",
+    "translation": "читать",
+    "examples": { "sentences": [
+      { "en": "I like to read books.", "ru": "Я люблю читать книги.", "cefr": "a1" },
+      { "en": "Have you read the instructions?", "ru": "Ты прочитал инструкцию?", "cefr": "b1" },
+      { "en": "The ability to read between the lines is an invaluable skill in diplomacy.", "ru": "Умение читать между строк — бесценный навык в дипломатии.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "READ — звучит как «рид». РИДер — устройство для ЧТЕНИЯ электронных книг." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Глагол — воспринимать текст глазами" },
+      { "level": 2, "text": "4 буквы, начинается на R" },
+      { "level": 3, "text": "R _ _ d" }
+    ]}
+  },
+  {
+    "meaningId": 22974,
+    "word": "own",
+    "translation": "собственный",
+    "examples": { "sentences": [
+      { "en": "This is my own room.", "ru": "Это моя собственная комната.", "cefr": "a1" },
+      { "en": "She started her own business.", "ru": "Она начала собственный бизнес.", "cefr": "b1" },
+      { "en": "Taking ownership of one's own mistakes is a hallmark of mature leadership.", "ru": "Принятие ответственности за собственные ошибки — признак зрелого лидерства.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "OWN — звучит как «оун». ОУН(ер) — СОБСТВЕННИК, хозяин." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Прилагательное — принадлежащий лично тебе" },
+      { "level": 2, "text": "3 буквы, начинается на O" },
+      { "level": 3, "text": "O _ n" }
+    ]}
+  },
+  {
+    "meaningId": 23530,
+    "word": "large",
+    "translation": "большой",
+    "examples": { "sentences": [
+      { "en": "This is a large room.", "ru": "Это большая комната.", "cefr": "a1" },
+      { "en": "A large number of people attended the event.", "ru": "Большое количество людей посетило мероприятие.", "cefr": "b1" },
+      { "en": "By and large, the experiment was considered a success.", "ru": "В целом, эксперимент был признан успешным.", "cefr": "c1" }
+    ]},
+    "mnemonic": { "association": "LARGE — «лардж». ЛАРДЖ-пицца — БОЛЬШАЯ пицца." },
+    "hints": { "hints": [
+      { "level": 1, "text": "Прилагательное — значительного размера" },
+      { "level": 2, "text": "5 букв, начинается на L" },
+      { "level": 3, "text": "L _ r g _" }
+    ]}
+  }
+]

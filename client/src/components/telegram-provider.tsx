@@ -1,20 +1,20 @@
 import { useEffect, type ReactNode } from 'react';
-import { telegram } from '@/lib/telegram';
+import { platformBridge } from '@/lib/platform-bridge';
 import { useUserStore } from '@/stores/user-store';
 
-type TelegramProviderProps = {
+type PlatformProviderProps = {
   children: ReactNode;
 };
 
-export function TelegramProvider({ children }: TelegramProviderProps) {
+export function TelegramProvider({ children }: PlatformProviderProps) {
   const isLoading = useUserStore((s) => s.isLoading);
   const error = useUserStore((s) => s.error);
   const init = useUserStore((s) => s.init);
 
   useEffect(() => {
-    telegram.expand();
-    telegram.requestFullscreen();
-    telegram.disableVerticalSwipes();
+    platformBridge.expand();
+    platformBridge.requestFullscreen();
+    platformBridge.disableVerticalSwipes();
     init();
   }, [init]);
 

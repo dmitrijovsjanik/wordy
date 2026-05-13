@@ -14,11 +14,13 @@ import {
   Award01Icon,
   Fire02Icon,
   StarIcon,
+  FavouriteIcon,
+  VolumeMute02Icon,
 } from '@hugeicons/core-free-icons';
 import { cn } from '@/lib/utils';
 import { createPayment } from '@/lib/api';
 
-type LimitType = 'collections' | 'words';
+type LimitType = 'collections' | 'words' | 'voices';
 
 type PremiumDrawerProps = {
   open: boolean;
@@ -28,11 +30,25 @@ type PremiumDrawerProps = {
 
 const BENEFITS = [
   {
+    icon: FavouriteIcon,
+    color: 'text-[var(--red-11)] [&_path]:fill-current',
+    bg: 'bg-[var(--red-3)]',
+    title: 'Бесконечные жизни',
+    description: 'Бессмертный режим: не теряйте жизни при ошибках',
+  },
+  {
     icon: Book02Icon,
     color: 'text-[var(--brand-11)]',
     bg: 'bg-[var(--brand-3)]',
     title: 'Безлимит коллекций и слов',
     description: 'Создавайте сколько угодно коллекций и добавляйте любое количество слов',
+  },
+  {
+    icon: StarIcon,
+    color: 'text-[var(--iris-11)]',
+    bg: 'bg-[var(--iris-3)]',
+    title: 'x1.5 к получаемому опыту',
+    description: 'Прокачивайте уровень быстрее с бонусом к XP за каждый ответ',
   },
   {
     icon: Award01Icon,
@@ -42,18 +58,18 @@ const BENEFITS = [
     description: 'Получайте вдвое больше кристаллов за ежедневную активность',
   },
   {
-    icon: StarIcon,
-    color: 'text-[var(--iris-11)]',
-    bg: 'bg-[var(--iris-3)]',
-    title: '+15% к получаемому опыту',
-    description: 'Прокачивайте уровень быстрее с бонусом к XP за каждый ответ',
-  },
-  {
     icon: Fire02Icon,
     color: 'text-[var(--cyan-11)]',
     bg: 'bg-[var(--cyan-3)]',
     title: 'Заморозка стрика каждую неделю',
     description: 'Одна бесплатная заморозка в неделю — не бойтесь пропустить день',
+  },
+  {
+    icon: VolumeMute02Icon,
+    color: 'text-[var(--gray-11)]',
+    bg: 'bg-[var(--gray-3)]',
+    title: 'Нет рекламы',
+    description: 'Никакой рекламы — только обучение',
   },
 ];
 
@@ -93,7 +109,9 @@ export function PremiumDrawer({ open, onOpenChange, limitType }: PremiumDrawerPr
           <DrawerDescription className="text-center">
             {limitType === 'collections'
               ? 'Вы достигли лимита бесплатного плана — 1 коллекция. Оформите подписку, чтобы снять ограничения.'
-              : 'Вы достигли лимита бесплатного плана — 50 слов. Оформите подписку, чтобы снять ограничения.'}
+              : limitType === 'words'
+                ? 'Вы достигли лимита бесплатного плана — 50 слов. Оформите подписку, чтобы снять ограничения.'
+                : 'Дополнительные голоса озвучки доступны с подпиской PRO.'}
           </DrawerDescription>
         </DrawerHeader>
 

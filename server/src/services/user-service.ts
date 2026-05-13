@@ -1,8 +1,9 @@
-import { eq, and, gte, asc, sql, count } from 'drizzle-orm';
+import { eq, and, gte, asc, count, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { users, quizSessions, duels, streakActivityDays, userLeagueProgress, userSeasonStats, userWordProgress, wordMeanings } from '../db/schema.js';
+import { users, quizSessions, duels, streakActivityDays, userLeagueProgress, userSeasonStats, userWordProgressWord } from '../db/schema.js';
 import { MAX_STREAK_FREEZES, FREEZE_PACKS } from '../config/gems-config.js';
 import { LEAGUE_TIERS } from '../config/league-config.js';
+import { LIVES_ENABLED, MAX_LIVES } from '../config/lives-config.js';
 import { getMskTodayStart, toMskDayStart } from '../lib/msk-date.js';
 
 export async function getProfile(userId: number) {
@@ -10,6 +11,8 @@ export async function getProfile(userId: number) {
     where: eq(users.id, userId),
     columns: {
       id: true,
+      telegramId: true,
+      vkId: true,
       firstName: true,
       username: true,
       avatarUrl: true,
@@ -21,16 +24,42 @@ export async function getProfile(userId: number) {
       nativeLanguage: true,
       learningLanguage: true,
       repeatMastered: true,
+      ttsVoice: true,
+      estimatedCefr: true,
       premiumUntil: true,
       premiumPlan: true,
       autoRenew: true,
       lastActivityAt: true,
       createdAt: true,
+      lives: true,
+      livesRestoredAt: true,
+      xpBoostUntil: true,
     },
   });
 
   if (!user) throw new Error('Пользователь не найден');
-  return user;
+
+  // Convert bigint to string for JSON serialization
+  const serialized = {
+    ...user,
+    telegramId: user.telegramId ? String(user.telegramId) : null,
+    vkId: user.vkId ? String(user.vkId) : null,
+  };
+
+  // Если система жизней отключена — возвращаем infinite. Это нужно чтобы
+  // у юзеров с устаревшими значениями lives/livesRestoredAt в БД фронт
+  // не мерцал старыми данными между обновлениями getLivesStatus.
+  if (!LIVES_ENABLED) {
+    return { ...serialized, lives: MAX_LIVES, livesRestoredAt: null };
+  }
+
+  // Auto-restore lives if timer has expired
+  const now = new Date();
+  if (serialized.livesRestoredAt && serialized.livesRestoredAt <= now) {
+    return { ...serialized, lives: 5, livesRestoredAt: null };
+  }
+
+  return serialized;
 }
 
 export async function getStats(userId: number) {
@@ -77,19 +106,18 @@ export async function getStats(userId: number) {
     }
   }
 
-  // Кол-во выученных СЛОВ (все meanings слова должны иметь srsStage >= 3)
-  const masteredWordsSq = db
-    .select({ wordId: wordMeanings.wordId })
-    .from(userWordProgress)
-    .innerJoin(wordMeanings, eq(userWordProgress.meaningId, wordMeanings.id))
-    .where(eq(userWordProgress.userId, userId))
-    .groupBy(wordMeanings.wordId)
-    .having(sql`min(${userWordProgress.srsStage}) >= 3`)
-    .as('mastered_words');
-
+  // Кол-во выученных слов: tier ∈ {mastered, review, known_external}.
+  // review = в SRS (фактически выучено, проходит долгосрочное закрепление).
+  // known_external = свайпнуто «Знаю» в обзоре (изъято из учебного потока).
+  // Аналитика «реально выученных» vs «знал изначально» — отдельным запросом
+  // по конкретному тиру.
   const [masteredRow] = await db
     .select({ value: count() })
-    .from(masteredWordsSq);
+    .from(userWordProgressWord)
+    .where(and(
+      eq(userWordProgressWord.userId, userId),
+      sql`${userWordProgressWord.learningTier} IN ('mastered', 'review', 'known_external')`,
+    ));
 
   return {
     totalGames,
@@ -112,10 +140,13 @@ export async function updateLanguages(userId: number, nativeLanguage: string, le
   return { nativeLanguage, learningLanguage };
 }
 
-export async function updateSettings(userId: number, settings: { repeatMastered?: boolean }) {
+export async function updateSettings(userId: number, settings: { repeatMastered?: boolean; ttsVoice?: string }) {
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (settings.repeatMastered !== undefined) {
     updates.repeatMastered = settings.repeatMastered;
+  }
+  if (settings.ttsVoice !== undefined) {
+    updates.ttsVoice = settings.ttsVoice;
   }
 
   await db

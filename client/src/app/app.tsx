@@ -1,29 +1,28 @@
 import { Suspense, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { TelegramProvider } from '@/components/telegram-provider';
-import { BottomTabs } from '@/components/bottom-tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { useUserStore } from '@/stores/user-store';
-import { telegram } from '@/lib/telegram';
+import { platformBridge } from '@/lib/platform-bridge';
 import { acceptInvite, sendFriendRequest } from '@/lib/api';
 import { lazyWithRetry } from '@/lib/lazy-retry';
+import { PILOT_FEATURES } from '@/lib/pilot-config';
 
-const Home = lazyWithRetry(() => import('@/components/home').then((m) => ({ default: m.Home })));
+const Dashboard = lazyWithRetry(() => import('@/components/dashboard').then((m) => ({ default: m.Dashboard })));
+const VocabularySection = lazyWithRetry(() => import('@/components/vocabulary-section').then((m) => ({ default: m.VocabularySection })));
+const VocabularyScreen = lazyWithRetry(() => import('@/components/vocabulary-screen').then((m) => ({ default: m.VocabularyScreen })));
+const PhrasesPage = lazyWithRetry(() => import('@/components/vocabulary/phrases-page').then((m) => ({ default: m.PhrasesPage })));
+const LexicalTrapsPage = lazyWithRetry(() => import('@/components/vocabulary/lexical-traps-page').then((m) => ({ default: m.LexicalTrapsPage })));
 const Collections = lazyWithRetry(() => import('@/components/collections').then((m) => ({ default: m.Collections })));
 const CollectionDetail = lazyWithRetry(() => import('@/components/collection-detail').then((m) => ({ default: m.CollectionDetail })));
 const CollectionCreate = lazyWithRetry(() => import('@/components/collection-create').then((m) => ({ default: m.CollectionCreate })));
-const ErrorsCollection = lazyWithRetry(() => import('@/components/errors-collection').then((m) => ({ default: m.ErrorsCollection })));
 const Profile = lazyWithRetry(() => import('@/components/profile').then((m) => ({ default: m.Profile })));
-const DuelCreate = lazyWithRetry(() => import('@/components/duel-create').then((m) => ({ default: m.DuelCreate })));
-const DuelGame = lazyWithRetry(() => import('@/components/duel-game').then((m) => ({ default: m.DuelGame })));
-const DuelResult = lazyWithRetry(() => import('@/components/duel-result').then((m) => ({ default: m.DuelResult })));
-const Leaderboard = lazyWithRetry(() => import('@/components/leaderboard'));
-const Modes = lazyWithRetry(() => import('@/components/modes').then((m) => ({ default: m.Modes })));
 const Shop = lazyWithRetry(() => import('@/components/shop').then((m) => ({ default: m.Shop })));
 const FriendsPage = lazyWithRetry(() => import('@/components/friends').then((m) => ({ default: m.Friends })));
 const Settings = lazyWithRetry(() => import('@/components/settings').then((m) => ({ default: m.Settings })));
 const AllWords = lazyWithRetry(() => import('@/components/all-words').then((m) => ({ default: m.AllWords })));
+const DevRoutes = lazyWithRetry(() => import('@/components/dev-routes').then((m) => ({ default: m.DevRoutes })));
 
 function DeepLinkHandler() {
   const navigate = useNavigate();
@@ -33,7 +32,7 @@ function DeepLinkHandler() {
   useEffect(() => {
     if (!isAuthenticated || processed.current) return;
 
-    const startParam = telegram.startParam;
+    const startParam = platformBridge.getStartParam();
     if (startParam?.startsWith('invite_')) {
       processed.current = true;
       const token = startParam.slice(7);
@@ -46,10 +45,6 @@ function DeepLinkHandler() {
       sendFriendRequest(code)
         .then(() => navigate('/friends', { replace: true, state: { deepLink: 'friend_success' } }))
         .catch(() => navigate('/friends', { replace: true, state: { deepLink: 'friend_error' } }));
-    } else if (startParam?.startsWith('duel_')) {
-      processed.current = true;
-      const duelId = startParam.slice(5);
-      navigate(`/duel/${duelId}`, { replace: true });
     }
   }, [isAuthenticated, navigate]);
 
@@ -66,9 +61,15 @@ function PageSkeleton() {
   );
 }
 
-// Приложение загрузилось — сбрасываем флаг chunk-reload,
-// чтобы после следующего деплоя перезагрузка снова сработала
-sessionStorage.removeItem('chunk-reload');
+// Приложение загрузилось — сбрасываем флаг chunk-reload через 5 секунд
+// успешной работы, чтобы после следующего деплоя перезагрузка снова
+// сработала. Раньше сброс был синхронным при mount app.tsx, но это создавало
+// цикл reload'ов: если lazy-чанки сами падали (например, Vite 504 на
+// outdated deps), флаг сбрасывался ДО их падения, и lazyWithRetry опять
+// перезагружал страницу — навечно.
+setTimeout(() => {
+  sessionStorage.removeItem('chunk-reload');
+}, 5000);
 
 export function App() {
   return (
@@ -80,26 +81,28 @@ export function App() {
             <ErrorBoundary>
               <Suspense fallback={<PageSkeleton />}>
                 <Routes>
-                  <Route path="/" element={<Home />} />
+                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/vocabulary" element={<VocabularySection />} />
+                  <Route path="/vocabulary/learn" element={<VocabularyScreen />} />
+                  <Route path="/vocabulary/phrases" element={<PhrasesPage />} />
+                  <Route path="/vocabulary/lexical-traps" element={<LexicalTrapsPage />} />
                   <Route path="/collections" element={<Collections />} />
                   <Route path="/collections/create" element={<CollectionCreate />} />
                   <Route path="/collections/:id" element={<CollectionDetail />} />
-                  <Route path="/errors" element={<ErrorsCollection />} />
                   <Route path="/profile" element={<Profile />} />
-                  <Route path="/duel/create" element={<DuelCreate />} />
-                  <Route path="/duel/:id" element={<DuelGame />} />
-                  <Route path="/duel/:id/result" element={<DuelResult />} />
-                  <Route path="/leaderboard" element={<Leaderboard />} />
-                  <Route path="/modes" element={<Modes />} />
-                  <Route path="/shop" element={<Shop />} />
-                  <Route path="/friends" element={<FriendsPage />} />
+                  {PILOT_FEATURES.gems && (
+                    <Route path="/shop" element={<Shop />} />
+                  )}
+                  {PILOT_FEATURES.friends && (
+                    <Route path="/friends" element={<FriendsPage />} />
+                  )}
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/words" element={<AllWords />} />
+                  <Route path="/dev" element={<DevRoutes />} />
                 </Routes>
               </Suspense>
             </ErrorBoundary>
           </main>
-          <BottomTabs />
         </div>
       </TelegramProvider>
     </BrowserRouter>
