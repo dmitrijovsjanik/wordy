@@ -30,6 +30,9 @@ if (!('speechSynthesis' in window)) {
 }
 if (!('SpeechSynthesisUtterance' in window)) {
   (window as unknown as { SpeechSynthesisUtterance: unknown }).SpeechSynthesisUtterance = class {
-    constructor(public text: string) {}
+    text: string;
+    constructor(text: string) {
+      this.text = text;
+    }
   };
 }

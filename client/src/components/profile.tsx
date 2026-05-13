@@ -5,7 +5,6 @@ import { useLeagueStore } from '@/stores/league-store';
 import { useBackButton } from '@/hooks/use-back-button';
 import { getMyStats } from '@/lib/api';
 import type { UserStats } from '@/types/api';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';

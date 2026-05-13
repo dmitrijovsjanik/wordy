@@ -102,8 +102,12 @@ const vkBridge: PlatformBridge = {
   disableClosingConfirmation() { /* VK не поддерживает */ },
 
   hapticImpact(style: HapticStyle) {
+    const vkStyle: 'light' | 'medium' | 'heavy' =
+      style === 'light' || style === 'soft' ? 'light' :
+      style === 'heavy' || style === 'rigid' ? 'heavy' :
+      'medium';
     getVkBridge().then((vk) => {
-      vk.default.send('VKWebAppTapticImpactOccurred', { style }).catch(() => {});
+      vk.default.send('VKWebAppTapticImpactOccurred', { style: vkStyle }).catch(() => {});
     }).catch(() => {});
   },
 

@@ -78,6 +78,7 @@ function sessionCompleteResponse(overrides: {
     reason: overrides.reason,
     nextDueAt: overrides.nextDueAt ?? null,
     counts: { ...baseCounts, ...overrides.counts },
+    dailyPromotions: { count: 0, limit: 5 },
   };
 }
 

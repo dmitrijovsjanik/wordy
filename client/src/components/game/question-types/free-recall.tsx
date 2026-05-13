@@ -33,7 +33,6 @@ type FreeRecallProps = {
   onTextSubmit?: (text: string) => void;
   onSkip?: () => void;
   showSkip?: boolean;
-  hideResultPanel?: boolean;
   /** Все значения слова (топ-3 по popularity_rank). Заполнено на L3 word-level. */
   meanings?: WordMeaningInfo[];
   /** Грамматические формы слова. Рендерятся inline после транскрипции +
@@ -76,7 +75,6 @@ export function FreeRecall({
   onTextSubmit,
   onSkip,
   showSkip = true,
-  hideResultPanel = false,
   meanings,
   forms,
   onNext,

@@ -16,7 +16,6 @@ import { RewardFeedback } from '@/components/game/reward-feedback';
 import { AnswerHistoryDrawer } from '@/components/answer-history-drawer';
 import { BatchStartedScreen } from '@/components/game/batch-started-screen';
 import { DailyLimitScreen } from '@/components/game/daily-limit-screen';
-import { checkAnswer, type AnswerResult } from '@/lib/answer-check';
 import type { RewardDisplay } from '@/types/game';
 import type { ReviewGrade } from '@/types/api';
 
@@ -377,7 +376,6 @@ export function VocabularyScreen() {
                   onTextSubmit={setLastUserAnswer}
                   onSkip={currentTier === 'review' ? undefined : handleSkip}
                   showSkip={currentTier !== 'review'}
-                  hideResultPanel={false}
                   meanings={currentQuestion.meanings}
                   forms={currentQuestion.forms}
                   gradeMode={currentTier === 'review'}

@@ -47,6 +47,7 @@ function makePassiveQuestion(wordId: number, word = 'test'): QuizQuestion {
     meaningId: wordId * 100,
     wordId,
     word,
+    transcription: null,
     translation: 'тест',
     example: null,
     mnemonic: null,

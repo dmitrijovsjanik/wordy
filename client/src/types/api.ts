@@ -279,12 +279,6 @@ export type PassiveRecallApiQuestion = {
   doubleXpTimeLimitMs?: number;
 };
 
-export type LearningTier = 'encounter' | 'passive' | 'active' | 'production' | 'review';
-
-// ─── v2 типы для новой лестницы (pool/passive/active/review/mastered) ───────
-// Параллельны legacy LearningTier. Используются эндпойнтами /api/learning/*.
-// На этапе cleanup (шаг 5) старые типы удаляются, V2 → переименуется без суффикса.
-
 export type LearningTier = 'pool' | 'passive' | 'active' | 'review' | 'mastered';
 export type ReviewGrade = 'again' | 'hard' | 'good' | 'easy';
 export type PoolSwipeAction = 'know' | 'learn' | 'snooze';
@@ -358,6 +352,8 @@ export type LearningAnswerRequest = {
   questionType?: string;
   answerTimeMs?: number;
   streak?: number;
+  /** true → пропуск без штрафа (пользователь нажал «не помню/пропустить»). */
+  skip?: boolean;
   /** Свободный ввод: сервер ре-валидирует через нормализатор. */
   userAnswer?: string;
   acceptableAnswers?: string[];
@@ -432,42 +428,6 @@ export type LearningSwipeResponse = {
   /** Размер стартовавшего батча. Релевантно только когда batchStarted=true. */
   batchSize: number;
 };
-
-export type LearningAnswerResponse = {
-  isCorrect: boolean;
-  normalizedVia: 'exact' | 'lemma' | 'typo' | 'none' | null;
-  tierBefore: LearningTier;
-  tierAfter: LearningTier;
-  becameLearned: boolean;
-  wasReset: boolean;
-  nextReviewAt: string | Date;
-  xpEarned: number;
-  xpModifier?: number;
-  totalXp?: number;
-  level?: number;
-  levelUp?: number;
-  lpEarned: number;
-  lpModifier?: number;
-  totalLp?: number;
-  gemsEarned: number;
-  lives: number;
-  livesRestoredAt: string | null;
-  livesExhausted: boolean;
-};
-
-// QuizQuestion — типы вопросов, которые могут прийти на главную и в дуэли.
-// Cloze (только production-tier, off) и Grammar (отдельная страница /grammar
-// со своими endpoint'ами) сюда не входят. ClozeApiQuestion/GrammarApiQuestion
-// сохраняются в файле для совместимости со старым quiz-service на сервере.
-export type QuizQuestion =
-  | QuizQuestionBase
-  | MatchPairsApiQuestion
-  | ListeningApiQuestion
-  | DictationApiQuestion
-  | FreeRecallApiQuestion
-  | EncounterCardApiQuestion
-  | PassiveRecallApiQuestion
-  | ClozeInputApiQuestion;
 
 export type QuizStartResponse = {
   sessionId: number;

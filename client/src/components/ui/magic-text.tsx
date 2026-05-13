@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useMemo, useState, type CSSProperties } from 'react';
+import { useRef, useEffect, useMemo, useState, type CSSProperties } from 'react';
 
 interface Particle {
   x: number;

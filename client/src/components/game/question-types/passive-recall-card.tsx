@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ViewIcon, Cancel01Icon } from '@hugeicons/core-free-icons';
 import {
