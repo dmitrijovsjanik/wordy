@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wordy - Изучай английский в Telegram</title>
+  <meta name="description" content="Telegram Mini App для изучения английских слов с умной системой интервальных повторений. Запоминайте слова навсегда.">
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Unbounded:wght@500;700&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <div class="wrapper">
+
+    <section class="topic--hero">
+
+      <div class="topic__header--hero">
+
+        <img src="assets/logo.svg" class="hero__logo" alt="Wordy Logo">
+
+        <h1 class="title txt-center">
+          Изучай английский<br>
+          прямо в <span class="title title--accent">Telegram<img src="assets/tg logo.svg" class="telegram-icon"
+              alt="Telegram"></span>
+        </h1>
+
+        <p class="subtitle txt-center">
+          Telegram Mini App с умной системой интервальных повторений. Запоминайте слова навсегда, а не на пару дней.
+        </p>
+
+        <button class="button button--primary">
+          <span class="label label--button-primary">Начать учить бесплатно</span>
+        </button>
+
+      </div>
+
+      <div class="topic__content--hero">
+        <!-- Phone mockup with app UI -->
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <!-- Status bar -->
+            <div class="app-header">
+              <div class="app-header__left">
+                <div class="app-avatar">Д</div>
+                <div class="app-streak">3</div>
+              </div>
+              <div class="app-header__right">
+                <div class="app-gems">128</div>
+                <div class="app-notif"></div>
+              </div>
+            </div>
+            <!-- League + Level bar -->
+            <div class="app-status-bar">
+              <div class="app-league-badge">
+                <span class="app-league-icon">&#9733;</span>
+                <span>240</span>
+                <span class="app-league-divider"></span>
+                <span class="app-league-time">2д 5ч</span>
+              </div>
+              <div class="app-level-ring">
+                <svg width="28" height="28" viewBox="0 0 28 28">
+                  <circle cx="14" cy="14" r="12" fill="var(--gray-3)" stroke="var(--gray-5)" stroke-width="2" />
+                  <circle cx="14" cy="14" r="12" fill="none" stroke="var(--brand-9)" stroke-width="2"
+                    stroke-linecap="round" stroke-dasharray="75.4" stroke-dashoffset="22.6"
+                    transform="rotate(-90 14 14)" />
+                </svg>
+                <span class="app-level-num">5</span>
+              </div>
+            </div>
+            <!-- Word -->
+            <div class="app-word-area">
+              <div class="app-word">schedule</div>
+              <div class="app-transcription">/ˈʃedjuːl/</div>
+            </div>
+            <!-- Answer options -->
+            <div class="app-options">
+              <div class="app-option">порядок</div>
+              <div class="app-option app-option--correct">расписание</div>
+              <div class="app-option">встреча</div>
+              <div class="app-option">запись</div>
+            </div>
+            <!-- Bottom tabs -->
+            <div class="app-bottom-tabs">
+              <div class="app-tab app-tab--active">
+                <div class="app-tab-icon">&#9679;</div>
+                <span>Учить</span>
+              </div>
+              <div class="app-tab">
+                <div class="app-tab-icon">&#9679;</div>
+                <span>Режимы</span>
+              </div>
+              <div class="app-tab">
+                <div class="app-tab-icon">&#9679;</div>
+                <span>Словарь</span>
+              </div>
+              <div class="app-tab">
+                <div class="app-tab-icon">&#9679;</div>
+                <span>Профиль</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="content__fade--hero"></div>
+        <img src="assets/decorative vector.svg" class="content__decor--hero" alt="">
+      </div>
+
+    </section>
+
+    <div class="topic topic--what-is">
+
+      <div class="topic__header">
+        <h2 class="title title--inverted txt-left">
+          Что такое WORDY?
+        </h2>
+        <p class="subtitle subtitle--inverted">
+          Умное приложение для изучения английских слов прямо в Telegram.
+          Без установки дополнительных приложений, все работает в
+          мессенджере.
+        </p>
+      </div>
+
+      <div class="what-is__cards what-is__content" id="how-it-works-cards"></div>
+
+    </div>
+
+
+    <div class="topic topic--how-it-works">
+
+      <div class="topic__header topic__header--how-it-works">
+        <h2 class="title txt--left">Как это работает?</h2>
+        <p class="subtitle subtitle--how-it-works">
+          Всего 3 простых шага до начала эффективного изучения английского
+        </p>
+      </div>
+
+      <div class="topic__content">
+
+        <div class="card card--how-it-works">
+          <div class="how-it-works__step-decor">
+            <img src="assets/decor num 01.svg" alt="">
+          </div>
+          <div class="how-it-works__step-text">
+            <h3 class="card__title">Откройте бота</h3>
+            <p class="card__p">
+              Найдите @WordyLangBot в Telegram и нажмите кнопку "Start". Бот автоматически создаст для вас аккаунт и
+              откроет приложение
+            </p>
+          </div>
+        </div>
+
+        <div class="card card--how-it-works">
+          <div class="how-it-works__step-decor">
+            <img src="assets/decor num 02.svg" alt="">
+          </div>
+          <div class="how-it-works__step-text">
+            <h3 class="card__title">Добавьте слова</h3>
+            <p class="card__p">
+              Введите слово на английском или русском языке. Система автоматически переведет его и даст выбрать нужные
+              варианты перевода
+            </p>
+          </div>
+        </div>
+
+        <div class="card card--how-it-works">
+          <div class="how-it-works__step-decor">
+            <img src="assets/decor num 03.svg" alt="">
+          </div>
+          <div class="how-it-works__step-text">
+            <h3 class="card__title">Учите и повторяйте</h3>
+            <p class="card__p">
+              Проходите квизы в удобное время. Алгоритм сам подскажет, когда повторить слово для лучшего запоминания
+            </p>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <div class="topic topic--pricing">
+
+      <div class="topic__header">
+        <h2 class="title txt--left title--inverted">Выберите свой тариф</h2>
+        <p class="subtitle subtitle--inverted">
+          Начните бесплатно или получите безлимитные возможности с PRO
+        </p>
+      </div>
+      <div class="topic__content topic__content--pricing">
+        <!-- FREE Card -->
+        <div class="card card--pricing card--free">
+          <div class="card__badge">
+            <span class="title title--badge">FREE</span>
+          </div>
+          <div class="card__content">
+            <div class="pricing__price">
+              <span class="title title--price">0&#8381;</span>
+              <span class="subtitle subtitle--price">навсегда</span>
+            </div>
+            <ul class="card__benefits">
+              <li class="card__benefits__item">
+                <svg class="pricing__benefit-icon" width="20" height="20" viewBox="0 0 20 20" fill="none"
+                  xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="10" cy="10" r="10" fill="var(--gray-9)" />
+                  <path d="M6 10l2.5 2.5L14 7" stroke="#fff" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg>
+                <span class="subtitle--benefits-item">До 50 слов в словаре</span>
+              </li>
+              <li class="card__benefits__item">
+                <svg class="pricing__benefit-icon" width="20" height="20" viewBox="0 0 20 20" fill="none"
+                  xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="10" cy="10" r="10" fill="var(--gray-9)" />
+                  <path d="M6 10l2.5 2.5L14 7" stroke="#fff" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg>
+                <span class="subtitle--benefits-item">Автоматический перевод</span>
+              </li>
+              <li class="card__benefits__item">
+                <svg class="pricing__benefit-icon" width="20" height="20" viewBox="0 0 20 20" fill="none"
+                  xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="10" cy="10" r="10" fill="var(--gray-9)" />
+                  <path d="M6 10l2.5 2.5L14 7" stroke="#fff" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg>
+                <span class="subtitle--benefits-item">2 режима обучения</span>
+              </li>
+              <li class="card__benefits__item">
+                <svg class="pricing__benefit-icon" width="20" height="20" viewBox="0 0 20 20" fill="none"
+                  xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="10" cy="10" r="10" fill="var(--gray-9)" />
+                  <path d="M6 10l2.5 2.5L14 7" stroke="#fff" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg>
+                <span class="subtitle--benefits-item">Интервальные повторения</span>
+              </li>
+              <li class="card__benefits__item">
+                <svg class="pricing__benefit-icon" width="20" height="20" viewBox="0 0 20 20" fill="none"
+                  xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="10" cy="10" r="10" fill="var(--gray-9)" />
+                  <path d="M6 10l2.5 2.5L14 7" stroke="#fff" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg>
+                <span class="subtitle--benefits-item">Транскрипция слов</span>
+              </li>
+            </ul>
+          </div>
+          <button class="button button--secondary button--card">
+            <span class="label label--button-secondary">Начать бесплатно</span>
+          </button>
+        </div>
+
+        <!-- PRO Card -->
+        <div class="card card--pricing card--pro">
+          <img src="assets/decorative price.svg" alt="" class="card__decor">
+          <div class="card__badge card__badge--pro">
+            <span class="title title--inverted title--badge">PRO</span>
+          </div>
+          <div class="card__content">
+            <div class="pricing__price">
+              <span class="title title--price title--pro">99&#8381;</span>
+              <span class="subtitle subtitle--price">в месяц</span>
+            </div>
+            <ul class="card__benefits card__benefits--pro">
+              <li class="card__benefits__item">
+                <svg class="pricing__benefit-icon" width="20" height="20" viewBox="0 0 20 20" fill="none"
+                  xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="10" cy="10" r="10" fill="var(--brand-9)" />
+                  <path d="M6 10l2.5 2.5L14 7" stroke="#fff" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg>
+                <span class="subtitle--benefits-item">Безлимитное количество слов</span>
+              </li>
+              <li class="card__benefits__item">
+                <svg class="pricing__benefit-icon" width="20" height="20" viewBox="0 0 20 20" fill="none"
+                  xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="10" cy="10" r="10" fill="var(--brand-9)" />
+                  <path d="M6 10l2.5 2.5L14 7" stroke="#fff" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg>
+                <span class="subtitle--benefits-item">Автоматический перевод</span>
+              </li>
+              <li class="card__benefits__item">
+                <svg class="pricing__benefit-icon" width="20" height="20" viewBox="0 0 20 20" fill="none"
+                  xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="10" cy="10" r="10" fill="var(--brand-9)" />
+                  <path d="M6 10l2.5 2.5L14 7" stroke="#fff" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg>
+                <span class="subtitle--benefits-item">Все режимы обучения</span>
+              </li>
+              <li class="card__benefits__item">
+                <svg class="pricing__benefit-icon" width="20" height="20" viewBox="0 0 20 20" fill="none"
+                  xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="10" cy="10" r="10" fill="var(--brand-9)" />
+                  <path d="M6 10l2.5 2.5L14 7" stroke="#fff" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg>
+                <span class="subtitle--benefits-item">Интервальные повторения</span>
+              </li>
+              <li class="card__benefits__item">
+                <svg class="pricing__benefit-icon" width="20" height="20" viewBox="0 0 20 20" fill="none"
+                  xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="10" cy="10" r="10" fill="var(--brand-9)" />
+                  <path d="M6 10l2.5 2.5L14 7" stroke="#fff" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg>
+                <span class="subtitle--benefits-item">Транскрипция слов</span>
+              </li>
+              <li class="card__benefits__item">
+                <svg class="pricing__benefit-icon" width="20" height="20" viewBox="0 0 20 20" fill="none"
+                  xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="10" cy="10" r="10" fill="var(--brand-9)" />
+                  <path d="M6 10l2.5 2.5L14 7" stroke="#fff" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg>
+                <span class="subtitle--benefits-item">Приоритетная поддержка</span>
+              </li>
+            </ul>
+          </div>
+          <button class="button button--primary button--card">
+            <span class="label label--button-primary">Купить PRO за 99&#8381;</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+
+    <div class="topic topic--faq">
+
+      <div class="topic__header topic__header--faq">
+        <h2 class="title title-left">Частые вопросы</h2>
+        <p class="subtitle subtitle--faq">Ответы на популярные вопросы о Wordy</p>
+      </div>
+      <div class="faq__content">
+        <div class="faq__accordion">
+          <div class="faq__accordion-inner">
+            <div class="faq__accordion-header">
+              <h3 class="faq__accordion-title">Как работает система интервальных повторений?</h3>
+              <div class="faq__accordion-icon">
+                <img src="assets/arrow icon.svg" alt="">
+              </div>
+            </div>
+            <p class="faq__accordion-description">Алгоритм показывает слова именно тогда, когда вы
+              вот-вот их забудете. После каждого правильного ответа интервал увеличивается: 1 день &rarr; 3 дня &rarr; 7
+              дней &rarr;
+              14 дней &rarr; 30 дней &rarr; 60 дней. Если ответили неправильно - интервал сбрасывается, и слово
+              повторяется
+              через 1 день.</p>
+          </div>
+        </div>
+
+        <div class="faq__accordion">
+          <div class="faq__accordion-inner">
+            <div class="faq__accordion-header">
+              <h3 class="faq__accordion-title">В чем разница между режимами?</h3>
+              <div class="faq__accordion-icon">
+                <img src="assets/arrow icon.svg" alt="">
+              </div>
+            </div>
+            <p class="faq__accordion-description">Algorithm mode - показывает только те слова,
+              которые пора повторить по расписанию. Отслеживает ваш прогресс и влияет на интервалы
+              повторений.<br>Practice mode - случайные слова из вашего словаря для свободной практики. Не влияет на
+              прогресс, можно тренироваться сколько угодно.</p>
+          </div>
+        </div>
+
+        <div class="faq__accordion">
+          <div class="faq__accordion-inner">
+            <div class="faq__accordion-header">
+              <h3 class="faq__accordion-title">Можно ли пользоваться приложением бесплатно?</h3>
+              <div class="faq__accordion-icon">
+                <img src="assets/arrow icon.svg" alt="">
+              </div>
+            </div>
+            <p class="faq__accordion-description">Да! FREE тариф полностью бесплатный и доступен
+              навсегда. Вы получаете все функции приложения с ограничением до 50 слов в словаре. Этого достаточно для
+              начального уровня или изучения базовой лексики.</p>
+          </div>
+        </div>
+
+        <div class="faq__accordion">
+          <div class="faq__accordion-inner">
+            <div class="faq__accordion-header">
+              <h3 class="faq__accordion-title">Что даёт PRO подписка?</h3>
+              <div class="faq__accordion-icon">
+                <img src="assets/arrow icon.svg" alt="">
+              </div>
+            </div>
+            <p class="faq__accordion-description">PRO подписка снимает ограничение на количество
+              слов - вы можете добавить неограниченное количество. Все остальные функции (перевод, квизы, интервальные
+              повторения) доступны и в FREE тарифе. PRO - это для тех, кто серьёзно настроен на изучение языка и хочет
+              расширенный словарь.</p>
+          </div>
+        </div>
+
+        <div class="faq__accordion">
+          <div class="faq__accordion-inner">
+            <div class="faq__accordion-header">
+              <h3 class="faq__accordion-title">Нужно ли устанавливать дополнительное приложение?</h3>
+              <div class="faq__accordion-icon">
+                <img src="assets/arrow icon.svg" alt="">
+              </div>
+            </div>
+            <p class="faq__accordion-description">Нет! Wordy - это Telegram Mini App, которое
+              работает прямо в вашем Telegram. Просто откройте бота @WordyLangBot и начните пользоваться. Работает на
+              iOS, Android и десктопе - везде, где есть Telegram.</p>
+          </div>
+        </div>
+
+        <div class="faq__accordion">
+          <div class="faq__accordion-inner">
+            <div class="faq__accordion-header">
+              <h3 class="faq__accordion-title">Безопасна ли оплата через Yookassa?</h3>
+              <div class="faq__accordion-icon">
+                <img src="assets/arrow icon.svg" alt="">
+              </div>
+            </div>
+            <p class="faq__accordion-description">Да, абсолютно безопасна. YooKassa (Яндекс.Касса)
+              - это надёжная платёжная система с сертификацией PCI DSS. Мы не храним данные ваших карт. Все платежи
+              защищены и проходят через официальный процессинг.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <div class="footer__banner">
+        <img src="assets/footer decor.svg" alt="" class="footer__banner-decor">
+        <div class="footer__banner-content">
+          <img src="assets/logo.svg" alt="Wordy" class="footer__logo" style="height: 40px; filter: brightness(0) invert(1);">
+          <h2 class="title txt-center title--inverted" style="font-size: 32px;">Готовы начать учить английский?</h2>
+          <p class="footer__banner-subtitle">Присоединяйтесь к тысячам пользователей,<br>которые уже изучают язык эффективно</p>
+          <button class="button button--footer">
+            <span class="label" style="color: var(--brand-9);">Присоединиться</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="footer__info">
+        <p class="footer__copyright">&copy; 2025 Wordy. Все права защищены.</p>
+      </div>
+    </footer>
+
+  </div>
+  <script src="what-is-works-cards.js" defer></script>
+</body>
+
+</html>

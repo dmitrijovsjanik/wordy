@@ -18,22 +18,11 @@ const Collections = lazyWithRetry(() => import('@/components/collections').then(
 const CollectionDetail = lazyWithRetry(() => import('@/components/collection-detail').then((m) => ({ default: m.CollectionDetail })));
 const CollectionCreate = lazyWithRetry(() => import('@/components/collection-create').then((m) => ({ default: m.CollectionCreate })));
 const Profile = lazyWithRetry(() => import('@/components/profile').then((m) => ({ default: m.Profile })));
-const DuelCreate = lazyWithRetry(() => import('@/components/duel-create').then((m) => ({ default: m.DuelCreate })));
-const DuelGame = lazyWithRetry(() => import('@/components/duel-game').then((m) => ({ default: m.DuelGame })));
-const DuelResult = lazyWithRetry(() => import('@/components/duel-result').then((m) => ({ default: m.DuelResult })));
-const Leaderboard = lazyWithRetry(() => import('@/components/leaderboard'));
-const Modes = lazyWithRetry(() => import('@/components/modes').then((m) => ({ default: m.Modes })));
 const Shop = lazyWithRetry(() => import('@/components/shop').then((m) => ({ default: m.Shop })));
 const FriendsPage = lazyWithRetry(() => import('@/components/friends').then((m) => ({ default: m.Friends })));
 const Settings = lazyWithRetry(() => import('@/components/settings').then((m) => ({ default: m.Settings })));
 const AllWords = lazyWithRetry(() => import('@/components/all-words').then((m) => ({ default: m.AllWords })));
-const GrammarPage = lazyWithRetry(() => import('@/components/grammar/grammar-page').then((m) => ({ default: m.GrammarPage })));
-const ArticlesPage = lazyWithRetry(() => import('@/components/grammar/articles-page').then((m) => ({ default: m.ArticlesPage })));
-const TensesPage = lazyWithRetry(() => import('@/components/grammar/tenses-page').then((m) => ({ default: m.TensesPage })));
-const ReadingPage = lazyWithRetry(() => import('@/components/reading/reading-page').then((m) => ({ default: m.ReadingPage })));
-const ReviewPage = lazyWithRetry(() => import('@/components/review/review-page').then((m) => ({ default: m.ReviewPage })));
-const SpellingPage = lazyWithRetry(() => import('@/components/spelling-page').then((m) => ({ default: m.SpellingPage })));
-const ProblemsPage = lazyWithRetry(() => import('@/components/problems-page').then((m) => ({ default: m.ProblemsPage })));
+const DevRoutes = lazyWithRetry(() => import('@/components/dev-routes').then((m) => ({ default: m.DevRoutes })));
 
 function DeepLinkHandler() {
   const navigate = useNavigate();
@@ -56,10 +45,6 @@ function DeepLinkHandler() {
       sendFriendRequest(code)
         .then(() => navigate('/friends', { replace: true, state: { deepLink: 'friend_success' } }))
         .catch(() => navigate('/friends', { replace: true, state: { deepLink: 'friend_error' } }));
-    } else if (startParam?.startsWith('duel_')) {
-      processed.current = true;
-      const duelId = startParam.slice(5);
-      navigate(`/duel/${duelId}`, { replace: true });
     }
   }, [isAuthenticated, navigate]);
 
@@ -76,9 +61,15 @@ function PageSkeleton() {
   );
 }
 
-// Приложение загрузилось — сбрасываем флаг chunk-reload,
-// чтобы после следующего деплоя перезагрузка снова сработала
-sessionStorage.removeItem('chunk-reload');
+// Приложение загрузилось — сбрасываем флаг chunk-reload через 5 секунд
+// успешной работы, чтобы после следующего деплоя перезагрузка снова
+// сработала. Раньше сброс был синхронным при mount app.tsx, но это создавало
+// цикл reload'ов: если lazy-чанки сами падали (например, Vite 504 на
+// outdated deps), флаг сбрасывался ДО их падения, и lazyWithRetry опять
+// перезагружал страницу — навечно.
+setTimeout(() => {
+  sessionStorage.removeItem('chunk-reload');
+}, 5000);
 
 export function App() {
   return (
@@ -99,17 +90,6 @@ export function App() {
                   <Route path="/collections/create" element={<CollectionCreate />} />
                   <Route path="/collections/:id" element={<CollectionDetail />} />
                   <Route path="/profile" element={<Profile />} />
-                  {PILOT_FEATURES.duels && (
-                    <>
-                      <Route path="/duel/create" element={<DuelCreate />} />
-                      <Route path="/duel/:id" element={<DuelGame />} />
-                      <Route path="/duel/:id/result" element={<DuelResult />} />
-                    </>
-                  )}
-                  {PILOT_FEATURES.leagues && (
-                    <Route path="/leaderboard" element={<Leaderboard />} />
-                  )}
-                  <Route path="/modes" element={<Modes />} />
                   {PILOT_FEATURES.gems && (
                     <Route path="/shop" element={<Shop />} />
                   )}
@@ -118,19 +98,7 @@ export function App() {
                   )}
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/words" element={<AllWords />} />
-                  {PILOT_FEATURES.grammar && (
-                    <>
-                      <Route path="/grammar" element={<GrammarPage />} />
-                      <Route path="/grammar/articles" element={<ArticlesPage />} />
-                      <Route path="/grammar/tenses" element={<TensesPage />} />
-                    </>
-                  )}
-                  {PILOT_FEATURES.reading && (
-                    <Route path="/reading" element={<ReadingPage />} />
-                  )}
-                  <Route path="/review" element={<ReviewPage />} />
-                  <Route path="/spelling" element={<SpellingPage />} />
-                  <Route path="/problems" element={<ProblemsPage />} />
+                  <Route path="/dev" element={<DevRoutes />} />
                 </Routes>
               </Suspense>
             </ErrorBoundary>

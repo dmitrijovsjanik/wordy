@@ -2,7 +2,6 @@ export type AiExamplesContent = {
   sentences: Array<{
     en: string;
     ru: string;
-    cefr: 'a1' | 'b1' | 'c1';
   }>;
 };
 

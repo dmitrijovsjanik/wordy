@@ -142,6 +142,7 @@ export type PassiveRecallCardQuestion = {
   meaningId: number;
   wordId?: number | null;
   word: string;
+  transcription: string | null;
   translation: string;               // representative meaning (fallback)
   example: { en: string; ru: string } | null;  // representative meaning (fallback)
   mnemonic: string | null;
@@ -208,6 +209,24 @@ export type DictationQuestion = {
   acceptableAnswers: string[]; // допустимые варианты
   partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
   doubleXpTimeLimitMs?: number;
+};
+
+// Pool card (L0 v2) — карточка для свайпа в основном потоке. Слово + переводы.
+// Юзер жмёт «Знаю» / «Изучаю» / «Отложить» → applyPoolSwipe.
+export type PoolCardQuestion = {
+  type: 'pool-card';
+  /** Word-level ID. Per-meaning информация — внутри meanings. */
+  wordId: number;
+  /** Representative meaningId — для legacy событий и backward-compat. */
+  meaningId: number;
+  word: string;
+  transcription: string | null;
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+  /** Все meanings слова (топ-3 по popularity_rank). */
+  meanings: WordMeaningInfo[];
+  forms?: WordFormsInfo | null;
+  /** Пример representative meaning (для UI). */
+  example: { en: string; ru: string } | null;
 };
 
 // Free Recall question (напиши перевод без вариантов)

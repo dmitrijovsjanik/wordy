@@ -74,27 +74,33 @@ export const leagueNotificationTypeEnum = pgEnum('league_notification_type', [
   'maintained',
 ]);
 
-// Уровень освоения слова на лестнице (используется в learning_events и в user_word_progress (фаза 2)).
-// encounter — первое знакомство; passive — узнавание; active — активное припоминание;
-// production — слово в предложении (отложено в MVP); review — после освоения, интервальные повторения.
+// Уровень освоения слова: pool (L0) / passive (L1) / active (L2) / review (L3) / mastered.
+// known_external — пользователь свайпнул «Знаю» в обзоре, слово изъято
+// из учебного потока (не показывается в pickNext, не идёт в SRS). В UI
+// отображается как mastered (полный ринг прогресса).
 export const learningTierEnum = pgEnum('learning_tier', [
-  'encounter',
+  'pool',
   'passive',
   'active',
-  'production',
   'review',
+  'mastered',
+  'known_external',
 ]);
 
-// Состояние записи user_word_progress.
-// `learning` — слово в очереди обучения, идёт по лестнице.
-// `known_from_review` — отмечено «знаю» в обзоре или через bulk-mark из плейсмента; не учим.
-// `snoozed` — отложено в обзоре, вернётся после snoozed_until.
-// `pending_pool` — свайп «не знаю» из обзора; ждёт забора в активную колоду через drawFromPool.
+// Состояние записи user_word_progress_word:
+//   active        — в обучении (любой тир кроме pool_snoozed/mastered)
+//   pool_snoozed  — отложено из L0 через «Отложить», вернётся после snoozed_until
 export const learningStateEnum = pgEnum('learning_state', [
-  'learning',
-  'known_from_review',
-  'snoozed',
-  'pending_pool',
+  'active',
+  'pool_snoozed',
+]);
+
+// Оценка ответа на L3 (review). 'again' = откат на L2, остальные — модификаторы интервала.
+export const reviewGradeEnum = pgEnum('review_grade', [
+  'again',
+  'hard',
+  'good',
+  'easy',
 ]);
 
 // Append-only лог обучающих событий. Источник правды для retention/funnel-аналитики.
@@ -163,6 +169,17 @@ export const users = pgTable('users', {
   livesRestoredAt: timestamp('lives_restored_at'), // null = жизни полные (5)
   // XP Boost
   xpBoostUntil: timestamp('xp_boost_until'), // null = нет активного буста
+  // Дневной лимит изучения. Считает переходы active → review за день.
+  // Сбрасывается на следующем pickNext после 02:00 MSK.
+  dailyPromotionsCount: integer('daily_promotions_count').default(0).notNull(),
+  // Дата (нормализованная к началу учебного дня = 02:00 MSK), к которой
+  // относится dailyPromotionsCount. null = ещё ни одного перехода.
+  dailyPromotionsDate: timestamp('daily_promotions_date'),
+  // Виртуальная коллекция «Все слова» — глобальный пул всех wordMeanings (rank≤3).
+  // Не хранится в `collections` (там не было бы списка слов — он бы строился
+  // динамически из всех wordMeanings). Подписка живёт прямо здесь.
+  allWordsSubscribed: boolean('all_words_subscribed').default(false).notNull(),
+  allWordsActive: boolean('all_words_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -392,56 +409,10 @@ export const userCollections = pgTable(
   ],
 );
 
-// ─── User Word Progress ─────────────────────────────────────────────────────
-
-export const userWordProgress = pgTable(
-  'user_word_progress',
-  {
-    id: serial('id').primaryKey(),
-    userId: integer('user_id')
-      .references(() => users.id, { onDelete: 'cascade' })
-      .notNull(),
-    meaningId: integer('meaning_id')
-      .references(() => wordMeanings.id, { onDelete: 'cascade' })
-      .notNull(),
-    correctCount: integer('correct_count').default(0).notNull(),
-    incorrectCount: integer('incorrect_count').default(0).notNull(),
-    srsStage: integer('srs_stage').default(0).notNull(), // 0-3 learning progress (3 = learned). LEGACY (заменяется на learning_tier).
-    hasPenalty: boolean('has_penalty').default(false).notNull(),
-    reviewStage: integer('review_stage').default(0).notNull(), // index into review intervals after learned
-    nextReviewAt: timestamp('next_review_at'),
-    masteredAt: timestamp('mastered_at'), // set when learning_tier reaches 'review'
-    fromPlacement: boolean('from_placement').default(false).notNull(), // true = слово помечено через онбординг
-    lastSeenAt: timestamp('last_seen_at').defaultNow().notNull(),
-    // Phase 2: новые поля под лестницу освоения.
-    learningTier: learningTierEnum('learning_tier').default('encounter').notNull(),
-    tierCorrectCount: integer('tier_correct_count').default(0).notNull(),
-    state: learningStateEnum('state').default('learning').notNull(),
-    snoozedUntil: timestamp('snoozed_until'),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  },
-  (table) => [
-    uniqueIndex('user_word_progress_uniq').on(table.userId, table.meaningId),
-    index('user_word_progress_user_idx').on(table.userId),
-    index('user_word_progress_review_idx').on(table.userId, table.nextReviewAt),
-    index('user_word_progress_state_idx').on(table.userId, table.state),
-    index('user_word_progress_snoozed_idx').on(table.userId, table.snoozedUntil),
-  ],
-);
-
-// ─── User Word Progress (Word-level, для L1-L3) ────────────────────────────
+// ─── User Word Progress (word-level) ────────────────────────────────────────
 //
-// Отдельная таблица для прогресса на уровне Word (а не WordSense).
-// На L1 (encounter), L2 (passive), L3 (active) единица обучения = слово.
-// Все значения слова тренируются как одна сущность.
-//
-// L4 (production) и per-meaning rollback после ошибки на review остаются
-// в `user_word_progress` (выше), привязанной к meaning_id.
-//
-// Аналогична `user_word_progress` по полям, но:
-//   - key = word_id (а не meaning_id)
-//   - убран legacy `srs_stage` — для нового кода не нужен
+// Единица обучения на всех тирах — Word (не WordSense). При L0/L1/L2/L3 → mastered
+// слово трекается одной строкой; meaning-level прогресс не хранится.
 
 export const userWordProgressWord = pgTable(
   'user_word_progress_word',
@@ -461,10 +432,22 @@ export const userWordProgressWord = pgTable(
     masteredAt: timestamp('mastered_at'),
     fromPlacement: boolean('from_placement').default(false).notNull(),
     lastSeenAt: timestamp('last_seen_at').defaultNow().notNull(),
-    learningTier: learningTierEnum('learning_tier').default('encounter').notNull(),
+    learningTier: learningTierEnum('learning_tier'),
     tierCorrectCount: integer('tier_correct_count').default(0).notNull(),
-    state: learningStateEnum('state').default('learning').notNull(),
+    state: learningStateEnum('state'),
     snoozedUntil: timestamp('snoozed_until'),
+    /** Счётчик подряд good/easy на финальном stage review (для перехода в mastered). */
+    consecutiveEasyOrGood: integer('consecutive_easy_or_good').default(0).notNull(),
+    /** Последняя кнопка grade на L3. Для аналитики и UI «последняя оценка». */
+    lastGrade: reviewGradeEnum('last_grade'),
+    /** E-Factor для SM-2 × 100 (int, чтобы не возиться с numeric в drizzle).
+     *  Default 250 = 2.50. На первой итерации НЕ используется в формуле — только
+     *  сетка + grade-modifier. Поле оставлено чтобы подключить EF без миграции. */
+    efFactorX100: integer('ef_factor').default(250).notNull(),
+    /** Маркер «свайпнут как Изучаю в обзоре». NULL → слово либо never свайпнуто,
+     *  либо вернулось из pool_snoozed (нужна повторная разметка). NOT NULL +
+     *  tier='pool' + state='active' → готово к промоушну в батч. */
+    poolSwipedLearnAt: timestamp('pool_swiped_learn_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -474,6 +457,8 @@ export const userWordProgressWord = pgTable(
     index('user_word_progress_word_review_idx').on(table.userId, table.nextReviewAt),
     index('user_word_progress_word_state_idx').on(table.userId, table.state),
     index('user_word_progress_word_snoozed_idx').on(table.userId, table.snoozedUntil),
+    index('user_word_progress_word_tier_idx').on(table.userId, table.learningTier),
+    index('user_word_progress_word_pool_swiped_idx').on(table.userId, table.poolSwipedLearnAt),
   ],
 );
 
@@ -772,11 +757,6 @@ export const collectionWordsRelations = relations(collectionWords, ({ one }) => 
 export const userCollectionsRelations = relations(userCollections, ({ one }) => ({
   user: one(users, { fields: [userCollections.userId], references: [users.id] }),
   collection: one(collections, { fields: [userCollections.collectionId], references: [collections.id] }),
-}));
-
-export const userWordProgressRelations = relations(userWordProgress, ({ one }) => ({
-  user: one(users, { fields: [userWordProgress.userId], references: [users.id] }),
-  meaning: one(wordMeanings, { fields: [userWordProgress.meaningId], references: [wordMeanings.id] }),
 }));
 
 export const userWordProgressWordRelations = relations(userWordProgressWord, ({ one }) => ({

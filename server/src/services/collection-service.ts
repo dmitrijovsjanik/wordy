@@ -1,4 +1,4 @@
-import { eq, and, sql, isNull, inArray, or, lte, gte, asc } from 'drizzle-orm';
+import { eq, and, sql, isNull, inArray, or, lte, gte, asc, notInArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   collections,
@@ -9,39 +9,42 @@ import {
   userWordProgressWord,
   wordMeanings,
   words,
+  users,
 } from '../db/schema.js';
+import { FUNCTIONAL_POS, FUNCTIONAL_ENGLISH_WORDS } from '../db/word-filters.js';
 import { FREE_LIMITS } from '../config/premium-config.js';
 import { LEARNED_PROGRESS } from './srs-service.js';
 
 // ─── Word-level progress helpers ────────────────────────────────────────────
 //
-// После Phase D (word-level redesign) прогресс L1-L3 хранится в
-// `userWordProgressWord` — единица учёта = Word. Для совместимости с клиентом
-// (который ждёт per-meaning srsStage 0-3) маппим word-level tier → старую шкалу:
+// Прогресс L0-L3 хранится в `userWordProgressWord` (единица учёта = Word).
+// Лестница (Phase D, Learning v2): pool / passive / active / review / mastered.
+// known_external — слово изъято из учебного потока через свайп «Знаю» в обзоре.
+// Для совместимости с клиентом, который ждёт per-meaning srsStage 0-3, маппим:
 //
-//   review / known_from_review → 3 (выучено)
-//   production                  → 2 (почти выучено, но L4 ещё в процессе)
-//   active                      → 2
-//   passive                     → 1
-//   encounter                   → 0
-//   нет записи (слово не встречалось) → null
-//
-// Все meanings одного слова получают одинаковый srsStage — это семантически
-// правильно, поскольку в новой модели слово учится как единая сущность.
+//   mastered / review / known_external  → 3 (выучено / изъято — UI рендерит одинаково)
+//   active                              → 2
+//   passive                             → 1
+//   pool                                → 0
+//   нет записи                          → null
 const TIER_TO_SRS_STAGE_SQL = sql<number | null>`CASE
   WHEN ${userWordProgressWord.id} IS NULL THEN NULL
-  WHEN ${userWordProgressWord.state} = 'known_from_review' THEN 3
+  WHEN ${userWordProgressWord.learningTier} = 'mastered' THEN 3
   WHEN ${userWordProgressWord.learningTier} = 'review' THEN 3
-  WHEN ${userWordProgressWord.learningTier} = 'production' THEN 2
+  WHEN ${userWordProgressWord.learningTier} = 'known_external' THEN 3
   WHEN ${userWordProgressWord.learningTier} = 'active' THEN 2
   WHEN ${userWordProgressWord.learningTier} = 'passive' THEN 1
   ELSE 0
 END`;
 
 // Условие «слово выучено» — для COUNT/HAVING запросов.
+// known_external включаем: для аналитики разделение «реально выучил» vs
+// «знал изначально» делается через прямой запрос по tier, а UI-метрика
+// «слов выучено» должна показывать оба варианта.
 const WORD_IS_MASTERED_SQL = sql`(
-  ${userWordProgressWord.learningTier} = 'review'
-  OR ${userWordProgressWord.state} = 'known_from_review'
+  ${userWordProgressWord.learningTier} = 'mastered'
+  OR ${userWordProgressWord.learningTier} = 'review'
+  OR ${userWordProgressWord.learningTier} = 'known_external'
 )`;
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -53,11 +56,100 @@ const MAX_POPULARITY_RANK = 3;
 // fr=1 — очень редкие переводы (град=city), fr=5/10 — популярные
 const MIN_FREQUENCY = 5;
 
+// ─── Virtual "All Words" Collection ─────────────────────────────────────────
+//
+// Глобальный пул всех «учебных» wordMeanings (rank ≤ 3, без функциональных
+// POS и артиклей). Не хранится в таблице `collections` — список строится
+// динамически из всех wordMeanings БД. Подписка живёт в `users.allWordsSubscribed`
+// и `users.allWordsActive`, чтобы не нарушать FK на `collections.id`.
+
+export const ALL_WORDS_COLLECTION_ID = -1;
+
+const ALL_WORDS_TITLE = 'Все слова';
+const ALL_WORDS_DESCRIPTION =
+  'Все слова словаря Wordy. Глобальная коллекция — расширяется автоматически при добавлении новых слов';
+const ALL_WORDS_ICON = 'Database02Icon';
+const ALL_WORDS_CATEGORY = 'featured';
+
+export function isAllWordsCollection(id: number): boolean {
+  return id === ALL_WORDS_COLLECTION_ID;
+}
+
+// Фильтры для глобального пула: rank ≤ 3, non-functional POS, не артикли.
+const allWordsMeaningFilter = and(
+  or(
+    isNull(wordMeanings.popularityRank),
+    lte(wordMeanings.popularityRank, MAX_POPULARITY_RANK),
+  ),
+  or(
+    isNull(wordMeanings.translationPartOfSpeech),
+    notInArray(wordMeanings.translationPartOfSpeech, [...FUNCTIONAL_POS]),
+  ),
+  notInArray(words.text, [...FUNCTIONAL_ENGLISH_WORDS]),
+);
+
+type AllWordsSubscription = { subscribed: boolean; active: boolean };
+
+async function getAllWordsSubscription(userId: number): Promise<AllWordsSubscription> {
+  const row = await db
+    .select({
+      subscribed: users.allWordsSubscribed,
+      active: users.allWordsActive,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  if (row.length === 0) return { subscribed: false, active: false };
+  return { subscribed: row[0].subscribed, active: row[0].active };
+}
+
+// Размер глобальной коллекции (количество УНИКАЛЬНЫХ слов после фильтра).
+async function countAllWordsTotalWords(): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(distinct ${wordMeanings.wordId})::int` })
+    .from(wordMeanings)
+    .innerJoin(words, eq(wordMeanings.wordId, words.id))
+    .where(allWordsMeaningFilter);
+  return row?.n ?? 0;
+}
+
+// Количество выученных слов юзера в глобальном пуле.
+async function countAllWordsMastered(userId: number): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(distinct ${wordMeanings.wordId})::int` })
+    .from(wordMeanings)
+    .innerJoin(words, eq(wordMeanings.wordId, words.id))
+    .innerJoin(
+      userWordProgressWord,
+      and(
+        eq(userWordProgressWord.wordId, wordMeanings.wordId),
+        eq(userWordProgressWord.userId, userId),
+      ),
+    )
+    .where(and(allWordsMeaningFilter, WORD_IS_MASTERED_SQL));
+  return row?.n ?? 0;
+}
+
+// Все meaningId из глобального пула. Возвращает обычный массив.
+// Используется в getActiveMeaningIds и getQuizPool.
+async function getAllWordsMeaningIds(): Promise<{ meaningId: number; popularityRank: number | null }[]> {
+  return db
+    .select({
+      meaningId: wordMeanings.id,
+      popularityRank: wordMeanings.popularityRank,
+    })
+    .from(wordMeanings)
+    .innerJoin(words, eq(wordMeanings.wordId, words.id))
+    .where(allWordsMeaningFilter);
+}
+
 // ─── Marketplace ────────────────────────────────────────────────────────────
 
-const CATEGORY_ORDER = ['level', 'pos', 'topic'] as const;
+const CATEGORY_ORDER = ['featured', 'level', 'oxford', 'pos', 'topic'] as const;
 const CATEGORY_TITLES: Record<string, string> = {
+  featured: 'Главное',
   level: 'По уровню',
+  oxford: 'Словари-стандарты',
   pos: 'По частям речи',
   topic: 'По темам',
 };
@@ -95,6 +187,24 @@ export async function getMarketplace(userId: number) {
     isInLibrary: subscribedIds.has(c.id),
   }));
 
+  // Virtual "All Words" — динамически считаем размер пула и подписку юзера.
+  const [allWordsTotal, allWordsSub] = await Promise.all([
+    countAllWordsTotalWords(),
+    getAllWordsSubscription(userId),
+  ]);
+
+  const virtualAllWords = {
+    id: ALL_WORDS_COLLECTION_ID,
+    title: ALL_WORDS_TITLE,
+    description: ALL_WORDS_DESCRIPTION,
+    iconName: ALL_WORDS_ICON,
+    cefrLevel: null,
+    totalWords: allWordsTotal,
+    price: null,
+    category: ALL_WORDS_CATEGORY,
+    isInLibrary: allWordsSub.subscribed,
+  };
+
   // Group by category
   const grouped = new Map<string, typeof withLibrary>();
   for (const c of withLibrary) {
@@ -102,6 +212,8 @@ export async function getMarketplace(userId: number) {
     if (!grouped.has(key)) grouped.set(key, []);
     grouped.get(key)!.push(c);
   }
+  // Виртуальная коллекция всегда в группе `featured` первым элементом.
+  grouped.set(ALL_WORDS_CATEGORY, [virtualAllWords, ...(grouped.get(ALL_WORDS_CATEGORY) ?? [])]);
 
   const groups: { key: string; title: string; collections: typeof withLibrary }[] = [];
 
@@ -132,7 +244,31 @@ export async function getLibrary(userId: number) {
     .from(userCollections)
     .where(eq(userCollections.userId, userId));
 
-  if (subs.length === 0) return [];
+  // Виртуальная «Все слова» — отдельная подписка в users.
+  const allWordsSub = await getAllWordsSubscription(userId);
+  const virtualAllWordsRow = allWordsSub.subscribed
+    ? await (async () => {
+        const [total, mastered] = await Promise.all([
+          countAllWordsTotalWords(),
+          countAllWordsMastered(userId),
+        ]);
+        return {
+          id: ALL_WORDS_COLLECTION_ID,
+          type: 'system' as const,
+          title: ALL_WORDS_TITLE,
+          description: ALL_WORDS_DESCRIPTION,
+          iconName: ALL_WORDS_ICON,
+          cefrLevel: null,
+          totalWords: total,
+          price: null,
+          isActive: allWordsSub.active,
+          addedAt: null,
+          masteredWords: mastered,
+        };
+      })()
+    : null;
+
+  if (subs.length === 0) return virtualAllWordsRow ? [virtualAllWordsRow] : [];
 
   const collectionIds = subs.map((s) => s.collectionId);
   const cols = await db
@@ -150,7 +286,7 @@ export async function getLibrary(userId: number) {
     .where(and(inArray(collections.id, collectionIds), isNull(collections.deletedAt)));
 
   // SRS progress per collection: count mastered WORDS (через word-level прогресс).
-  // Слово считается выученным когда tier='review' или state='known_from_review'.
+  // Слово считается выученным когда tier IN ('review', 'mastered').
   const masteredSq = db
     .select({
       collectionId: collectionWords.collectionId,
@@ -198,17 +334,24 @@ export async function getLibrary(userId: number) {
   const customProgressMap = new Map(customProgressRows.map((r) => [r.collectionId, Number(r.masteredCount)]));
   const subsMap = new Map(subs.map((s) => [s.collectionId, s]));
 
-  return cols.map((c) => ({
+  const realRows = cols.map((c) => ({
     ...c,
     isActive: subsMap.get(c.id)?.isActive ?? true,
-    addedAt: subsMap.get(c.id)?.addedAt,
+    addedAt: subsMap.get(c.id)?.addedAt ?? null,
     masteredWords: (progressMap.get(c.id) ?? 0) + (customProgressMap.get(c.id) ?? 0),
   }));
+
+  return virtualAllWordsRow ? [virtualAllWordsRow, ...realRows] : realRows;
 }
 
 // ─── Collection Detail ──────────────────────────────────────────────────────
 
 export async function getCollectionDetail(collectionId: number, userId: number) {
+  // Виртуальная «Все слова» — список строится из всех wordMeanings.
+  if (isAllWordsCollection(collectionId)) {
+    return getAllWordsCollectionDetail(userId);
+  }
+
   const col = await db.query.collections.findFirst({
     where: and(eq(collections.id, collectionId), isNull(collections.deletedAt)),
   });
@@ -320,9 +463,85 @@ export async function getCollectionDetail(collectionId: number, userId: number) 
   };
 }
 
+async function getAllWordsCollectionDetail(userId: number) {
+  const allWordsSub = await getAllWordsSubscription(userId);
+  const totalWords = await countAllWordsTotalWords();
+
+  // Список слов: все wordMeanings, прошедшие фильтр (rank ≤ 3, non-functional).
+  // Сортировка по frequency_rank (как в обычных коллекциях).
+  const systemWords = await db
+    .select({
+      id: wordMeanings.id,
+      word: words.text,
+      lemma: words.lemma,
+      transcription: words.transcription,
+      translation: wordMeanings.translation,
+      alternativeTranslations: wordMeanings.alternativeTranslations,
+      partOfSpeech: wordMeanings.partOfSpeech,
+      contextExample: wordMeanings.contextExample,
+      examples: wordMeanings.examples,
+      synonyms: wordMeanings.synonyms,
+      meaningHints: wordMeanings.meaningHints,
+      frequency: wordMeanings.frequency,
+      srsStage: TIER_TO_SRS_STAGE_SQL,
+      popularityRank: words.frequencyRank,
+    })
+    .from(wordMeanings)
+    .innerJoin(words, eq(wordMeanings.wordId, words.id))
+    .leftJoin(
+      userWordProgressWord,
+      and(
+        eq(userWordProgressWord.wordId, wordMeanings.wordId),
+        eq(userWordProgressWord.userId, userId),
+      ),
+    )
+    .where(allWordsMeaningFilter)
+    .orderBy(asc(words.frequencyRank), asc(wordMeanings.popularityRank));
+
+  return {
+    collection: {
+      id: ALL_WORDS_COLLECTION_ID,
+      type: 'system' as const,
+      creatorId: null,
+      title: ALL_WORDS_TITLE,
+      description: ALL_WORDS_DESCRIPTION,
+      iconName: ALL_WORDS_ICON,
+      cefrLevel: null,
+      price: null,
+      isPublished: true,
+      category: ALL_WORDS_CATEGORY,
+      totalWords,
+      createdAt: new Date(0),
+      updatedAt: new Date(0),
+      deletedAt: null,
+      isInLibrary: allWordsSub.subscribed,
+      isActive: allWordsSub.active,
+    },
+    words: systemWords.map((w) => ({
+      ...w,
+      lemma: w.lemma ?? undefined,
+      transcription: w.transcription ?? undefined,
+      alternativeTranslations: w.alternativeTranslations ?? undefined,
+      contextExample: w.contextExample ?? undefined,
+      examples: (w.examples as { text: string; translation: string }[] | null) ?? undefined,
+      synonyms: w.synonyms ?? undefined,
+      meaningHints: w.meaningHints ?? undefined,
+      frequency: w.frequency ?? undefined,
+      popularityRank: w.popularityRank ?? undefined,
+    })),
+  };
+}
+
 // ─── Subscribe / Unsubscribe ────────────────────────────────────────────────
 
 export async function subscribe(userId: number, collectionId: number) {
+  if (isAllWordsCollection(collectionId)) {
+    await db
+      .update(users)
+      .set({ allWordsSubscribed: true, allWordsActive: true, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+    return;
+  }
   await db
     .insert(userCollections)
     .values({ userId, collectionId, isActive: true })
@@ -330,6 +549,13 @@ export async function subscribe(userId: number, collectionId: number) {
 }
 
 export async function unsubscribe(userId: number, collectionId: number) {
+  if (isAllWordsCollection(collectionId)) {
+    await db
+      .update(users)
+      .set({ allWordsSubscribed: false, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+    return;
+  }
   await db
     .delete(userCollections)
     .where(
@@ -338,6 +564,13 @@ export async function unsubscribe(userId: number, collectionId: number) {
 }
 
 export async function toggleActive(userId: number, collectionId: number, isActive: boolean) {
+  if (isAllWordsCollection(collectionId)) {
+    await db
+      .update(users)
+      .set({ allWordsActive: isActive, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+    return;
+  }
   await db
     .update(userCollections)
     .set({ isActive })
@@ -593,6 +826,15 @@ export async function getAllWords(userId: number) {
 // ─── Get Active Pool Meaning IDs ────────────────────────────────────────────
 
 export async function getActiveMeaningIds(userId: number): Promise<number[]> {
+  // Если активна виртуальная «Все слова» — возвращаем глобальный пул
+  // (он надмножество всех остальных коллекций, дополнительные подписки не дают
+  // новых meanings, поэтому их можно не запрашивать).
+  const allWordsSub = await getAllWordsSubscription(userId);
+  if (allWordsSub.subscribed && allWordsSub.active) {
+    const rows = await getAllWordsMeaningIds();
+    return [...new Set(rows.map((r) => r.meaningId))];
+  }
+
   // Получаем активные коллекции пользователя
   const activeSubs = await db
     .select({ collectionId: userCollections.collectionId })
@@ -628,27 +870,41 @@ export type QuizPool = {
 };
 
 export async function getQuizPool(userId: number, collectionId?: number): Promise<QuizPool> {
-  let collectionIds: number[];
+  // Виртуальная «Все слова»: либо явная изоляция на -1, либо активна без указания коллекции.
+  // В этом режиме источник meanings — глобальный пул, а не collectionWords.
+  let useAllWordsPool = false;
+  let collectionIds: number[] = [];
 
-  if (collectionId) {
-    // Изоляция — только одна коллекция (проверяем что пользователь подписан)
-    const sub = await db.query.userCollections.findFirst({
-      where: and(
-        eq(userCollections.userId, userId),
-        eq(userCollections.collectionId, collectionId),
-      ),
-    });
-    if (!sub) return { meaningIds: [], customWords: [] };
-    collectionIds = [collectionId];
+  if (collectionId !== undefined) {
+    if (isAllWordsCollection(collectionId)) {
+      const sub = await getAllWordsSubscription(userId);
+      if (!sub.subscribed) return { meaningIds: [], customWords: [] };
+      useAllWordsPool = true;
+    } else {
+      // Изоляция — только одна коллекция (проверяем что пользователь подписан)
+      const sub = await db.query.userCollections.findFirst({
+        where: and(
+          eq(userCollections.userId, userId),
+          eq(userCollections.collectionId, collectionId),
+        ),
+      });
+      if (!sub) return { meaningIds: [], customWords: [] };
+      collectionIds = [collectionId];
+    }
   } else {
-    // Все активные коллекции
-    const activeSubs = await db
-      .select({ collectionId: userCollections.collectionId })
-      .from(userCollections)
-      .where(and(eq(userCollections.userId, userId), eq(userCollections.isActive, true)));
+    // Все активные источники: виртуальная коллекция (если активна) перекрывает все обычные.
+    const allWordsSub = await getAllWordsSubscription(userId);
+    if (allWordsSub.subscribed && allWordsSub.active) {
+      useAllWordsPool = true;
+    } else {
+      const activeSubs = await db
+        .select({ collectionId: userCollections.collectionId })
+        .from(userCollections)
+        .where(and(eq(userCollections.userId, userId), eq(userCollections.isActive, true)));
 
-    if (activeSubs.length === 0) return { meaningIds: [], customWords: [] };
-    collectionIds = activeSubs.map((s) => s.collectionId);
+      if (activeSubs.length === 0) return { meaningIds: [], customWords: [] };
+      collectionIds = activeSubs.map((s) => s.collectionId);
+    }
   }
 
   // Фильтр по популярности: только топ-N переводов
@@ -664,14 +920,23 @@ export async function getQuizPool(userId: number, collectionId?: number): Promis
   );
 
   // Словарные слова с popularity rank (для ранговых слоёв)
-  const systemMeanings = await db
-    .select({
-      meaningId: collectionWords.meaningId,
-      popularityRank: wordMeanings.popularityRank,
-    })
-    .from(collectionWords)
-    .innerJoin(wordMeanings, eq(collectionWords.meaningId, wordMeanings.id))
-    .where(and(inArray(collectionWords.collectionId, collectionIds), popularityFilter, frequencyFilter));
+  const systemMeanings = useAllWordsPool
+    ? await db
+        .select({
+          meaningId: wordMeanings.id,
+          popularityRank: wordMeanings.popularityRank,
+        })
+        .from(wordMeanings)
+        .innerJoin(words, eq(wordMeanings.wordId, words.id))
+        .where(and(allWordsMeaningFilter, frequencyFilter))
+    : await db
+        .select({
+          meaningId: collectionWords.meaningId,
+          popularityRank: wordMeanings.popularityRank,
+        })
+        .from(collectionWords)
+        .innerJoin(wordMeanings, eq(collectionWords.meaningId, wordMeanings.id))
+        .where(and(inArray(collectionWords.collectionId, collectionIds), popularityFilter, frequencyFilter));
 
   const allMeaningIds = [...new Set(systemMeanings.map((m) => m.meaningId))];
 
@@ -723,20 +988,30 @@ export async function getQuizPool(userId: number, collectionId?: number): Promis
     if (!allLearned) break; // Не открываем следующий ранг
   }
 
-  // Кастомные слова (без ранговых ограничений)
-  const custom = await db
-    .select({
-      id: userCustomWords.id,
-      wordText: userCustomWords.wordText,
-      translation: userCustomWords.translation,
-    })
-    .from(userCustomWords)
-    .where(
-      and(
-        eq(userCustomWords.userId, userId),
-        inArray(userCustomWords.collectionId, collectionIds),
-      ),
-    );
+  // Кастомные слова (без ранговых ограничений).
+  // Для виртуальной «Все слова» — все кастомные слова юзера во всех его коллекциях.
+  const custom = useAllWordsPool
+    ? await db
+        .select({
+          id: userCustomWords.id,
+          wordText: userCustomWords.wordText,
+          translation: userCustomWords.translation,
+        })
+        .from(userCustomWords)
+        .where(eq(userCustomWords.userId, userId))
+    : await db
+        .select({
+          id: userCustomWords.id,
+          wordText: userCustomWords.wordText,
+          translation: userCustomWords.translation,
+        })
+        .from(userCustomWords)
+        .where(
+          and(
+            eq(userCustomWords.userId, userId),
+            inArray(userCustomWords.collectionId, collectionIds),
+          ),
+        );
 
   return { meaningIds: unlockedMeaningIds, customWords: custom };
 }
@@ -920,6 +1195,12 @@ export async function removeWordFromCollection(
 }
 
 export async function getActiveCustomWords(userId: number) {
+  // Виртуальная «Все слова»: все кастомные слова юзера.
+  const allWordsSub = await getAllWordsSubscription(userId);
+  if (allWordsSub.subscribed && allWordsSub.active) {
+    return db.select().from(userCustomWords).where(eq(userCustomWords.userId, userId));
+  }
+
   const activeSubs = await db
     .select({ collectionId: userCollections.collectionId })
     .from(userCollections)

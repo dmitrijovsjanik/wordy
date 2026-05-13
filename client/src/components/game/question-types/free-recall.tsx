@@ -1,12 +1,18 @@
 import { useState, useRef, useEffect } from 'react';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-import { checkAnswer, type AnswerResult } from '@/lib/answer-check';
-import { useSpeech } from '@/hooks/use-speech';
-import { motion, AnimatePresence } from 'framer-motion';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { VolumeHighIcon, Tick01Icon } from '@hugeicons/core-free-icons';
+import { Tick01Icon, ArrowRight01Icon, Cancel01Icon } from '@hugeicons/core-free-icons';
+import { Input } from '@/components/ui/input';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+} from '@/components/ui/drawer';
+import { checkAnswer, type AnswerResult } from '@/lib/answer-check';
+import { cn } from '@/lib/utils';
+import { LearningCard, type LearningCardMeaning } from '@/components/game/learning-card';
+import type { WordMeaningInfo, ReviewGrade, WordFormsInfo } from '@/types/api';
 
 type FreeRecallFeedback = {
   result: AnswerResult;
@@ -27,14 +33,40 @@ type FreeRecallProps = {
   onTextSubmit?: (text: string) => void;
   onSkip?: () => void;
   showSkip?: boolean;
-  /** Скрыть нижнюю плашку «Верно!»/«Неверно». Используется на главной,
-   *  где валидация показывается в stimulus-области через цвет. */
   hideResultPanel?: boolean;
+  /** Все значения слова (топ-3 по popularity_rank). Заполнено на L3 word-level. */
+  meanings?: WordMeaningInfo[];
+  /** Грамматические формы слова. Рендерятся inline после транскрипции +
+   *  в отдельном дровере с расшифровкой. */
+  forms?: WordFormsInfo | null;
+  /** Опциональный явный «следующий вопрос» — вызывается после клика на стрелку.
+   *  Если задан, после onAnswer сразу подгружаем следующий вопрос; иначе полагаемся
+   *  на серверный таймер store (если он включён для этого типа). */
+  onNext?: () => void;
+  /** L3-режим: после результата вместо «→» показываются 4 кнопки grade.
+   *  Клик любой кнопки вызывает onGrade(grade, userAnswer). */
+  gradeMode?: boolean;
+  onGrade?: (grade: ReviewGrade, userAnswer: string) => void;
 };
 
+/**
+ * Free Recall — L3-карточка (tier=active). Дизайн Wordy 2.2 (Figma 5221:7688).
+ *
+ * Карточка:
+ *   - заголовок «Введите слово на английском»
+ *   - слово + транскрипция СВЕРХУ С ЭФФЕКТОМ БЛЮРА (контуры видно, прочесть нельзя)
+ *   - список значений (русский перевод + часть речи) + русские примеры
+ *     (английские примеры скрыты)
+ * Футер: инпут «Введите слово на английском» + круглая кнопка «Проверить».
+ *
+ * После ответа: блюр снимается, английское слово и примеры показываются
+ * полностью, инпут окрашивается по результату (зелёный/жёлтый/красный).
+ */
 export function FreeRecall({
   questionKey,
+  prompt,
   direction,
+  transcription,
   audioWord,
   acceptableAnswers,
   feedback,
@@ -45,59 +77,83 @@ export function FreeRecall({
   onSkip,
   showSkip = true,
   hideResultPanel = false,
+  meanings,
+  forms,
+  onNext,
+  gradeMode = false,
+  onGrade,
 }: FreeRecallProps) {
   const [inputValue, setInputValue] = useState('');
   const [localFeedback, setLocalFeedback] = useState<FreeRecallFeedback | null>(null);
+  const [allMeaningsOpen, setAllMeaningsOpen] = useState(false);
+  // Триггер анимации карточки. Сбрасываем через 400ms, чтобы при следующем
+  // ответе того же типа анимация запустилась повторно (без remount LearningCard).
+  const [animationKind, setAnimationKind] = useState<'shake' | 'nod' | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { speak } = useSpeech();
 
-  // Совмещённый feedback (локальный или от родителя)
   const activeFeedback = feedback ?? localFeedback;
   const showResult = activeFeedback !== null;
 
-  // Сбрасываем состояние при смене вопроса
   useEffect(() => {
     setInputValue('');
     setLocalFeedback(null);
-    // Автофокус на инпут при новом вопросе
-    const timer = setTimeout(() => {
-      inputRef.current?.focus();
-    }, 100);
+    setAnimationKind(null);
+    const timer = setTimeout(() => inputRef.current?.focus(), 100);
     return () => clearTimeout(timer);
   }, [questionKey]);
 
+  // Запускаем анимацию по результату; через 400ms (длиннее самой долгой
+  // анимации — nod 0.4s) убираем класс, чтобы повторный wrong/correct
+  // запустил её снова без remount.
+  useEffect(() => {
+    if (!activeFeedback) return;
+    if (activeFeedback.result === 'wrong') setAnimationKind('shake');
+    else if (activeFeedback.result === 'exact') setAnimationKind('nod');
+    else setAnimationKind(null);
+    const t = setTimeout(() => setAnimationKind(null), 450);
+    return () => clearTimeout(t);
+  }, [activeFeedback]);
+
   function handleSubmit() {
     if (showResult || disabled || !inputValue.trim()) return;
-
     onTextSubmit?.(inputValue.trim());
-
     const result = checkAnswer(inputValue, acceptableAnswers);
     const correctAnswer = acceptableAnswers[0] ?? '';
-
     setLocalFeedback({ result, correctAnswer });
+    // ВАЖНО: не вызываем onAnswer сразу — даём юзеру посмотреть результат.
+    // Переход к следующему вопросу происходит по клику на кнопку «дальше».
+  }
 
-    // exact или close — считаем правильным, передаём meaningId
-    if (result === 'exact' || result === 'close') {
+  function handleNext() {
+    if (!showResult || disabled) return;
+    if (activeFeedback!.result === 'exact' || activeFeedback!.result === 'close') {
       onAnswer(meaningId);
     } else {
       onAnswer(null);
     }
+    // Сразу подгружаем следующий вопрос. Для free-recall store настроен
+    // skipFeedbackUpdate=true, поэтому автоматического таймера 1200мс нет.
+    onNext?.();
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Enter') {
       e.preventDefault();
-      handleSubmit();
+      if (showResult) {
+        handleNext();
+      } else {
+        handleSubmit();
+      }
     }
   }
 
-  function handleSpeak() {
-    if (audioWord) {
-      speak(audioWord);
-    }
-  }
+  // direction='ru-en' (стандартный для L3): юзеру показывают русские переводы,
+  // он вводит англ. слово. prompt — это, как правило, англ. слово (на L3 word-level
+  // используется как стимул, но мы блюрим его до ответа).
+  // direction='en-ru' — legacy meaning-level: показываем prompt без блюра.
+  const isRuEn = direction === 'ru-en';
+  const wordToShow = isRuEn ? (acceptableAnswers[0] ?? prompt) : prompt;
 
-  // Цвет обводки инпута по результату
   const inputBorderClass = showResult
     ? activeFeedback.result === 'exact'
       ? 'border-[var(--green-9)]'
@@ -106,105 +162,204 @@ export function FreeRecall({
         : 'border-[var(--red-9)]'
     : '';
 
-  // Текст подсказки для инпута
-  const placeholder = direction === 'en-ru'
-    ? 'Введите перевод...'
-    : 'Type the word...';
+  // Цвет кнопки «дальше» зеркалит результат: зелёный/жёлтый/красный.
+  // До ответа — брендовая кнопка «Проверить».
+  const nextButtonToneClass = !showResult
+    ? 'bg-[var(--brand-9)] active:bg-[var(--brand-10)]'
+    : activeFeedback.result === 'exact'
+      ? 'bg-[var(--green-9)] active:bg-[var(--green-10)]'
+      : activeFeedback.result === 'close'
+        ? 'bg-[var(--amber-9)] active:bg-[var(--amber-10)]'
+        : 'bg-[var(--red-9)] active:bg-[var(--red-10)]';
+
+  const meaningsList: LearningCardMeaning[] = (meanings ?? []).map(toLearningMeaning);
+  const blurActive = isRuEn && !showResult;
+
+  // Цвет слова на L3 = индикатор результата. До ответа — белый.
+  const wordColor = showResult
+    ? activeFeedback.result === 'exact'
+      ? 'var(--green-9)'
+      : activeFeedback.result === 'close'
+        ? 'var(--amber-9)'
+        : 'var(--red-9)'
+    : undefined;
 
   return (
-    <div className="flex w-full flex-col gap-3">
-      {/* Кнопка произношения (только для en→ru) */}
-      {direction === 'en-ru' && audioWord && (
-        <div className="flex justify-center">
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={handleSpeak}
-            className="text-[var(--brand-9)]"
-          >
-            <HugeiconsIcon icon={VolumeHighIcon} size={22} strokeWidth={2} />
-          </Button>
-        </div>
-      )}
-
-      {/* Инпут с кнопкой подтверждения */}
-      <div className="flex gap-2">
-        <Input
-          ref={inputRef}
-          key={`input-${questionKey}`}
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          disabled={showResult || disabled}
-          autoComplete="off"
-          autoCapitalize="off"
-          autoCorrect="off"
-          spellCheck={false}
+    <>
+      <div className="flex min-h-0 flex-1 flex-col">
+        {/* Body */}
+        <div
           className={cn(
-            'flex-1 border transition-colors',
-            inputBorderClass,
+            'flex min-h-0 flex-1 flex-col p-4',
+            animationKind === 'shake' && 'animate-shake',
+            animationKind === 'nod' && 'animate-nod',
           )}
-        />
-        <Button
-          onClick={handleSubmit}
-          disabled={showResult || disabled || !inputValue.trim()}
-          className="shrink-0"
-          size="icon"
         >
-          <HugeiconsIcon icon={Tick01Icon} size={20} />
-        </Button>
+          <LearningCard
+            prompt={isRuEn ? 'Введите слово на английском' : 'Введите перевод'}
+            word={wordToShow}
+            transcription={transcription}
+            meanings={meaningsList}
+            blur={{ word: true, transcription: true, exampleEn: true, forms: true }}
+            revealed={!blurActive}
+            audioWord={audioWord ?? wordToShow}
+            // На L3 active recall кнопка TTS видна только после ответа —
+            // пока юзер не ввёл, аудио раскрыло бы слово.
+            hideAudio={blurActive}
+            onShowAll={() => setAllMeaningsOpen(true)}
+            wordColor={wordColor}
+            forms={forms ?? null}
+            onShowForms={forms ? () => setAllMeaningsOpen(true) : undefined}
+          />
+        </div>
+
+        {/* Footer */}
+        <div className="flex shrink-0 flex-col gap-3 px-8 py-4">
+          <div className="flex items-center gap-2">
+            <Input
+              ref={inputRef}
+              key={`input-${questionKey}`}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={isRuEn ? 'Введите слово на английском' : 'Введите перевод...'}
+              disabled={showResult || disabled}
+              autoComplete="off"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              className={cn(
+                'h-[52px] min-w-0 flex-1 rounded-full border-2 bg-[var(--gray-2)] px-5 transition-colors',
+                inputBorderClass,
+              )}
+            />
+            {/* В gradeMode после ответа стрелку «дальше» скрываем — переход
+                идёт только через одну из 4 grade-кнопок ниже. */}
+            {(!showResult || !gradeMode) && (
+              <button
+                type="button"
+                onClick={showResult ? handleNext : handleSubmit}
+                disabled={disabled || (!showResult && !inputValue.trim())}
+                aria-label={showResult ? 'Следующее слово' : 'Проверить'}
+                style={{ width: 52, height: 52, minWidth: 52, minHeight: 52, flexShrink: 0 }}
+                className={cn(
+                  'flex items-center justify-center rounded-full text-white transition-colors',
+                  nextButtonToneClass,
+                  'disabled:opacity-40',
+                )}
+              >
+                <HugeiconsIcon
+                  icon={showResult ? ArrowRight01Icon : Tick01Icon}
+                  size={20}
+                  strokeWidth={2}
+                />
+              </button>
+            )}
+          </div>
+
+          {/* L3 grade-кнопки — рендерятся ПОСЛЕ ответа в gradeMode. */}
+          {showResult && gradeMode && onGrade && (
+            <div className="grid grid-cols-4 gap-2">
+              <GradeButton label="Снова" tone="red" onClick={() => onGrade('again', inputValue.trim())} />
+              <GradeButton label="Трудно" tone="amber" onClick={() => onGrade('hard', inputValue.trim())} />
+              <GradeButton label="Хорошо" tone="brand" onClick={() => onGrade('good', inputValue.trim())} />
+              <GradeButton label="Легко" tone="green" onClick={() => onGrade('easy', inputValue.trim())} />
+            </div>
+          )}
+
+          {showSkip && onSkip && (
+            <button
+              type="button"
+              onClick={onSkip}
+              disabled={showResult || disabled}
+              style={{ height: 52, minHeight: 52 }}
+              className="flex w-full items-center justify-center rounded-full px-5 text-sm font-medium text-[var(--gray-11)] transition-colors active:text-[var(--gray-12)] disabled:opacity-40"
+            >
+              Не знаю
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Результат — плашка с текстом «Верно!»/«Неверно». На главной скрыта
-          (hideResultPanel=true): валидация показывается в stimulus-области
-          через цвет правильного ответа. */}
-      <AnimatePresence mode="wait">
-        {showResult && !hideResultPanel && (
-          <motion.div
-            key={`feedback-${questionKey}`}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className={cn(
-              'rounded-xl px-4 py-3 text-center text-sm font-medium',
-              activeFeedback.result === 'exact' && 'bg-[var(--green-3)] text-[var(--green-11)]',
-              activeFeedback.result === 'close' && 'bg-[var(--amber-3)] text-[var(--amber-11)]',
-              activeFeedback.result === 'wrong' && 'bg-[var(--red-3)] text-[var(--red-11)]',
-            )}
-          >
-            {activeFeedback.result === 'exact' && 'Верно!'}
-            {activeFeedback.result === 'close' && 'Почти! Засчитано.'}
-            {activeFeedback.result === 'wrong' && (
-              <>
-                <div>Неверно</div>
-                <div className="mt-1 text-base font-bold">
-                  {activeFeedback.correctAnswer}
-                </div>
-              </>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Кнопка пропуска */}
-      {showSkip && onSkip && (
-        <Button
-          variant="link"
-          size="sm"
-          disabled={showResult || disabled}
-          onClick={onSkip}
-          className={cn(
-            'w-full',
-            (showResult || disabled) && 'opacity-40',
-          )}
-        >
-          Не знаю
-        </Button>
-      )}
-    </div>
+      {/* Bottom-sheet со всеми значениями. Дизайн повторяет CollectionsSheet:
+          скругление 48px, встроенная кнопка закрытия скрыта — её роль играет
+          круглая кнопка справа на уровне слова. LearningCard рендерится
+          в flat-режиме (без своего фона) и наследует blur-конфиг основной
+          карточки + значение revealed, чтобы magic-blur вёл себя одинаково. */}
+      <Drawer open={allMeaningsOpen} onOpenChange={setAllMeaningsOpen}>
+        <DrawerContent className="!max-h-[85vh] !rounded-t-[48px] [&>button[data-slot=drawer-close]]:hidden">
+          <DrawerHeader className="sr-only">
+            <DrawerTitle>{wordToShow}</DrawerTitle>
+            <DrawerDescription>Все значения слова</DrawerDescription>
+          </DrawerHeader>
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
+            <LearningCard
+              prompt=""
+              hidePrompt
+              word={wordToShow}
+              transcription={transcription}
+              meanings={meaningsList}
+              blur={{ word: true, transcription: true, exampleEn: true, forms: true }}
+              revealed={!blurActive}
+              audioWord={audioWord ?? wordToShow}
+              hideAudio={blurActive}
+              hideShowAll
+              flat
+              wordColor={wordColor}
+              forms={forms ?? null}
+              formsDetailed
+              wordRightSlot={
+                <button
+                  type="button"
+                  onClick={() => setAllMeaningsOpen(false)}
+                  aria-label="Закрыть"
+                  className="flex size-11 items-center justify-center rounded-full bg-[var(--gray-3)] active:bg-[var(--gray-4)]"
+                >
+                  <HugeiconsIcon icon={Cancel01Icon} size={18} className="text-[var(--gray-11)]" strokeWidth={2} />
+                </button>
+              }
+            />
+          </div>
+        </DrawerContent>
+      </Drawer>
+    </>
   );
 }
 
 export type { FreeRecallFeedback, FreeRecallProps };
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function toLearningMeaning(m: WordMeaningInfo): LearningCardMeaning {
+  return {
+    meaningId: m.meaningId,
+    translation: m.translation,
+    partOfSpeech: m.partOfSpeech,
+    example: m.example ?? null,
+  };
+}
+
+// ─── Grade button (L3 review) ────────────────────────────────────────────────
+
+type GradeTone = 'red' | 'amber' | 'brand' | 'green';
+
+function GradeButton({ label, tone, onClick }: { label: string; tone: GradeTone; onClick: () => void }) {
+  const toneClass = {
+    red:   'bg-[var(--red-9)]   active:bg-[var(--red-10)]',
+    amber: 'bg-[var(--amber-9)] active:bg-[var(--amber-10)]',
+    brand: 'bg-[var(--brand-9)] active:bg-[var(--brand-10)]',
+    green: 'bg-[var(--green-9)] active:bg-[var(--green-10)]',
+  }[tone];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex items-center justify-center rounded-full px-2 py-3 text-xs font-medium text-white',
+        toneClass,
+      )}
+    >
+      {label}
+    </button>
+  );
+}

@@ -4,7 +4,8 @@
 // using a layered strategy:
 //   1. Punctuation/case-insensitive exact match.
 //   2. Lemma equality (only for noun/verb/adj — adv & phrase have no
-//      single-word lemmatizer support in wink).
+//      single-word lemmatizer support in wink). В new flow lemma сворачивается
+//      в `exact` (для юзера это «правильный ответ»).
 //   3. Levenshtein-1 typo tolerance (single token, length ≥ 4).
 //
 // This service is a leaf — no DB, no I/O. Easy to unit-test.
@@ -25,7 +26,10 @@ export interface NormalizeOptions {
   partOfSpeech?: NormalizerPos;
 }
 
-export type NormalizeVia = 'exact' | 'lemma' | 'typo' | 'none';
+// `lemma` свёрнут в `exact` — в текущем flow юзеру не показывается отдельная
+// маркировка «совпало через лемму». Если в будущем нужно различать —
+// добавить четвёртый член в union и UI-кейс на L3/L4.
+export type NormalizeVia = 'exact' | 'typo' | 'none';
 
 export interface NormalizeResult {
   match: boolean;
@@ -104,7 +108,7 @@ function isMultiToken(s: string): boolean {
  * Order of attempts:
  *   1. exact (after normalize)
  *   2. lemma (only when `partOfSpeech` is noun/verb/adj AND both inputs
- *      are single tokens)
+ *      are single tokens) — возвращается как `via: 'exact'`.
  *   3. typo — Levenshtein distance ≤ 1, but only:
  *        - for single-word expected: input length ≥ 4
  *        - for multi-word expected: token-count must match; each pair
@@ -130,7 +134,7 @@ export function normalizeAndCompare(
     return { match: true, via: 'exact' };
   }
 
-  // 2. Lemma (single-word, lemmatizable POS only).
+  // 2. Lemma (single-word, lemmatizable POS only). Свёрнуто в `exact`.
   const pos = opts.partOfSpeech;
   const lemmatizable = pos === 'noun' || pos === 'verb' || pos === 'adj';
   if (lemmatizable && !isMultiToken(normInput)) {
@@ -139,17 +143,12 @@ export function normalizeAndCompare(
       if (isMultiToken(exp)) continue;
       const expLemma = lemmatizeWord(exp, pos);
       if (inputLemma === expLemma) {
-        return { match: true, via: 'lemma', correctedTo: exp };
+        return { match: true, via: 'exact', correctedTo: exp };
       }
     }
   }
 
   // 3. Typo tolerance (Levenshtein ≤ 1).
-  //
-  // Special-case: when pos='phrase' is explicitly set, we treat the answer
-  // as a memorization test — typo tolerance across tokens would also let
-  // through morphological inflections (e.g. "gave"/"give" is Lev=1), which
-  // we want to flag as wrong. So skip typo entirely for explicit phrase pos.
   if (pos === 'phrase') {
     return { match: false, via: 'none' };
   }
@@ -165,7 +164,6 @@ export function normalizeAndCompare(
         const a = inputTokens[i];
         const b = expTokens[i];
         if (a === b) continue;
-        // Per-token typo only allowed if the EXPECTED token is length ≥ 4.
         if (b.length < 4) {
           ok = false;
           break;
@@ -186,7 +184,6 @@ export function normalizeAndCompare(
       }
     } else {
       if (isMultiToken(normInput)) continue;
-      // Single word: minimum length 4 on the EXPECTED side.
       if (exp.length < 4) continue;
       const d = levenshtein(normInput, exp, 1);
       if (d === 1) {

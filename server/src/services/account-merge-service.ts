@@ -3,7 +3,7 @@ import { db } from '../db/index.js';
 import {
   users,
   quizSessions,
-  userWordProgress,
+  userWordProgressWord,
   userCustomWords,
   userCustomWordProgress,
   userCollections,
@@ -24,18 +24,18 @@ import {
  */
 export async function mergeAccounts(targetUserId: number, sourceUserId: number): Promise<void> {
   await db.transaction(async (tx) => {
-    // 1. Перенести прогресс (с дедупликацией — оставляем запись с бОльшим srsStage)
-    // Сначала удаляем конфликтующие записи из source (где есть запись и в target)
+    // 1. Перенести прогресс. Если в target уже есть запись для того же word_id —
+    // удаляем из source (target имеет приоритет: вероятно бОльший прогресс).
     await tx.execute(sql`
-      DELETE FROM user_word_progress
+      DELETE FROM user_word_progress_word
       WHERE user_id = ${sourceUserId}
-        AND meaning_id IN (
-          SELECT meaning_id FROM user_word_progress WHERE user_id = ${targetUserId}
+        AND word_id IN (
+          SELECT word_id FROM user_word_progress_word WHERE user_id = ${targetUserId}
         )
     `);
-    await tx.update(userWordProgress)
+    await tx.update(userWordProgressWord)
       .set({ userId: targetUserId })
-      .where(eq(userWordProgress.userId, sourceUserId));
+      .where(eq(userWordProgressWord.userId, sourceUserId));
 
     // 2. Custom words progress — аналогично
     await tx.execute(sql`

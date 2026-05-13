@@ -1,6 +1,6 @@
-import { eq, and, gte, asc, sql, count } from 'drizzle-orm';
+import { eq, and, gte, asc, count, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { users, quizSessions, duels, streakActivityDays, userLeagueProgress, userSeasonStats, userWordProgress, wordMeanings } from '../db/schema.js';
+import { users, quizSessions, duels, streakActivityDays, userLeagueProgress, userSeasonStats, userWordProgressWord } from '../db/schema.js';
 import { MAX_STREAK_FREEZES, FREEZE_PACKS } from '../config/gems-config.js';
 import { LEAGUE_TIERS } from '../config/league-config.js';
 import { LIVES_ENABLED, MAX_LIVES } from '../config/lives-config.js';
@@ -106,19 +106,18 @@ export async function getStats(userId: number) {
     }
   }
 
-  // Кол-во выученных СЛОВ (все meanings слова должны иметь srsStage >= 3)
-  const masteredWordsSq = db
-    .select({ wordId: wordMeanings.wordId })
-    .from(userWordProgress)
-    .innerJoin(wordMeanings, eq(userWordProgress.meaningId, wordMeanings.id))
-    .where(eq(userWordProgress.userId, userId))
-    .groupBy(wordMeanings.wordId)
-    .having(sql`min(${userWordProgress.srsStage}) >= 3`)
-    .as('mastered_words');
-
+  // Кол-во выученных слов: tier ∈ {mastered, review, known_external}.
+  // review = в SRS (фактически выучено, проходит долгосрочное закрепление).
+  // known_external = свайпнуто «Знаю» в обзоре (изъято из учебного потока).
+  // Аналитика «реально выученных» vs «знал изначально» — отдельным запросом
+  // по конкретному тиру.
   const [masteredRow] = await db
     .select({ value: count() })
-    .from(masteredWordsSq);
+    .from(userWordProgressWord)
+    .where(and(
+      eq(userWordProgressWord.userId, userId),
+      sql`${userWordProgressWord.learningTier} IN ('mastered', 'review', 'known_external')`,
+    ));
 
   return {
     totalGames,

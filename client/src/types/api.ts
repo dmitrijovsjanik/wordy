@@ -264,6 +264,7 @@ export type PassiveRecallApiQuestion = {
   /** Word-level ID (новый сервер). null/undefined — старый сервер, fallback на one-meaning UI. */
   wordId?: number | null;
   word: string;
+  transcription: string | null;
   /** Translation representative meaning'а (fallback). */
   translation: string;
   /** Пример representative meaning'а (fallback). */
@@ -279,6 +280,125 @@ export type PassiveRecallApiQuestion = {
 };
 
 export type LearningTier = 'encounter' | 'passive' | 'active' | 'production' | 'review';
+
+// ─── v2 типы для новой лестницы (pool/passive/active/review/mastered) ───────
+// Параллельны legacy LearningTier. Используются эндпойнтами /api/learning/*.
+// На этапе cleanup (шаг 5) старые типы удаляются, V2 → переименуется без суффикса.
+
+export type LearningTier = 'pool' | 'passive' | 'active' | 'review' | 'mastered';
+export type ReviewGrade = 'again' | 'hard' | 'good' | 'easy';
+export type PoolSwipeAction = 'know' | 'learn' | 'snooze';
+
+// Pool card (L0 v2) — карточка для свайпа в основном потоке.
+export type PoolCardApiQuestion = {
+  type: 'pool-card';
+  wordId: number;
+  meaningId: number;
+  word: string;
+  transcription: string | null;
+  partOfSpeech: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+  meanings: WordMeaningInfo[];
+  forms?: WordFormsInfo | null;
+  example: { en: string; ru: string } | null;
+};
+
+export type QuizQuestion =
+  | PoolCardApiQuestion
+  | PassiveRecallApiQuestion  // L1
+  | FreeRecallApiQuestion;    // L2 + L3
+
+export type SessionCompleteReason =
+  | 'all_in_cooldown'
+  | 'collection_exhausted'
+  | 'no_words'
+  | 'daily_limit_done'
+  | 'all_recent';
+
+export type DailyPromotionsInfo = {
+  /** Сколько слов уже перешло active → review за текущий учебный день (после 02:00 MSK). */
+  count: number;
+  /** Максимум, после которого batches не стартуют. */
+  limit: number;
+};
+
+export type LearningNextResponse =
+  | {
+      mode?: undefined;
+      question: QuizQuestion;
+      tier: LearningTier;
+      wordId: number;
+      dailyPromotions: DailyPromotionsInfo;
+      /** true → на этом pickNext maybePromoteBatch стартовал батч. UI показывает
+       *  экран «Ты отобрал N слов» перед первым passive-вопросом. */
+      batchStarted: boolean;
+      /** Размер батча. Релевантно только когда batchStarted=true. */
+      batchSize: number;
+    }
+  | {
+      mode: 'session_complete';
+      reason: SessionCompleteReason;
+      /** Время ближайшего due (для UI «возвращайтесь к …»). null = нет due. */
+      nextDueAt: string | null;
+      counts: {
+        pool: number;
+        passive: number;
+        active: number;
+        review: number;
+        mastered: number;
+      };
+      dailyPromotions: DailyPromotionsInfo;
+    };
+
+export type LearningAnswerRequest = {
+  wordId: number;
+  /** Для L1/L2 — bool. Для L3 — игнорируется (используется grade). */
+  isCorrect?: boolean;
+  /** Для L3 — обязательно. Для L1/L2 — undefined. */
+  grade?: ReviewGrade;
+  questionType?: string;
+  answerTimeMs?: number;
+  streak?: number;
+  /** Свободный ввод: сервер ре-валидирует через нормализатор. */
+  userAnswer?: string;
+  acceptableAnswers?: string[];
+  partOfSpeech?: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
+};
+
+export type LearningAnswerResponse = {
+  isCorrect: boolean;
+  /** 'exact' | 'typo' | 'none'. lemma → exact во v2. */
+  normalizedVia: 'exact' | 'typo' | 'none' | null;
+  /** Правильный текст для UI «вот правильное написание» (при typo / wrong). */
+  correctedTo?: string;
+  tierBefore: LearningTier;
+  tierAfter: LearningTier;
+  wasAdvanced: boolean;
+  wasReset: boolean;
+  becameMastered: boolean;
+  nextReviewAt: string | Date;
+  // Награды/жизни — те же поля что в v1
+  xpEarned: number;
+  xpModifier?: number;
+  totalXp?: number;
+  level?: number;
+  levelUp?: number;
+  lpEarned: number;
+  lpModifier?: number;
+  totalLp?: number;
+  gemsEarned: number;
+  lives: number;
+  livesRestoredAt: string | null;
+  livesExhausted: boolean;
+};
+
+export type LearningSwipeRequest = {
+  wordId: number;
+  action: PoolSwipeAction;
+  snoozeDays?: number;
+  /** Опционально: коллекция, в которой произведён swipe. Нужно maybePromoteBatch
+   *  для корректной фильтрации pool по коллекции при триггере батча после swipe. */
+  collectionId?: number;
+};
 
 // Обзор (этап 3): один режим — карточка = слово + все его eligible meanings.
 // Решение (свайп) применяется к слову целиком.
@@ -304,36 +424,13 @@ export type ReviewFeedResponse = {
   words: ReviewFeedWord[];
 };
 
-export type LearningNextResponse =
-  | {
-      mode?: undefined;
-      question: QuizQuestion | null;
-      tier: LearningTier | null;
-      /** Word-level ID для L1-3 + word-review. null для L4 production / rollback
-       *  / старого сервера (backward compat). Клиент использует это поле для
-       *  маршрутизации /api/learning/answer на word-level vs meaning-level. */
-      wordId?: number | null;
-    }
-  | {
-      /** Активная колода пуста и pending_pool < poolMinForResume —
-       *  переключиться на встроенный обзор для пополнения пула. */
-      mode: 'embedded_review';
-      poolSize: number;
-      poolMinForResume: number;
-    }
-  | {
-      /** Активная колода пуста, пул пуст, и в общей базе нет доступных
-       *  слов для обзора (исчерпан CEFR-диапазон). Стена. */
-      mode: 'embedded_review_empty';
-    };
-
 export type LearningSwipeResponse = {
   ok: boolean;
-  /** Размер pending_pool после применения батча. Клиент сравнивает с
-   *  poolMinForResume чтобы выйти из встроенного обзора. */
-  poolSize: number;
-  /** Размер активной колоды (state='learning' AND tier IN encounter/passive/active). */
-  activeDeckSize: number;
+  /** true → этот свайп стартовал батч (pool достиг minBatchSize и daily<limit).
+   *  UI показывает экран «Ты отобрал N слов» перед первым passive-вопросом. */
+  batchStarted: boolean;
+  /** Размер стартовавшего батча. Релевантно только когда batchStarted=true. */
+  batchSize: number;
 };
 
 export type LearningAnswerResponse = {

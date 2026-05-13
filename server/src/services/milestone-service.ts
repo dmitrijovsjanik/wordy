@@ -5,18 +5,15 @@
  *
  * После Phase D (word-level redesign):
  *   - "wordsLearned" считается на уровне слов через `userWordProgressWord`.
- *     Слово считается выученным когда оно достигло tier='review'
- *     или state='known_from_review'.
- *   - "totalAnswers" суммирует счётчики из обеих таблиц
- *     (`userWordProgress` для L4/review, `userWordProgressWord` для L1-L3).
- *     У backfill-пользователей возможна небольшая дублирующая инфляция —
- *     приемлемо, метрики milestone завязаны на круглые пороги.
+ *     Слово считается выученным когда оно достигло tier IN ('review', 'mastered').
+ *   - "totalAnswers" суммирует correct + incorrect counters из
+ *     `userWordProgressWord` (per-meaning таблица удалена).
  *   - CEFR-уровень определяется per-word: каждому слову присваивается
  *     минимальный CEFR его meanings (= «самый базовый смысл слова»).
  */
 import { eq, sql, and, isNotNull } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { users, userWordProgress, userWordProgressWord, wordMeanings } from '../db/schema.js';
+import { users, userWordProgressWord, wordMeanings } from '../db/schema.js';
 import { getNewlyReachedMilestones, type MilestoneConfig } from '../config/milestones-config.js';
 import { PILOT_FEATURES } from '../config/pilot-config.js';
 import { addGems } from './progression-service.js';
@@ -39,9 +36,9 @@ export async function checkAndAwardMilestones(userId: number): Promise<Milestone
   const shownMilestones = (user.shownMilestones ?? []) as string[];
 
   // ─── wordsLearned: word-level через userWordProgressWord ──────────────────
-  // Слово выучено, если tier='review' (прошло L1-L4) или state='known_from_review'
-  // (отмечено через обзор/онбординг). Исключаем from_placement=true (отметка
-  // через placement-тест не считается «реальным» обучением).
+  // Слово выучено, если tier in ('review', 'mastered', 'known_external').
+  // Исключаем from_placement=true (отметка через placement-тест не считается
+  // «реальным» обучением).
   const [wordsRow] = await db
     .select({
       count: sql<number>`COUNT(*)`.as('count'),
@@ -51,23 +48,12 @@ export async function checkAndAwardMilestones(userId: number): Promise<Milestone
       and(
         eq(userWordProgressWord.userId, userId),
         eq(userWordProgressWord.fromPlacement, false),
-        sql`(${userWordProgressWord.learningTier} = 'review' OR ${userWordProgressWord.state} = 'known_from_review')`,
+        sql`${userWordProgressWord.learningTier} IN ('review', 'mastered', 'known_external')`,
       ),
     );
   const wordsLearned = Number(wordsRow?.count ?? 0);
 
-  // ─── totalAnswers: сумма по обеим таблицам ────────────────────────────────
-  // userWordProgress отвечает за L4 production + per-meaning review;
-  // userWordProgressWord — за L1-L3.
-  const [meaningAnswersRow] = await db
-    .select({
-      total: sql<number>`COALESCE(SUM(${userWordProgress.correctCount} + ${userWordProgress.incorrectCount}), 0)`.as(
-        'total',
-      ),
-    })
-    .from(userWordProgress)
-    .where(and(eq(userWordProgress.userId, userId), eq(userWordProgress.fromPlacement, false)));
-
+  // totalAnswers: word-level прогресс (per-meaning таблица удалена).
   const [wordAnswersRow] = await db
     .select({
       total: sql<number>`COALESCE(SUM(${userWordProgressWord.correctCount} + ${userWordProgressWord.incorrectCount}), 0)`.as(
@@ -82,7 +68,7 @@ export async function checkAndAwardMilestones(userId: number): Promise<Milestone
       ),
     );
 
-  const totalAnswers = Number(meaningAnswersRow?.total ?? 0) + Number(wordAnswersRow?.total ?? 0);
+  const totalAnswers = Number(wordAnswersRow?.total ?? 0);
 
   // ─── CEFR per-word ─────────────────────────────────────────────────────────
   // Для каждого слова берём MIN CEFR его meanings (минимальный = «базовый» смысл).
@@ -107,7 +93,7 @@ export async function checkAndAwardMilestones(userId: number): Promise<Milestone
       totalWords: sql<number>`COUNT(*)`.as('total_words'),
       learnedWords: sql<number>`COUNT(CASE
         WHEN ${userWordProgressWord.fromPlacement} = false
-          AND (${userWordProgressWord.learningTier} = 'review' OR ${userWordProgressWord.state} = 'known_from_review')
+          AND ${userWordProgressWord.learningTier} IN ('review', 'mastered', 'known_external')
         THEN 1 END)`.as('learned_words'),
     })
     .from(wordCefrSq)

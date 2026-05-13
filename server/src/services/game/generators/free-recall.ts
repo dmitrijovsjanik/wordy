@@ -1,5 +1,5 @@
 import type { PooledMeaning, FreeRecallQuestion } from '../types.js';
-import { getAllTranslations } from './multiple-choice.js';
+import { getAllTranslations } from './translations-util.js';
 import { loadWordMeaningsList } from './word-meanings-list.js';
 import { getWordForms } from '../../word-forms-service.js';
 
@@ -79,7 +79,10 @@ export async function generateFreeRecallFromMeaning(
       wordId: correct.wordId,
       direction: 'ru-en',
       prompt: correct.translation,
-      transcription: null,
+      // Транскрипция нужна для всех карточек: на L2/L3 word-level юзер вводит
+      // английское слово, под ним должна быть транскрипция (под blur'ом до ответа,
+      // открытая после). Раньше тут было null — legacy для meaning-level rollback.
+      transcription: correct.word.transcription,
       audioWord: englishWord,
       acceptableAnswers: unique,
       partOfSpeech: correct.partOfSpeech,

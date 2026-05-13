@@ -7,7 +7,7 @@ import { VALID_VOICES, DEFAULT_VOICE } from '../config/tts-config.js';
 import { XP_BOOST_GEM_COST, XP_BOOST_DURATION_MS } from '../config/xp-boost-config.js';
 import { PILOT_FEATURES } from '../config/pilot-config.js';
 import { db } from '../db/index.js';
-import { wordMeanings, userWordProgress, users } from '../db/schema.js';
+import { wordMeanings, userWordProgressWord, users } from '../db/schema.js';
 
 export default async function userRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
@@ -164,16 +164,18 @@ export default async function userRoutes(app: FastifyInstance) {
   app.get('/api/users/me/cefr-progress', async (request) => {
     const userId = request.user.id;
 
+    // CEFR-прогресс: считаем слова, где tier ∈ {review, mastered} в учёте word-level.
+    // wordMeanings.cefr берём для отображения распределения по уровням.
     const rows = await db
       .select({
         cefrLevel: wordMeanings.cefr,
         totalWords: sql<number>`COUNT(DISTINCT ${wordMeanings.id})`.as('total_words'),
-        learnedWords: sql<number>`COUNT(DISTINCT CASE WHEN ${userWordProgress.srsStage} >= 3 THEN ${wordMeanings.id} END)`.as('learned_words'),
+        learnedWords: sql<number>`COUNT(DISTINCT CASE WHEN ${userWordProgressWord.learningTier} IN ('review', 'mastered') THEN ${wordMeanings.id} END)`.as('learned_words'),
       })
       .from(wordMeanings)
       .leftJoin(
-        userWordProgress,
-        sql`${userWordProgress.meaningId} = ${wordMeanings.id} AND ${userWordProgress.userId} = ${userId}`,
+        userWordProgressWord,
+        sql`${userWordProgressWord.wordId} = ${wordMeanings.wordId} AND ${userWordProgressWord.userId} = ${userId}`,
       )
       .where(isNotNull(wordMeanings.cefr))
       .groupBy(wordMeanings.cefr)

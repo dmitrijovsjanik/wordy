@@ -1,6 +1,21 @@
-import { useEffect } from 'react';
-import { motion, useMotionValue, useTransform, useSpring, AnimatePresence, animate, type PanInfo } from 'framer-motion';
-import { Card } from '@/components/ui/card';
+import { useEffect, useState } from 'react';
+import {
+  motion,
+  useMotionValue,
+  useTransform,
+  useSpring,
+  AnimatePresence,
+  animate,
+  type PanInfo,
+} from 'framer-motion';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+} from '@/components/ui/drawer';
+import { LearningCard, type LearningCardMeaning } from '@/components/game/learning-card';
 import type { ReviewFeedWord } from '@/types/api';
 
 type Action = 'known' | 'unknown' | 'snooze';
@@ -19,21 +34,19 @@ const SWIPE_THRESHOLD_Y = 90;
 const FLY_AWAY_DISTANCE = 800;
 const FLY_AWAY_DURATION = 0.22;
 
-const CARD_SHADOW = 'shadow-[0_10px_30px_-5px_rgba(0,0,0,0.18)]';
-
 /**
- * Карточка обзора (этап 3, единый режим).
+ * Карточка обзора L0 (знакомство с новым словом). По дизайну Wordy 2.2 (Figma 5120:7270).
  *
- * Одна карточка = одно слово + все его eligible meanings строкой через
- * точку с запятой. Без стопки, без переключателей. Свайп карточки целиком —
- * решение по слову.
+ * Лицевая часть карточки — слово, транскрипция, список значений с примерами
+ * и переводами. Карточка не флипается; полный список значений открывается
+ * в bottom-sheet по кнопке «Показать все N».
  *
- * Жесты: вправо = знаю, влево = не знаю, вверх = отложить, вниз = откат.
+ * Жесты сохранены: вправо = знаю, влево = не знаю, вверх = отложить, вниз = откат.
  * onUndo no-op блокирует жест «вниз» (используется в embedded review).
  */
 export function WordStack({ word, onSwipe, onUndo }: WordStackProps) {
   return (
-    <div className="relative h-[60vh] w-full">
+    <div className="relative flex min-h-0 flex-1 flex-col">
       <AnimatePresence mode="popLayout" initial={false}>
         <TopCard
           key={`top-${word.wordId}`}
@@ -53,6 +66,8 @@ type TopCardProps = {
 };
 
 function TopCard({ word, onSwipe, onUndo }: TopCardProps) {
+  const [allMeaningsOpen, setAllMeaningsOpen] = useState(false);
+
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotate = useTransform(x, [-200, 200], [-12, 12]);
@@ -70,7 +85,7 @@ function TopCard({ word, onSwipe, onUndo }: TopCardProps) {
     return unsub;
   }, [x, inDropZone]);
 
-  // Ripple-заливка из точки касания (см. этап 2 / прежняя реализация).
+  // Ripple-заливка из точки касания.
   const fillBg = useTransform([x, originX, originY, dropZoneSpring], (latest) => {
     const xv = latest[0] as number;
     const ox = latest[1] as number;
@@ -117,54 +132,74 @@ function TopCard({ word, onSwipe, onUndo }: TopCardProps) {
     }
   };
 
-  const translations = word.meanings.map((m) => m.translation).join('; ');
-  // Сервер заполняет example только у первого meaning по popularity_rank ASC.
-  // Если у первого meaning примера нет — на карточке примера тоже не будет.
-  const first = word.meanings[0];
-  const exampleEn = first?.exampleEn;
-  const exampleRu = first?.exampleRu;
+  const meaningsCount = word.meanings.length;
 
   return (
-    <motion.div
-      drag
-      dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-      dragSnapToOrigin
-      dragElastic={0.6}
-      onPointerDown={handlePointerDown}
-      onDragEnd={handleDragEnd}
-      initial={{ opacity: 0, scale: 0.96 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.18 }}
-      style={{ x, y, rotate, zIndex: 100 }}
-      className="absolute inset-0 flex flex-col"
-    >
-      <Card className={`relative flex flex-1 flex-col gap-4 overflow-hidden px-6 py-8 text-center ${CARD_SHADOW}`}>
-        <motion.div
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{ backgroundImage: fillBg }}
+    <>
+      <motion.div
+        drag
+        dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+        dragSnapToOrigin
+        dragElastic={0.6}
+        onPointerDown={handlePointerDown}
+        onDragEnd={handleDragEnd}
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.18 }}
+        style={{ x, y, rotate, zIndex: 100 }}
+        className="absolute inset-0 flex flex-col"
+      >
+        <LearningCard
+          prompt="Решите, знаете ли вы это слово"
+          word={word.text}
+          transcription={word.transcription ?? null}
+          meanings={toLearningMeanings(word)}
+          revealed
+          audioWord={word.text}
+          onShowAll={() => setAllMeaningsOpen(true)}
+          backgroundOverlay={
+            <motion.div
+              aria-hidden
+              className="pointer-events-none absolute inset-0"
+              style={{ backgroundImage: fillBg }}
+            />
+          }
         />
+      </motion.div>
 
-        <div className="relative flex flex-1 flex-col items-center justify-center gap-3">
-          <div className="text-xs uppercase tracking-wide text-[var(--gray-11)]">
-            {word.partOfSpeech}
+      {/* Bottom-sheet со всеми значениями (та же карточка, но со скроллом). */}
+      <Drawer open={allMeaningsOpen} onOpenChange={setAllMeaningsOpen}>
+        <DrawerContent className="max-h-[85vh]">
+          <DrawerHeader className="sr-only">
+            <DrawerTitle>{word.text}</DrawerTitle>
+            <DrawerDescription>Все значения слова</DrawerDescription>
+          </DrawerHeader>
+          <div className="overflow-y-auto px-4 pb-8">
+            <LearningCard
+              prompt="Решите, знаете ли вы это слово"
+              word={word.text}
+              transcription={word.transcription ?? null}
+              meanings={toLearningMeanings(word)}
+              revealed
+              audioWord={word.text}
+              hideShowAll
+            />
           </div>
-          <div className="text-3xl font-bold">{word.text}</div>
-          {word.transcription && (
-            <div className="text-sm text-[var(--gray-11)]">[{word.transcription}]</div>
-          )}
-          <div className="mt-2 px-2 text-base text-[var(--gray-12)] leading-snug">
-            {translations}
-          </div>
-        </div>
-
-        {exampleEn && exampleRu && (
-          <div className="relative border-t border-[var(--gray-5)] pt-3 text-left">
-            <div className="text-sm">{exampleEn}</div>
-            <div className="text-sm text-[var(--gray-11)]">{exampleRu}</div>
-          </div>
-        )}
-      </Card>
-    </motion.div>
+        </DrawerContent>
+      </Drawer>
+    </>
   );
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function toLearningMeanings(word: ReviewFeedWord): LearningCardMeaning[] {
+  return word.meanings.map((m) => ({
+    meaningId: m.meaningId,
+    translation: m.translation,
+    partOfSpeech: word.partOfSpeech,
+    example: m.exampleEn
+      ? { en: m.exampleEn, ru: m.exampleRu ?? '' }
+      : null,
+  }));
 }

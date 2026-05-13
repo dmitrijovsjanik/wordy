@@ -1,5 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { HugeiconsIcon } from '@hugeicons/react';
+import {
+  ArrowLeft01Icon,
+  ArrowRight01Icon,
+  CheckmarkCircle02Icon,
+  PlayIcon,
+  Settings02Icon,
+  Tick02Icon,
+} from '@hugeicons/core-free-icons';
 import { useUserStore } from '@/stores/user-store';
 import { useLeagueStore } from '@/stores/league-store';
 import { useCollectionStore } from '@/stores/collection-store';
@@ -8,169 +17,210 @@ import { GemsIndicator } from '@/components/ui/gems-indicator';
 import { LeagueBadge } from '@/components/ui/league-badge';
 import { StreakDaysIndicator } from '@/components/ui/streak-days-indicator';
 import { StreakInfoSheet } from '@/components/ui/streak-info-sheet';
-import { Badge } from '@/components/ui/badge';
+import { getStreakCalendar } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { PILOT_FEATURES } from '@/lib/pilot-config';
+import type { StreakActivityDay } from '@/types/api';
+import cardVocabularyBg from '@/assets/dashboard/card-vocabulary.png';
+import cardGrammarBg from '@/assets/dashboard/card-grammar.png';
+import cardComprehensionBg from '@/assets/dashboard/card-comprehension.png';
+import cardExpressionBg from '@/assets/dashboard/card-expression.png';
 
-type SectionStatus = 'active' | 'in-progress' | 'soon';
+const DAY_LABELS_RU = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
-type CoreSection = {
-  key: string;
+type WeekDay = {
+  dateStr: string;
+  label: string;
+  isToday: boolean;
+  isFuture: boolean;
+  isWeekend: boolean;
+  activity: 'play' | 'freeze' | null;
+};
+
+function toDateStr(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
+const MONTHS_RU_SHORT = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+
+function buildWeek(activityMap: Map<string, 'play' | 'freeze'>, weekOffset: number): WeekDay[] {
+  const now = new Date();
+  const today = toDateStr(now);
+  const utcDow = (now.getUTCDay() + 6) % 7;
+  const monday = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate() - utcDow + weekOffset * 7,
+  ));
+
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(Date.UTC(monday.getUTCFullYear(), monday.getUTCMonth(), monday.getUTCDate() + i));
+    const dateStr = toDateStr(d);
+    return {
+      dateStr,
+      label: DAY_LABELS_RU[i],
+      isToday: dateStr === today,
+      isFuture: dateStr > today,
+      isWeekend: i >= 5,
+      activity: activityMap.get(dateStr) ?? null,
+    };
+  });
+}
+
+function weekTitle(week: WeekDay[], weekOffset: number): string {
+  if (weekOffset === 0) return 'Сегодня';
+  const start = new Date(week[0].dateStr + 'T00:00:00Z');
+  const end = new Date(week[6].dateStr + 'T00:00:00Z');
+  const startStr = `${start.getUTCDate()} ${MONTHS_RU_SHORT[start.getUTCMonth()]}`;
+  const endStr = `${end.getUTCDate()} ${MONTHS_RU_SHORT[end.getUTCMonth()]}`;
+  return `${startStr} – ${endStr}`;
+}
+
+type WeekHeaderProps = {
   title: string;
-  description: string;
-  status: SectionStatus;
-  navigateTo: string | null;
+  titleKey: number;
+  slideDir: 'left' | 'right';
+  onPrev: () => void;
+  onNext: () => void;
+  canGoNext: boolean;
 };
 
-const SYSTEMS_SECTIONS: CoreSection[] = [
-  {
-    key: 'vocabulary',
-    title: 'Вокабуляр',
-    description: 'Учим слова: знакомство, узнавание и припоминание в контексте.',
-    status: 'active',
-    navigateTo: '/vocabulary',
-  },
-  ...(PILOT_FEATURES.grammar
-    ? [
-        {
-          key: 'grammar',
-          title: 'Грамматика',
-          description: 'Артикли и времена: правила и тренажёр.',
-          status: 'active' as const,
-          navigateTo: '/grammar',
-        },
-      ]
-    : []),
-  {
-    key: 'spelling',
-    title: 'Орфография',
-    description: 'Правописание частотных слов английского.',
-    status: 'active',
-    navigateTo: '/spelling',
-  },
-  {
-    key: 'pronunciation',
-    title: 'Произношение',
-    description: 'Звуки английского и постановка артикуляции.',
-    status: 'in-progress',
-    navigateTo: null,
-  },
-];
+function WeekHeader({ title, titleKey, slideDir, onPrev, onNext, canGoNext }: WeekHeaderProps) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="min-w-0 flex-1 overflow-hidden pl-2">
+        <h1
+          key={titleKey}
+          className={cn(
+            'truncate text-[24px] font-semibold leading-[32px] text-[var(--gray-12)] animate-in fade-in duration-200',
+            slideDir === 'left' ? 'slide-in-from-right-4' : 'slide-in-from-left-4',
+          )}
+        >
+          {title}
+        </h1>
+      </div>
+      <button
+        type="button"
+        onClick={onPrev}
+        aria-label="Предыдущая неделя"
+        className="flex size-11 items-center justify-center rounded-full active:bg-[var(--gray-3)]"
+      >
+        <HugeiconsIcon icon={ArrowLeft01Icon} size={18} className="text-[var(--gray-11)]" strokeWidth={2} />
+      </button>
+      <button
+        type="button"
+        onClick={onNext}
+        disabled={!canGoNext}
+        aria-label="Следующая неделя"
+        className={cn(
+          'flex size-11 items-center justify-center rounded-full',
+          canGoNext ? 'active:bg-[var(--gray-3)]' : 'opacity-40',
+        )}
+      >
+        <HugeiconsIcon icon={ArrowRight01Icon} size={18} className="text-[var(--gray-11)]" strokeWidth={2} />
+      </button>
+    </div>
+  );
+}
 
-const SKILLS_SECTIONS: CoreSection[] = [
-  ...(PILOT_FEATURES.reading
-    ? [
-        {
-          key: 'reading',
-          title: 'Чтение',
-          description: 'Мини-тексты с проверкой понимания.',
-          status: 'active' as const,
-          navigateTo: '/reading',
-        },
-      ]
-    : []),
-  {
-    key: 'listening',
-    title: 'Аудирование',
-    description: 'Понимание устной речи на слух.',
-    status: 'in-progress',
-    navigateTo: null,
-  },
-  {
-    key: 'writing',
-    title: 'Письмо',
-    description: 'Складный письменный английский.',
-    status: 'soon',
-    navigateTo: null,
-  },
-  {
-    key: 'speaking',
-    title: 'Говорение',
-    description: 'Свободная устная речь.',
-    status: 'soon',
-    navigateTo: null,
-  },
-];
+function WeekDayCell({ day }: { day: WeekDay }) {
+  const isPlayed = day.activity === 'play' || day.activity === 'freeze';
 
-type OtherSection = {
-  key: string;
+  return (
+    <div
+      className={cn(
+        'flex flex-1 flex-col items-center gap-1 py-2',
+        day.isFuture && 'opacity-40',
+      )}
+    >
+      <div
+        className={cn(
+          'flex size-5 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold leading-none',
+          day.isToday && 'bg-[var(--brand-9)] text-white',
+          !day.isToday && day.isWeekend && 'text-[var(--red-11)]',
+          !day.isToday && !day.isWeekend && 'text-[var(--gray-11)]',
+        )}
+      >
+        {day.label}
+      </div>
+      <div className="flex size-[22px] shrink-0 items-center justify-center">
+        {isPlayed ? (
+          <HugeiconsIcon
+            icon={CheckmarkCircle02Icon}
+            size={18}
+            className={day.activity === 'freeze' ? 'text-[var(--blue-9)]' : 'text-[var(--green-9)]'}
+            strokeWidth={2}
+          />
+        ) : day.isToday ? (
+          <div className="size-[18px] rounded-full border-2 border-dashed border-[var(--brand-9)]" />
+        ) : (
+          <div className="size-[18px] rounded-full border-2 border-[var(--gray-6)]" />
+        )}
+      </div>
+    </div>
+  );
+}
+
+type ModeCardProps = {
   title: string;
-  description: string;
-  navigateTo: string;
+  subtitle: string;
+  status: string;
+  statusVariant?: 'default' | 'badge-done' | 'badge-start';
+  backgroundImage: string;
+  disabled?: boolean;
+  onClick?: () => void;
 };
 
-const OTHER_SECTIONS: OtherSection[] = [
-  ...(PILOT_FEATURES.duels
-    ? [
-        {
-          key: 'duel',
-          title: 'Дуэли',
-          description: 'Сразись с другом на скорость и точность.',
-          navigateTo: '/duel/create',
-        },
-      ]
-    : []),
-  {
-    key: 'quiz-legacy',
-    title: 'Квиз (legacy)',
-    description: 'Старый формат квиза. Будет проработан после пилота.',
-    navigateTo: '/modes',
-  },
-];
-
-type SectionCardProps = {
-  section: CoreSection;
-  isFirstTime: boolean;
-};
-
-function SectionCard({ section, isFirstTime }: SectionCardProps) {
-  const navigate = useNavigate();
-  const isVocabulary = section.key === 'vocabulary';
-  const isInProgress = section.status === 'in-progress';
-  const isSoon = section.status === 'soon';
-  const isInactive = isInProgress || isSoon;
-
-  const handleClick = () => {
-    if (isInactive) return;
-    if (isFirstTime && isVocabulary) {
-      navigate('/collections');
-      return;
-    }
-    if (section.navigateTo) navigate(section.navigateTo);
-  };
-
+function ModeCard({
+  title,
+  subtitle,
+  status,
+  statusVariant = 'default',
+  backgroundImage,
+  disabled,
+  onClick,
+}: ModeCardProps) {
   return (
     <button
       type="button"
-      onClick={handleClick}
-      disabled={isInactive}
+      onClick={onClick}
+      disabled={disabled}
       className={cn(
-        'flex flex-col gap-1.5 rounded-2xl bg-[var(--gray-2)] px-4 py-3 text-left transition-colors',
-        !isInactive && 'active:bg-[var(--gray-3)]',
-        isSoon && 'opacity-40 cursor-default',
-        isInProgress && 'opacity-60 cursor-default',
+        'relative flex h-full min-h-0 flex-col items-start justify-end overflow-hidden rounded-[32px] p-4 text-left transition-transform',
+        !disabled && 'active:scale-[0.98]',
+        disabled && 'cursor-default',
       )}
     >
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-semibold">{section.title}</span>
-        {isInProgress && (
-          <Badge variant="secondary" className="shrink-0 text-[10px]">
-            В разработке
-          </Badge>
+      <img
+        src={backgroundImage}
+        alt=""
+        aria-hidden
+        className={cn(
+          'absolute inset-0 size-full object-cover',
+          disabled && 'opacity-40 saturate-0',
         )}
-        {isSoon && (
-          <Badge variant="secondary" className="shrink-0 text-[10px]">
-            Скоро
-          </Badge>
-        )}
+      />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent to-black/70" />
+
+      <div className="relative flex w-full flex-col gap-4">
+        <div className="flex flex-col gap-1 text-white">
+          <span className="text-xl font-semibold leading-7">{title}</span>
+          <span className="text-sm leading-5">{subtitle}</span>
+        </div>
+        <div className="inline-flex items-center justify-center self-start rounded-full bg-white/15 px-2 py-1 backdrop-blur-2xl">
+          <span className="text-sm leading-5 text-white">{status}</span>
+        </div>
       </div>
-      <span className="text-xs text-[var(--gray-11)]">
-        {isFirstTime && isVocabulary
-          ? 'Выберите коллекцию для старта'
-          : section.description}
-      </span>
-      {section.status === 'active' && !(isFirstTime && isVocabulary) && (
-        <span className="text-[10px] text-[var(--gray-10)]">Уровень будет здесь</span>
+
+      {statusVariant === 'badge-done' && (
+        <div className="absolute right-4 top-4 flex size-9 items-center justify-center rounded-full bg-white">
+          <HugeiconsIcon icon={Tick02Icon} size={18} className="text-[var(--gray-12)]" strokeWidth={2} />
+        </div>
+      )}
+      {statusVariant === 'badge-start' && (
+        <div className="absolute right-4 top-4 flex size-9 items-center justify-center rounded-full border border-white">
+          <HugeiconsIcon icon={PlayIcon} size={18} className="text-white" strokeWidth={2} />
+        </div>
       )}
     </button>
   );
@@ -184,38 +234,72 @@ export function Dashboard() {
   const progress = useLeagueStore((s) => s.progress);
   const fetchStatus = useLeagueStore((s) => s.fetchStatus);
   const [streakSheetOpen, setStreakSheetOpen] = useState(false);
+  const [activityDays, setActivityDays] = useState<StreakActivityDay[]>([]);
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [slideDir, setSlideDir] = useState<'left' | 'right'>('left');
+  // Грузим столько месяцев, сколько нужно для покрытия weekOffset-й недели + запас.
+  const monthsToFetch = Math.max(1, Math.ceil(Math.abs(weekOffset) / 4) + 1);
 
   useEffect(() => {
     fetchLibrary();
   }, [fetchLibrary]);
 
   useEffect(() => {
-    fetchStatus();
+    if (PILOT_FEATURES.leagues) fetchStatus();
   }, [fetchStatus]);
+
+  useEffect(() => {
+    getStreakCalendar(monthsToFetch)
+      .then((data) => setActivityDays(data.activityDays))
+      .catch(() => {});
+  }, [monthsToFetch]);
+
+  const week = useMemo(() => {
+    const map = new Map<string, 'play' | 'freeze'>();
+    for (const d of activityDays) map.set(d.date, d.type as 'play' | 'freeze');
+    return buildWeek(map, weekOffset);
+  }, [activityDays, weekOffset]);
+
+  const headerTitle = useMemo(() => weekTitle(week, weekOffset), [week, weekOffset]);
 
   if (!user) return null;
 
   const tier = progress?.tier ?? 'bronze';
   const hasActiveCollection = library.some((c) => c.isActive);
-  const isFirstTimeVocab = !hasActiveCollection;
+  const todayDone = week.find((d) => d.isToday)?.activity != null;
+
+  // TODO: подключить реальный счётчик L4 due (выученных слов, готовых к повторению сейчас).
+  // На бэке нужна функция getReviewDueCount(userId, collectionId) в learning-service.ts —
+  // COUNT WHERE state='learning' AND learning_tier='review' AND next_review_at <= NOW().
+  // Затем добавить поле reviewDueCount в LibraryCollection и в ответ /api/collections/library.
+  const vocabularyDueCount = 0;
+  const vocabularyStatus = hasActiveCollection
+    ? `Повторение ${vocabularyDueCount}`
+    : 'Выберите коллекцию';
 
   return (
-    <div className="flex flex-col gap-5 px-4 pt-4 pb-4">
-      {/* Header: Avatar | Gems | League | Streak */}
-      <div className="flex items-center gap-3">
-        <button onClick={() => navigate('/profile')} className="shrink-0">
-          <Avatar src={user.avatarUrl} fallback={user.firstName} size={48} />
+    <div className="flex h-full flex-col overflow-hidden py-4">
+      <header className="flex items-center gap-3 px-8 py-4">
+        <button
+          onClick={() => navigate('/profile')}
+          className="flex flex-1 items-center gap-3 text-left"
+          aria-label="Профиль"
+        >
+          <Avatar src={user.avatarUrl} fallback={user.firstName} size={46} />
+          <div className="flex flex-col">
+            <span className="text-sm leading-5 text-[var(--gray-11)]">Привет,</span>
+            <span className="text-base font-semibold leading-[22px] text-[var(--gray-12)]">
+              {user.firstName}
+            </span>
+          </div>
         </button>
         {PILOT_FEATURES.gems && (
-          <div className="flex flex-1 justify-center">
-            <GemsIndicator
-              gems={user.gems}
-              freezes={user.streakFreezes}
-              onClick={() => navigate('/shop')}
-            />
-          </div>
+          <GemsIndicator
+            gems={user.gems}
+            freezes={user.streakFreezes}
+            onClick={() => navigate('/shop')}
+          />
         )}
-        {!PILOT_FEATURES.gems && <div className="flex-1" />}
         {PILOT_FEATURES.leagues && (
           <button
             onClick={() => navigate('/leaderboard')}
@@ -226,52 +310,75 @@ export function Dashboard() {
           </button>
         )}
         <StreakDaysIndicator count={user.streakDays} onClick={() => setStreakSheetOpen(true)} />
-      </div>
+        <button
+          type="button"
+          onClick={() => navigate('/settings')}
+          aria-label="Настройки"
+          className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[var(--gray-3)] active:bg-[var(--gray-4)]"
+        >
+          <HugeiconsIcon icon={Settings02Icon} size={18} className="text-[var(--gray-11)]" strokeWidth={2} />
+        </button>
+      </header>
 
-      {/* Системы */}
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-[var(--gray-11)]">Системы</h2>
-        <div className="flex flex-col gap-2">
-          {SYSTEMS_SECTIONS.map((s) => (
-            <SectionCard
-              key={s.key}
-              section={s}
-              isFirstTime={s.key === 'vocabulary' ? isFirstTimeVocab : false}
-            />
+      <section className="flex flex-col gap-3.5 overflow-hidden px-8 py-4">
+        <WeekHeader
+          title={headerTitle}
+          titleKey={weekOffset}
+          slideDir={slideDir}
+          onPrev={() => {
+            setSlideDir('right');
+            setWeekOffset((o) => o - 1);
+          }}
+          onNext={() => {
+            setSlideDir('left');
+            setWeekOffset((o) => Math.min(0, o + 1));
+          }}
+          canGoNext={weekOffset < 0}
+        />
+        <div
+          key={weekOffset}
+          className={cn(
+            'flex items-center gap-[17px] animate-in fade-in duration-200',
+            slideDir === 'left' ? 'slide-in-from-right-4' : 'slide-in-from-left-4',
+          )}
+        >
+          {week.map((day) => (
+            <WeekDayCell key={day.dateStr} day={day} />
           ))}
         </div>
       </section>
 
-      {/* Навыки */}
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-[var(--gray-11)]">Навыки</h2>
-        <div className="flex flex-col gap-2">
-          {SKILLS_SECTIONS.map((s) => (
-            <SectionCard
-              key={s.key}
-              section={s}
-              isFirstTime={false}
-            />
-          ))}
-        </div>
-      </section>
-
-      {/* Другое */}
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-[var(--gray-11)]">Другое</h2>
-        <div className="flex flex-col gap-2">
-          {OTHER_SECTIONS.map((s) => (
-            <button
-              key={s.key}
-              type="button"
-              onClick={() => navigate(s.navigateTo)}
-              className="flex flex-col gap-1.5 rounded-2xl bg-[var(--gray-2)] px-4 py-3 text-left transition-colors active:bg-[var(--gray-3)]"
-            >
-              <span className="text-sm font-semibold">{s.title}</span>
-              <span className="text-xs text-[var(--gray-11)]">{s.description}</span>
-            </button>
-          ))}
-        </div>
+      <section className="grid min-h-0 flex-1 grid-cols-2 gap-2 px-4 py-4">
+        <ModeCard
+          title="Словарь"
+          subtitle="Изучение слов"
+          status={vocabularyStatus}
+          statusVariant={todayDone ? 'badge-done' : undefined}
+          backgroundImage={cardVocabularyBg}
+          onClick={() => navigate('/vocabulary/learn')}
+        />
+        <ModeCard
+          title="Грамматика"
+          subtitle="Правила языка"
+          status="Скоро"
+          backgroundImage={cardGrammarBg}
+          disabled
+        />
+        <ModeCard
+          title="Понимание"
+          subtitle="Чтение и слух"
+          status="Скоро"
+          statusVariant="badge-start"
+          backgroundImage={cardComprehensionBg}
+          disabled
+        />
+        <ModeCard
+          title="Выражение"
+          subtitle="Письмо и речь"
+          status="Скоро"
+          backgroundImage={cardExpressionBg}
+          disabled
+        />
       </section>
 
       <StreakInfoSheet

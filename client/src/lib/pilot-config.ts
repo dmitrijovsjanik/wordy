@@ -20,36 +20,28 @@
 import { LIVES_ENABLED } from './feature-flags';
 
 export const PILOT_FEATURES = {
-  // ===== СКРЫТО В ПИЛОТЕ =====
+  // duels/reading/grammar/review/spelling/problems/modes удалены вместе с
+  // legacy-кодом (см. archive/v1-learning-flow/). Оставляем флаги, которые
+  // реально что-то скрывают в живых компонентах.
 
-  /** PvP-режим, экраны лобби/дуэли, кнопки запуска. */
-  duels: false,
-
-  /** Лиги, LP-индикаторы, рейтинг-таблицы. */
+  /** Лиги — экран /leaderboard удалён, но league-виджеты остались в
+   *  dashboard/profile/vocabulary-section/reward-feedback. Скрываются этим флагом. */
   leagues: false,
 
-  /** Гемы целиком: индикатор в шапке, /shop, тостеры наград, popup'ы freeze. */
+  /** Гемы целиком: индикатор в шапке, /shop, тостеры наград. */
   gems: false,
 
-  /** Double XP / boost-таймер, прогресс-бар, всплывашки. */
+  /** Double XP / boost-таймер. */
   xpBoost: false,
 
   /** Premium-страницы, кнопки оплаты, Telegram Stars. */
   payments: false,
-
-  /** Reading mode — отдельный режим, вкладка/кнопка запуска. */
-  reading: false,
-
-  /** Grammar module — отдельный режим, вкладка/кнопка запуска. */
-  grammar: false,
 
   /** Онбординг — туры, объяснялки. Кроме первого выбора коллекции. */
   onboarding: false,
 
   /** Система жизней (сердечки). Источник: feature-flags.ts. */
   lives: LIVES_ENABLED,
-
-  // ===== ОСТАВЛЕНО В ПИЛОТЕ =====
 
   /** Streak дней. В пилоте без freeze. */
   streakDays: true,

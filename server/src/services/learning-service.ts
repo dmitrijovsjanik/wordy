@@ -1,823 +1,369 @@
 /**
- * Learning Service — фундамент новой лестницы освоения слов.
+ * Learning Service V2 — новая лестница освоения слов.
  *
- * Заменяет логику `srs-service.computeNextReview` на tier-машину
- * encounter → passive → active → production → review.
+ *   L0 pool     → L1 passive (через свайп «Изучаю»)
+ *   L1 passive  → L2 active  (2 правильных подряд)
+ *   L2 active   → L3 review  (2 правильных подряд)
+ *   L3 review   → mastered   (по SM-2 сетке, выпуск после 2 подряд good/easy на stage=7)
  *
- * В фазе 2 этот сервис существует параллельно `quiz-service.recordInfiniteAnswer`
- * и НЕ интегрирован в API роуты. Интеграция — в фазе 3 (см. план переработки).
+ *   L0 «Знаю»   → L3 review stage=0 (1 день, невидимая проверка)
+ *   L0 «Отложить» → state='pool_snoozed', snoozed_until=now+7±2 дней
+ *   L3 «Снова»  → откат на L2
  *
- * Ключевые решения (зафиксированы юзером в Этапе 2):
- *   - В фазе изучения (encounter/passive/active) ошибка НЕ откатывает tier,
- *     только сбрасывает tier_correct_count и ставит cooldown 30 минут.
- *   - В review-фазе ошибка откатывает на active (см. learningConfig.intervals).
- *   - Production отключён (enabled=false) — переход active → review.
- *     Когда production включится в фазе 7, новые слова пойдут active → production
- *     → review, существующие записи на review остаются как есть.
- *   - Лестницу пользователь не видит явно — это внутренняя логика отбора.
+ * Работает с new-полями user_word_progress_word: learning_tier / state /
+ * consecutive_easy_or_good / last_grade / ef_factor. Поля старой схемы
+ * (learning_tier / state) не трогаем — их обслуживает legacy learning-service.ts
+ * до шага 4 миграции, где будет cleanup.
+ *
+ * Anti-repeat: K-cooldown удалён. Используется только recentWordIds, переданный
+ * клиентом (последние 2-3 показанных слова).
  */
 
-import { eq, and, sql, isNull, or, lte, inArray, ne, type SQL } from 'drizzle-orm';
+import { eq, and, sql, isNull, or, lte, type SQL } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { userWordProgress, userWordProgressWord, collectionWords, wordMeanings, words } from '../db/schema.js';
-import { learningConfig, type ExerciseType } from '../config/learning-config.js';
+import { users, userWordProgressWord, wordMeanings } from '../db/schema.js';
+import { learningConfig } from '../config/learning-config.js';
 import { recordEvent, type LearningTier } from './analytics-service.js';
-import { FUNCTIONAL_POS, FUNCTIONAL_ENGLISH_WORDS } from '../db/word-filters.js';
-import { setCooldown } from './cooldown-service.js';
-
-/** Drizzle db или активная транзакция — для функций, безопасно работающих
- *  и снаружи, и внутри транзакции. */
-type DbOrTx = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-/** Сколько fetchNext пропустить после повышения tier (encounter→passive→active→production). */
-const COOLDOWN_ON_ADVANCE = 2;
-/** Сколько fetchNext пропустить после ошибки на passive/active. */
-const COOLDOWN_ON_ERROR = 4;
+import { NON_FUNCTIONAL_SQL } from '../db/word-filters.js';
+import { getMskDailyResetStart } from '../lib/msk-date.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-export type TierTransitionInput = {
+export type ReviewGrade = 'again' | 'hard' | 'good' | 'easy';
+
+export type PoolSwipeAction = 'know' | 'learn' | 'snooze';
+
+export type TransitionInput = {
   tier: LearningTier;
   tierCorrectCount: number;
   reviewStage: number;
-  hasPenalty: boolean;
-  isCorrect: boolean;
+  consecutiveEasyOrGood: number;
+  /** Для L1/L2: правильность ответа. Для L3: undefined (используется grade). */
+  isCorrect?: boolean;
+  /** Для L3: оценка кнопкой. Для L1/L2: undefined. */
+  grade?: ReviewGrade;
 };
 
-export type TierTransitionResult = {
-  /** Новый tier после применения ответа. */
+export type TransitionResult = {
   tier: LearningTier;
-  /** Новый счётчик правильных подряд для текущего tier. */
   tierCorrectCount: number;
-  /** Новый review_stage. Релевантен только когда tier='review'. */
   reviewStage: number;
-  /** Когда показывать слово снова. null = никогда (например, после known_from_review). */
+  consecutiveEasyOrGood: number;
   nextReviewAt: Date;
-  /** has_penalty флаг (унаследован из старого SRS — оставлен для совместимости). */
-  hasPenalty: boolean;
-  /** true, если это переход в review «впервые» (был active, стал review). */
-  becameLearned: boolean;
-  /** true, если был выполнен откат (review wrong → active). */
-  wasReset: boolean;
-  /** true, если tier продвинулся вперёд (encounter→passive, passive→active, active→review). */
+  /** true когда тир продвинулся вперёд (passive→active, active→review, review→mastered). */
   wasAdvanced: boolean;
+  /** true когда был откат (review→active по grade='again'). */
+  wasReset: boolean;
+  /** true когда слово выпущено из обучения (review→mastered). */
+  becameMastered: boolean;
 };
+
+// ─── Pure tier-machine ──────────────────────────────────────────────────────
+
+/**
+ * Чистая функция перехода. Без БД, без now() — все timestamp'ы относительны
+ * параметру `now`. Удобно для unit-тестов.
+ *
+ * Контракт:
+ *   - L0 pool: переходы только через applyPoolSwipe (не через эту функцию)
+ *   - L1 passive / L2 active: ждём isCorrect
+ *   - L3 review: ждём grade
+ *   - mastered: терминальный, не должен сюда попадать
+ */
+export function computeTransition(
+  input: TransitionInput,
+  now: Date = new Date(),
+): TransitionResult {
+  const { tier, tierCorrectCount, reviewStage, consecutiveEasyOrGood, isCorrect, grade } = input;
+  const cfg = learningConfig.tiers[tier];
+
+  // ─── pool ─────────────────────────────────────────────────────────────────
+  // L0 — только через applyPoolSwipe. Сюда попасть не должны, но на всякий
+  // случай возвращаем no-op.
+  if (tier === 'pool') {
+    return noopTransition(input, now);
+  }
+
+  // ─── passive (L1) ─────────────────────────────────────────────────────────
+  if (tier === 'passive') {
+    if (isCorrect === undefined) {
+      // Программная ошибка: на L1 ждём isCorrect.
+      return noopTransition(input, now);
+    }
+    if (!isCorrect) {
+      // Сброс счётчика, остаёмся на L1. Откатов нет.
+      return {
+        tier: 'passive',
+        tierCorrectCount: 0,
+        reviewStage,
+        consecutiveEasyOrGood,
+        nextReviewAt: now,
+        wasAdvanced: false,
+        wasReset: false,
+        becameMastered: false,
+      };
+    }
+    const newCount = tierCorrectCount + 1;
+    if (newCount >= cfg.correctToAdvance) {
+      // L1 → L2
+      return {
+        tier: 'active',
+        tierCorrectCount: 0,
+        reviewStage,
+        consecutiveEasyOrGood,
+        nextReviewAt: now,
+        wasAdvanced: true,
+        wasReset: false,
+        becameMastered: false,
+      };
+    }
+    return {
+      tier: 'passive',
+      tierCorrectCount: newCount,
+      reviewStage,
+      consecutiveEasyOrGood,
+      nextReviewAt: now,
+      wasAdvanced: false,
+      wasReset: false,
+      becameMastered: false,
+    };
+  }
+
+  // ─── active (L2) ──────────────────────────────────────────────────────────
+  if (tier === 'active') {
+    if (isCorrect === undefined) return noopTransition(input, now);
+    if (!isCorrect) {
+      return {
+        tier: 'active',
+        tierCorrectCount: 0,
+        reviewStage,
+        consecutiveEasyOrGood,
+        nextReviewAt: now,
+        wasAdvanced: false,
+        wasReset: false,
+        becameMastered: false,
+      };
+    }
+    const newCount = tierCorrectCount + 1;
+    if (newCount >= cfg.correctToAdvance) {
+      // L2 → L3: вход в SRS на stage=0 (1 день).
+      const stage0 = 0;
+      const intervalDays = learningConfig.reviewGrid[stage0]!;
+      return {
+        tier: 'review',
+        tierCorrectCount: 0,
+        reviewStage: stage0,
+        consecutiveEasyOrGood: 0,
+        nextReviewAt: addDays(now, intervalDays),
+        wasAdvanced: true,
+        wasReset: false,
+        becameMastered: false,
+      };
+    }
+    return {
+      tier: 'active',
+      tierCorrectCount: newCount,
+      reviewStage,
+      consecutiveEasyOrGood,
+      nextReviewAt: now,
+      wasAdvanced: false,
+      wasReset: false,
+      becameMastered: false,
+    };
+  }
+
+  // ─── review (L3) ──────────────────────────────────────────────────────────
+  if (tier === 'review') {
+    if (!grade) return noopTransition(input, now);
+
+    // again → откат на L2.
+    if (grade === 'again') {
+      return {
+        tier: 'active',
+        tierCorrectCount: 0,
+        reviewStage: 0,
+        consecutiveEasyOrGood: 0,
+        nextReviewAt: now,
+        wasAdvanced: false,
+        wasReset: true,
+        becameMastered: false,
+      };
+    }
+
+    const grid = learningConfig.reviewGrid;
+    const lastStage = grid.length - 1; // = 7
+
+    // На финальном stage 7:
+    //   - hard: остаёмся на stage 7, счётчик СБРАСЫВАЕТСЯ (по решению юзера —
+    //     hard рассматривается как слабый сигнал, не двигает к выпуску)
+    //   - good/easy: счётчик +1, при reviewMasteredAfter → mastered
+    if (reviewStage >= lastStage) {
+      if (grade === 'hard') {
+        const intervalDays = grid[lastStage]! * learningConfig.reviewGradeModifiers.hard;
+        return {
+          tier: 'review',
+          tierCorrectCount: 0,
+          reviewStage: lastStage,
+          consecutiveEasyOrGood: 0, // hard сбрасывает счётчик выпуска
+          nextReviewAt: addDays(now, intervalDays),
+          wasAdvanced: false,
+          wasReset: false,
+          becameMastered: false,
+        };
+      }
+      // good / easy на финале
+      const newConsec = consecutiveEasyOrGood + 1;
+      if (newConsec >= learningConfig.reviewMasteredAfter) {
+        return {
+          tier: 'mastered',
+          tierCorrectCount: 0,
+          reviewStage: lastStage,
+          consecutiveEasyOrGood: newConsec,
+          nextReviewAt: now, // не используется для mastered
+          wasAdvanced: true,
+          wasReset: false,
+          becameMastered: true,
+        };
+      }
+      // Ещё один шаг на финале до выпуска: интервал = grid[7] × modifier.
+      const modifier = grade === 'easy'
+        ? learningConfig.reviewGradeModifiers.easy
+        : learningConfig.reviewGradeModifiers.good;
+      return {
+        tier: 'review',
+        tierCorrectCount: 0,
+        reviewStage: lastStage,
+        consecutiveEasyOrGood: newConsec,
+        nextReviewAt: addDays(now, grid[lastStage]! * modifier),
+        wasAdvanced: false,
+        wasReset: false,
+        becameMastered: false,
+      };
+    }
+
+    // Обычный шаг (stage < 7). nextInterval = grid[stage+1] * modifier.
+    // Согласно решению по плану: модификатор применяется к следующему шагу
+    // сетки, не к текущему интервалу (см. финализированный план).
+    const nextStage = reviewStage + 1;
+    const modifier = grade === 'hard'
+      ? learningConfig.reviewGradeModifiers.hard
+      : grade === 'easy'
+        ? learningConfig.reviewGradeModifiers.easy
+        : learningConfig.reviewGradeModifiers.good;
+    return {
+      tier: 'review',
+      tierCorrectCount: 0,
+      reviewStage: nextStage,
+      consecutiveEasyOrGood: 0, // счётчик финала актуален только на stage=lastStage
+      nextReviewAt: addDays(now, grid[nextStage]! * modifier),
+      wasAdvanced: false,
+      wasReset: false,
+      becameMastered: false,
+    };
+  }
+
+  // ─── mastered ─────────────────────────────────────────────────────────────
+  // Терминальный, не должен сюда попадать.
+  return noopTransition(input, now);
+}
+
+function noopTransition(input: TransitionInput, now: Date): TransitionResult {
+  return {
+    tier: input.tier,
+    tierCorrectCount: input.tierCorrectCount,
+    reviewStage: input.reviewStage,
+    consecutiveEasyOrGood: input.consecutiveEasyOrGood,
+    nextReviewAt: now,
+    wasAdvanced: false,
+    wasReset: false,
+    becameMastered: false,
+  };
+}
+
+// ─── Daily promotions counter ───────────────────────────────────────────────
+
+/**
+ * Возвращает текущее значение dailyPromotionsCount для пользователя, делая
+ * ленивый сброс если dailyPromotionsDate относится к прошлому учебному дню
+ * (день начинается в 02:00 MSK, см. [[getMskDailyResetStart]]).
+ *
+ * Если был ленивый сброс — обновляет БД до возврата.
+ */
+export async function getDailyPromotionsCount(userId: number): Promise<number> {
+  const now = new Date();
+  const todayStart = getMskDailyResetStart(now);
+
+  const row = await db.query.users.findFirst({
+    where: eq(users.id, userId),
+    columns: { dailyPromotionsCount: true, dailyPromotionsDate: true },
+  });
+  if (!row) return 0;
+
+  const date = row.dailyPromotionsDate;
+  if (date && date.getTime() >= todayStart.getTime()) {
+    return row.dailyPromotionsCount;
+  }
+
+  // Stale → reset
+  await db
+    .update(users)
+    .set({ dailyPromotionsCount: 0, dailyPromotionsDate: todayStart, updatedAt: now })
+    .where(eq(users.id, userId));
+  return 0;
+}
+
+/**
+ * Атомарно инкрементирует dailyPromotionsCount на 1. Если dailyPromotionsDate
+ * stale — счётчик сбрасывается в 1 (этот переход = первый за новый день).
+ *
+ * Возвращает новое значение счётчика.
+ */
+export async function incrementDailyPromotions(userId: number): Promise<number> {
+  const now = new Date();
+  const todayStart = getMskDailyResetStart(now);
+
+  // CASE: если dailyPromotionsDate stale ИЛИ null → сброс на 1, дата = today.
+  // Иначе → +1.
+  const result = await db
+    .update(users)
+    .set({
+      dailyPromotionsCount: sql`CASE
+        WHEN ${users.dailyPromotionsDate} IS NULL OR ${users.dailyPromotionsDate} < ${todayStart}
+        THEN 1
+        ELSE ${users.dailyPromotionsCount} + 1
+      END`,
+      dailyPromotionsDate: todayStart,
+      updatedAt: now,
+    })
+    .where(eq(users.id, userId))
+    .returning({ count: users.dailyPromotionsCount });
+
+  return result[0]?.count ?? 0;
+}
+
+// ─── Public API: recordAnswer ─────────────────────────────────────────────
 
 export type RecordAnswerInput = {
   userId: number;
-  meaningId: number;
-  isCorrect: boolean;
-  questionType?: ExerciseType | string;
+  wordId: number;
+  isCorrect?: boolean;
+  grade?: ReviewGrade;
+  questionType?: string;
   answerTimeMs?: number;
-  /** true, если пользователь нажал «пропустить». Влияет только на аналитику —
-   *  пишется event question_skipped, а не question_answered. Tier-машина
-   *  обрабатывает skip как обычный wrong (не отдельная ветка). */
   skip?: boolean;
 };
 
 export type RecordAnswerResult = {
   tierBefore: LearningTier;
   tierAfter: LearningTier;
-  becameLearned: boolean;
+  wasAdvanced: boolean;
   wasReset: boolean;
+  becameMastered: boolean;
   nextReviewAt: Date;
 };
 
-export type SwipeAction = 'known' | 'unknown' | 'snooze';
-
-export type ApplySwipeInput = {
-  userId: number;
-  meaningId: number;
-  action: SwipeAction;
-  /** Кастомный snooze-days. Если не задан — берётся из конфига + jitter. */
-  snoozeDays?: number;
-};
-
-// ─── Pure tier-machine ──────────────────────────────────────────────────────
-
-/**
- * Чистая функция: на вход — текущее состояние слова, на выход — новое.
- *
- * Не делает БД-запросов, не читает now() — все timestamp'ы относительны
- * `now`. Это удобно для тестов: подаёшь состояние, проверяешь все поля.
- */
-export function computeTransition(
-  input: TierTransitionInput,
-  now: Date = new Date(),
-): TierTransitionResult {
-  const { tier, tierCorrectCount, reviewStage, isCorrect } = input;
-  const cfg = learningConfig.tiers[tier];
-
-  // ─── encounter ────────────────────────────────────────────────────────────
-  // Encounter — это просто показ карточки. 1 показ = переход на active
-  // (passive скрыт, см. ниже). Корректность ответа не имеет смысла.
-  if (tier === 'encounter') {
-    return {
-      tier: 'active',
-      tierCorrectCount: 0,
-      reviewStage: 0,
-      nextReviewAt: addHours(now, learningConfig.intervals.encounterToPassiveHours),
-      hasPenalty: false,
-      becameLearned: false,
-      wasReset: false,
-      wasAdvanced: true,
-    };
-  }
-
-  // ─── passive ──────────────────────────────────────────────────────────────
-  // Passive скрыт из потока обучения. Migrate-on-touch: любая запись с
-  // tier='passive' (legacy в БД) при касании немедленно переходит на active
-  // независимо от isCorrect. tcc сбрасывается, wasAdvanced=true (поставит
-  // K-cooldown как при обычном повышении). После одного ответа БД
-  // самоочищается от legacy passive-записей.
-  if (tier === 'passive') {
-    return {
-      tier: 'active',
-      tierCorrectCount: 0,
-      reviewStage: 0,
-      nextReviewAt: addHours(now, learningConfig.intervals.learningIntervalsHours[0]),
-      hasPenalty: false,
-      becameLearned: false,
-      wasReset: false,
-      wasAdvanced: true,
-    };
-  }
-
-  // ─── active ───────────────────────────────────────────────────────────────
-  if (tier === 'active') {
-    if (!isCorrect) {
-      return {
-        tier: 'active',
-        tierCorrectCount: 0,
-        reviewStage: 0,
-        nextReviewAt: addMinutes(now, learningConfig.intervals.learningCooldownMinutes),
-        hasPenalty: true,
-        becameLearned: false,
-        wasReset: false,
-        wasAdvanced: false,
-      };
-    }
-    const newCount = tierCorrectCount + 1;
-    if (newCount >= cfg.correctToAdvance) {
-      // active → production (если включён) или сразу → review
-      const productionEnabled = learningConfig.tiers.production.enabled;
-      if (productionEnabled) {
-        return {
-          tier: 'production',
-          tierCorrectCount: 0,
-          reviewStage: 0,
-          nextReviewAt: addHours(now, learningConfig.intervals.learningIntervalsHours[0]),
-          hasPenalty: false,
-          becameLearned: false,
-          wasReset: false,
-          wasAdvanced: true,
-        };
-      }
-      return {
-        tier: 'review',
-        tierCorrectCount: 0,
-        reviewStage: 0,
-        nextReviewAt: addDays(now, learningConfig.intervals.reviewIntervalsDays[0]!),
-        hasPenalty: false,
-        becameLearned: true,
-        wasReset: false,
-        wasAdvanced: true,
-      };
-    }
-    const intervals = learningConfig.intervals.learningIntervalsHours;
-    const idx = Math.min(newCount, intervals.length - 1);
-    return {
-      tier: 'active',
-      tierCorrectCount: newCount,
-      reviewStage: 0,
-      nextReviewAt: addHours(now, intervals[idx]!),
-      hasPenalty: false,
-      becameLearned: false,
-      wasReset: false,
-      wasAdvanced: false,
-    };
-  }
-
-  // ─── production ───────────────────────────────────────────────────────────
-  if (tier === 'production') {
-    if (!isCorrect) {
-      return {
-        tier: 'production',
-        tierCorrectCount: 0,
-        reviewStage: 0,
-        nextReviewAt: addMinutes(now, learningConfig.intervals.learningCooldownMinutes),
-        hasPenalty: true,
-        becameLearned: false,
-        wasReset: false,
-        wasAdvanced: false,
-      };
-    }
-    const newCount = tierCorrectCount + 1;
-    if (newCount >= cfg.correctToAdvance) {
-      return {
-        tier: 'review',
-        tierCorrectCount: 0,
-        reviewStage: 0,
-        nextReviewAt: addDays(now, learningConfig.intervals.reviewIntervalsDays[0]!),
-        hasPenalty: false,
-        becameLearned: true,
-        wasReset: false,
-        wasAdvanced: true,
-      };
-    }
-    const intervals = learningConfig.intervals.learningIntervalsHours;
-    const idx = Math.min(newCount, intervals.length - 1);
-    return {
-      tier: 'production',
-      tierCorrectCount: newCount,
-      reviewStage: 0,
-      nextReviewAt: addHours(now, intervals[idx]!),
-      hasPenalty: false,
-      becameLearned: false,
-      wasReset: false,
-      wasAdvanced: false,
-    };
-  }
-
-  // ─── review ───────────────────────────────────────────────────────────────
-  // tier === 'review'
-  if (!isCorrect) {
-    // Откат на active с кулдауном.
-    return {
-      tier: learningConfig.intervals.reviewWrongRollbackTier,
-      tierCorrectCount: 0,
-      reviewStage: 0,
-      nextReviewAt: addDays(now, learningConfig.intervals.reviewWrongCooldownDays),
-      hasPenalty: false,
-      becameLearned: false,
-      wasReset: true,
-      wasAdvanced: false,
-    };
-  }
-  const intervals = learningConfig.intervals.reviewIntervalsDays;
-  const nextStage = Math.min(reviewStage + 1, intervals.length - 1);
-  const intervalDays = intervals[nextStage]!;
-  return {
-    tier: 'review',
-    tierCorrectCount: 0,
-    reviewStage: nextStage,
-    nextReviewAt: addDays(now, intervalDays),
-    hasPenalty: false,
-    becameLearned: false,
-    wasReset: false,
-    wasAdvanced: false,
-  };
-}
-
-// ─── Public API: recordAnswer ───────────────────────────────────────────────
-
-/**
- * Записать ответ пользователя на слово, провести его по tier-машине,
- * сохранить новое состояние и записать аналитические события.
- *
- * Кастомные слова (meaningId < 0) НЕ обрабатываются здесь — для них
- * остаётся отдельный pathway в quiz-service. Будет переработано в фазе 3.
- */
 export async function recordAnswer(input: RecordAnswerInput): Promise<RecordAnswerResult> {
-  const { userId, meaningId, isCorrect, questionType, answerTimeMs, skip } = input;
-  const now = new Date();
-
-  // Загружаем текущий прогресс или создаём новую запись.
-  const [existing] = await db
-    .select()
-    .from(userWordProgress)
-    .where(and(eq(userWordProgress.userId, userId), eq(userWordProgress.meaningId, meaningId)))
-    .limit(1);
-
-  const tierBefore: LearningTier = existing?.learningTier ?? 'encounter';
-  const tierCorrectCountBefore = existing?.tierCorrectCount ?? 0;
-  const reviewStageBefore = existing?.reviewStage ?? 0;
-  const hasPenaltyBefore = existing?.hasPenalty ?? false;
-
-  const transition = computeTransition({
-    tier: tierBefore,
-    tierCorrectCount: tierCorrectCountBefore,
-    reviewStage: reviewStageBefore,
-    hasPenalty: hasPenaltyBefore,
-    isCorrect,
-  }, now);
-
-  // Override 30-минутного nextReviewAt для ошибок на passive/active/production:
-  // в новой архитектуре word-level cooldown заменён K-cooldown через cooldown-service,
-  // а на meaning-level (production) пока без замены — пилот наблюдает.
-  // Review-rollback с reviewWrongCooldownDays оставляем.
-  let effectiveNextReviewAt = transition.nextReviewAt;
-  if (!isCorrect && (tierBefore === 'passive' || tierBefore === 'active' || tierBefore === 'production')) {
-    effectiveNextReviewAt = now;
-  }
-
-  // Persist.
-  if (existing) {
-    await db
-      .update(userWordProgress)
-      .set({
-        learningTier: transition.tier,
-        tierCorrectCount: transition.tierCorrectCount,
-        reviewStage: transition.reviewStage,
-        nextReviewAt: effectiveNextReviewAt,
-        hasPenalty: transition.hasPenalty,
-        masteredAt: transition.becameLearned ? now : existing.masteredAt,
-        correctCount: isCorrect
-          ? sql`${userWordProgress.correctCount} + 1`
-          : userWordProgress.correctCount,
-        incorrectCount: !isCorrect
-          ? sql`${userWordProgress.incorrectCount} + 1`
-          : userWordProgress.incorrectCount,
-        // state не трогаем — остаётся 'learning' (изменяется только через applySwipe).
-        fromPlacement: false, // реальный ответ → сбрасываем флаг плейсмента
-        lastSeenAt: now,
-        updatedAt: now,
-      })
-      .where(eq(userWordProgress.id, existing.id));
-  } else {
-    await db.insert(userWordProgress).values({
-      userId,
-      meaningId,
-      state: 'learning',
-      learningTier: transition.tier,
-      tierCorrectCount: transition.tierCorrectCount,
-      reviewStage: transition.reviewStage,
-      nextReviewAt: effectiveNextReviewAt,
-      hasPenalty: transition.hasPenalty,
-      masteredAt: transition.becameLearned ? now : null,
-      correctCount: isCorrect ? 1 : 0,
-      incorrectCount: isCorrect ? 0 : 1,
-      lastSeenAt: now,
-    });
-  }
-
-  // Analytics: question_answered (или question_skipped) + tier_advanced/tier_reset/meaning_learned.
-  await recordEvent({
-    userId,
-    eventType: skip ? 'question_skipped' : 'question_answered',
-    meaningId,
-    tierBefore,
-    tierAfter: transition.tier,
-    questionType: questionType ?? null,
-    isCorrect,
-    answerTimeMs: answerTimeMs ?? null,
-  });
-
-  if (transition.wasAdvanced) {
-    await recordEvent({
-      userId,
-      eventType: 'tier_advanced',
-      meaningId,
-      tierBefore,
-      tierAfter: transition.tier,
-    });
-  }
-  if (transition.wasReset) {
-    await recordEvent({
-      userId,
-      eventType: 'tier_reset',
-      meaningId,
-      tierBefore,
-      tierAfter: transition.tier,
-    });
-  }
-  if (transition.becameLearned) {
-    await recordEvent({
-      userId,
-      eventType: 'meaning_learned',
-      meaningId,
-      tierBefore,
-      tierAfter: transition.tier,
-    });
-  }
-
-  // K-cooldown на word-level (затрагивает оба пула — pickNextWord и pickNextItem
-  // через резолв meaning→word). Правила (ошибка > правильный, единообразно):
-  //   - tierBefore='production' AND correct → 2; AND error → 4. Декомпозиция
-  //     одного слова в N meanings без cooldown выглядит для юзера как цикл
-  //     одного слова (will: воля→непременно→хотеть→...).
-  //   - tierBefore in (encounter/passive/active) AND wasAdvanced (≠review) → 2.
-  //   - tierBefore in (passive/active) AND error → 4.
-  //   - review не трогаем (там SRS через nextReviewAt).
-  let cooldownK: number | null = null;
-  if (tierBefore === 'production') {
-    cooldownK = isCorrect ? COOLDOWN_ON_ADVANCE : COOLDOWN_ON_ERROR;
-  } else if (tierBefore !== 'review') {
-    if (transition.wasAdvanced && transition.tier !== 'review') {
-      cooldownK = COOLDOWN_ON_ADVANCE;
-    } else if (!isCorrect && (tierBefore === 'passive' || tierBefore === 'active')) {
-      cooldownK = COOLDOWN_ON_ERROR;
-    }
-  }
-  if (cooldownK !== null) {
-    const wmRow = await db.execute(sql`SELECT word_id FROM word_meanings WHERE id = ${meaningId}`);
-    const w = (wmRow as unknown as { rows: Array<{ word_id: number }> }).rows[0]?.word_id;
-    if (typeof w === 'number') {
-      setCooldown(userId, Number(w), cooldownK);
-    }
-  }
-
-  return {
-    tierBefore,
-    tierAfter: transition.tier,
-    becameLearned: transition.becameLearned,
-    wasReset: transition.wasReset,
-    nextReviewAt: effectiveNextReviewAt,
-  };
-}
-
-// ─── Public API: applySwipe ─────────────────────────────────────────────────
-
-/**
- * Применить свайп из обзора. Не идёт через tier-машину — это прямое
- * действие пользователя над состоянием слова.
- *
- *   known   → state='known_from_review', не учим.
- *   unknown → state='learning', tier='encounter', сразу в очередь обучения.
- *   snooze  → state='snoozed', snoozedUntil=now+N±jitter дней.
- */
-export async function applySwipe(input: ApplySwipeInput): Promise<void> {
-  const { userId, meaningId, action } = input;
-  const now = new Date();
-
-  const [existing] = await db
-    .select()
-    .from(userWordProgress)
-    .where(and(eq(userWordProgress.userId, userId), eq(userWordProgress.meaningId, meaningId)))
-    .limit(1);
-
-  if (action === 'known') {
-    if (existing) {
-      await db
-        .update(userWordProgress)
-        .set({
-          state: 'known_from_review',
-          snoozedUntil: null,
-          lastSeenAt: now,
-          updatedAt: now,
-        })
-        .where(eq(userWordProgress.id, existing.id));
-    } else {
-      await db.insert(userWordProgress).values({
-        userId,
-        meaningId,
-        state: 'known_from_review',
-        learningTier: 'encounter', // не используется при known_from_review
-        tierCorrectCount: 0,
-        lastSeenAt: now,
-      });
-    }
-    await recordEvent({
-      userId,
-      eventType: 'review_swiped_known',
-      meaningId,
-    });
-    return;
-  }
-
-  if (action === 'unknown') {
-    if (existing) {
-      // Юзер сказал «не знаю» в обзоре — сбрасываем tier на encounter,
-      // даже если слово было на passive/active/review. Без этого, например,
-      // слово после плейсмент-калибровки (где markLowerLevelWordsAsLearned
-      // ставит tier=review) могло бы получить сразу active recall, что
-      // противоречит сигналу «не знаю».
-      // Counter'ы correct/incorrect сохраняем — это историческая статистика.
-      await db
-        .update(userWordProgress)
-        .set({
-          state: 'learning',
-          learningTier: 'encounter',
-          tierCorrectCount: 0,
-          reviewStage: 0,
-          hasPenalty: false,
-          nextReviewAt: now, // сразу готов к показу
-          fromPlacement: false,
-          snoozedUntil: null,
-          lastSeenAt: now,
-          updatedAt: now,
-        })
-        .where(eq(userWordProgress.id, existing.id));
-    } else {
-      await db.insert(userWordProgress).values({
-        userId,
-        meaningId,
-        state: 'learning',
-        learningTier: 'encounter',
-        tierCorrectCount: 0,
-        nextReviewAt: now, // сразу готов к показу
-        lastSeenAt: now,
-      });
-    }
-    await recordEvent({
-      userId,
-      eventType: 'review_swiped_unknown',
-      meaningId,
-    });
-    return;
-  }
-
-  // action === 'snooze'
-  const baseDays = input.snoozeDays ?? learningConfig.review.snoozeDaysDefault;
-  const jitter = learningConfig.review.snoozeJitterDays;
-  const days = baseDays + (Math.floor(Math.random() * (2 * jitter + 1)) - jitter);
-  const snoozedUntil = addDays(now, Math.max(1, days));
-
-  if (existing) {
-    await db
-      .update(userWordProgress)
-      .set({
-        state: 'snoozed',
-        snoozedUntil,
-        lastSeenAt: now,
-        updatedAt: now,
-      })
-      .where(eq(userWordProgress.id, existing.id));
-  } else {
-    await db.insert(userWordProgress).values({
-      userId,
-      meaningId,
-      state: 'snoozed',
-      snoozedUntil,
-      learningTier: 'encounter',
-      tierCorrectCount: 0,
-      lastSeenAt: now,
-    });
-  }
-  await recordEvent({
-    userId,
-    eventType: 'review_swiped_snooze',
-    meaningId,
-    payload: { snoozeDays: days },
-  });
-}
-
-/**
- * Откат свайпа. Удаляет запись `user_word_progress` для пары (userId, meaningId),
- * чтобы слово снова появилось в feed обзора. Используется жестом «вниз» в режиме A.
- *
- * Если записи не было — no-op (не падаем).
- *
- * `originalAction` — что именно откатывают (для аналитики). Клиент знает по
- * своей history, поэтому передаёт; сервер сам не определяет (последнее
- * событие в learning_events может быть question_shown между свайпами).
- */
-export async function undoSwipe(
-  userId: number,
-  meaningId: number,
-  originalAction?: 'known' | 'unknown' | 'snooze',
-): Promise<void> {
-  await db
-    .delete(userWordProgress)
-    .where(and(eq(userWordProgress.userId, userId), eq(userWordProgress.meaningId, meaningId)));
-
-  await recordEvent({
-    userId,
-    eventType: 'review_undo',
-    meaningId,
-    payload: originalAction ? { originalAction } : null,
-  });
-}
-
-// ─── Public API: pickNextItem (минимальная версия для фазы 2) ───────────────
-
-/**
- * Выбрать следующее слово для показа.
- *
- * Это упрощённая реализация: подбираем по приоритету review > active > passive
- * > encounter, с учётом state и snoozed_until. В фазе 3 переработается под
- * учёт generator-rotation, adaptive difficulty и пулов коллекций.
- */
-export async function pickNextItem(
-  userId: number,
-  opts: { excludeMeaningIds?: number[]; excludeWordIds?: number[]; collectionId?: number } = {},
-): Promise<{ meaningId: number; tier: LearningTier } | null> {
-  const exclude = opts.excludeMeaningIds ?? [];
-  const excludeWordIds = opts.excludeWordIds ?? [];
-  const now = new Date();
-
-  // Если задан collectionId — ограничиваем пул meanings из этой коллекции.
-  let collectionFilter: ReturnType<typeof inArray> | null = null;
-  if (typeof opts.collectionId === 'number') {
-    const meaningIds = await db
-      .select({ meaningId: collectionWords.meaningId })
-      .from(collectionWords)
-      .where(eq(collectionWords.collectionId, opts.collectionId));
-    if (meaningIds.length === 0) return null;
-    collectionFilter = inArray(userWordProgress.meaningId, meaningIds.map(r => r.meaningId));
-  }
-
-  // Берём 1 строку: подходящие записи, отсортированные по tier-приоритету и nextReviewAt.
-  // tier_priority: review=0, active=1, production=2, passive=3, encounter=4.
-  const results = await db
-    .select({
-      meaningId: userWordProgress.meaningId,
-      tier: userWordProgress.learningTier,
-    })
-    .from(userWordProgress)
-    .where(and(
-      eq(userWordProgress.userId, userId),
-      eq(userWordProgress.state, 'learning'),
-      or(
-        isNull(userWordProgress.snoozedUntil),
-        lte(userWordProgress.snoozedUntil, now),
-      )!,
-      or(
-        isNull(userWordProgress.nextReviewAt),
-        lte(userWordProgress.nextReviewAt, now),
-      )!,
-      ...(collectionFilter ? [collectionFilter] : []),
-      ...(exclude.length > 0
-        ? [sql`${userWordProgress.meaningId} NOT IN (${sql.join(exclude.map(id => sql`${id}`), sql`, `)})`]
-        : []),
-      // Word-level cooldown в meaning-pool: исключаем все meanings слов из
-      // excludeWordIds. Без этого decomposition production (5+ meanings одного
-      // слова) крутит одно и то же слово через свои meaning-варианты.
-      ...(excludeWordIds.length > 0
-        ? [sql`${userWordProgress.meaningId} NOT IN (
-            SELECT id FROM ${wordMeanings}
-            WHERE word_id IN (${sql.join(excludeWordIds.map(id => sql`${id}`), sql`, `)})
-          )`]
-        : []),
-    ))
-    .orderBy(sql`CASE ${userWordProgress.learningTier}
-        WHEN 'review' THEN 0
-        WHEN 'production' THEN 1
-        WHEN 'active' THEN 2
-        WHEN 'passive' THEN 3
-        WHEN 'encounter' THEN 4
-        ELSE 5 END`,
-      sql`${userWordProgress.nextReviewAt} NULLS FIRST`,
-    )
-    .limit(1);
-
-  const row = results[0];
-  if (!row) return null;
-  return { meaningId: row.meaningId, tier: row.tier };
-}
-
-// ─── Word-level operations (L1-3 + word-review) ─────────────────────────────
-//
-// Параллельная ветка к meaning-уровневым функциям выше. Используется на
-// уровнях encounter/passive/active (L1-3) и для review-фазы на word-level.
-// На L4 production переход управляется meaning-уровневыми функциями.
-//
-// Инвариант (введён здесь, не выполняется в backfill-данных):
-//   - word.tier ∈ {encounter, passive, active, production, review}
-//   - word.tier == 'production' ⟹ есть meaning-записи с tier='production'
-//   - word.tier == 'review' ⟹ все eligible meanings слова на tier='review'
-
-export type RecordWordAnswerInput = {
-  userId: number;
-  wordId: number;
-  isCorrect: boolean;
-  questionType?: ExerciseType | string;
-  answerTimeMs?: number;
-  skip?: boolean;
-};
-
-export type RecordWordAnswerResult = {
-  tierBefore: LearningTier;
-  tierAfter: LearningTier;
-  becameLearned: boolean;
-  wasReset: boolean;
-  nextReviewAt: Date;
-  /** true, если слово ушло в L4 production и созданы meaning-записи. */
-  enteredProduction: boolean;
-};
-
-/**
- * Загружает eligible meanings слова — те, что прошли учебный фильтр
- * (popularity_rank ≤ 3, frequency ≥ 5, кириллический перевод, не functional).
- * Используется при L3→L4 переходе для создания meaning-записей.
- */
-async function getEligibleMeaningsForWord(
-  wordId: number,
-  tx: DbOrTx = db,
-): Promise<{ id: number }[]> {
-  const rows = await tx
-    .select({ id: wordMeanings.id })
-    .from(wordMeanings)
-    .innerJoin(words, eq(words.id, wordMeanings.wordId))
-    .where(and(
-      eq(wordMeanings.wordId, wordId),
-      or(isNull(wordMeanings.popularityRank), lte(wordMeanings.popularityRank, 3))!,
-      or(isNull(wordMeanings.frequency), sql`${wordMeanings.frequency} >= 5`)!,
-      sql`${wordMeanings.translation} ~ '[а-яА-ЯёЁ]'`,
-      or(
-        isNull(wordMeanings.translationPartOfSpeech),
-        sql`${wordMeanings.translationPartOfSpeech} NOT IN (${sql.join(FUNCTIONAL_POS.map(p => sql`${p}`), sql`, `)})`,
-      )!,
-      sql`${words.text} NOT IN (${sql.join(FUNCTIONAL_ENGLISH_WORDS.map(w => sql`${w}`), sql`, `)})`,
-    ));
-  return rows;
-}
-
-/**
- * L3 → L4 переход. Вызывается из recordWordAnswer когда слово достигло
- * tier='production' на word-level (т.е. прошло L3 active recall).
- *
- * Принимает Drizzle transaction (или db) — должна вызываться внутри той
- * же транзакции, что и UPDATE word-level записи в recordWordAnswer.
- * Без атомарности возможен рассинхрон: word.tier='production' без
- * meaning-записей → слот production навсегда пуст для этого слова.
- *
- * Что делает:
- *   1. Удаляет stale meaning-записи на tier ∈ {encounter, passive, active}
- *      (это backfill-артефакты от старой архитектуры — больше не нужны)
- *   2. Вставляет meaning-записи на tier='production' для всех eligible
- *      meanings слова. ON CONFLICT DO NOTHING — если запись уже есть
- *      (например, на production+ от прошлой попытки), не трогаем.
- */
-async function transitionWordToProduction(tx: DbOrTx, userId: number, wordId: number, now: Date): Promise<void> {
-  // 1. Удалить stale L1-3 meaning-записи слова.
-  await tx.execute(sql`
-    DELETE FROM user_word_progress
-    USING word_meanings wm
-    WHERE wm.id = user_word_progress.meaning_id
-      AND wm.word_id = ${wordId}
-      AND user_word_progress.user_id = ${userId}
-      AND user_word_progress.learning_tier IN ('encounter', 'passive', 'active')
-  `);
-
-  // 2. Вставить meaning-записи на production для eligible meanings.
-  const eligible = await getEligibleMeaningsForWord(wordId, tx);
-  for (const m of eligible) {
-    await tx
-      .insert(userWordProgress)
-      .values({
-        userId,
-        meaningId: m.id,
-        state: 'learning',
-        learningTier: 'production',
-        tierCorrectCount: 0,
-        nextReviewAt: now,
-        lastSeenAt: now,
-      })
-      .onConflictDoNothing();
-  }
-}
-
-/**
- * Проверяет, все ли eligible meanings слова достигли tier='review'.
- * Если да — продвигает word-level запись с tier='production' на 'review'.
- *
- * Вызывается из meaning-level recordAnswer когда meaning достигает
- * production → review.
- */
-async function promoteWordToReviewIfReady(userId: number, wordId: number, now: Date): Promise<void> {
-  const eligible = await getEligibleMeaningsForWord(wordId);
-  if (eligible.length === 0) return;
-
-  const meaningIds = eligible.map(m => m.id);
-  const rows = await db
-    .select({ tier: userWordProgress.learningTier })
-    .from(userWordProgress)
-    .where(and(
-      eq(userWordProgress.userId, userId),
-      inArray(userWordProgress.meaningId, meaningIds),
-    ));
-
-  // Должны быть записи на ВСЕ eligible meanings (мы их создали при L3→L4)
-  // и каждая — на review.
-  if (rows.length < meaningIds.length) return;
-  const allReview = rows.every(r => r.tier === 'review');
-  if (!allReview) return;
-
-  // Промоушн word-уровневой записи: production → review.
-  await db
-    .update(userWordProgressWord)
-    .set({
-      learningTier: 'review',
-      tierCorrectCount: 0,
-      reviewStage: 0,
-      nextReviewAt: addDays(now, learningConfig.intervals.reviewIntervalsDays[0]!),
-      hasPenalty: false,
-      masteredAt: now,
-      updatedAt: now,
-    })
-    .where(and(
-      eq(userWordProgressWord.userId, userId),
-      eq(userWordProgressWord.wordId, wordId),
-      eq(userWordProgressWord.learningTier, 'production'),
-    ));
-
-  await recordEvent({
-    userId,
-    eventType: 'meaning_learned', // переиспользуем enum: «word fully learned»
-    wordId,
-    tierBefore: 'production',
-    tierAfter: 'review',
-  });
-}
-
-/**
- * Записать ответ на word-level (L1-3 + word-review).
- * Аналог recordAnswer, но оперирует userWordProgressWord и обрабатывает
- * L3→L4 переход.
- */
-export async function recordWordAnswer(input: RecordWordAnswerInput): Promise<RecordWordAnswerResult> {
-  const { userId, wordId, isCorrect, questionType, answerTimeMs, skip } = input;
+  const { userId, wordId, isCorrect, grade, questionType, answerTimeMs, skip } = input;
   const now = new Date();
 
   const [existing] = await db
@@ -826,146 +372,141 @@ export async function recordWordAnswer(input: RecordWordAnswerInput): Promise<Re
     .where(and(eq(userWordProgressWord.userId, userId), eq(userWordProgressWord.wordId, wordId)))
     .limit(1);
 
-  const tierBefore: LearningTier = existing?.learningTier ?? 'encounter';
-  const tierCorrectCountBefore = existing?.tierCorrectCount ?? 0;
+  // Если записи нет — слово впервые попадает в обучение, считаем что юзер
+  // ответил на passive-карточке. Создаём запись на passive с tcc=0.
+  const tierBefore: LearningTier = existing?.learningTier ?? 'passive';
+  const tccBefore = existing?.tierCorrectCount ?? 0;
   const reviewStageBefore = existing?.reviewStage ?? 0;
-  const hasPenaltyBefore = existing?.hasPenalty ?? false;
+  const consecBefore = existing?.consecutiveEasyOrGood ?? 0;
 
   const transition = computeTransition({
     tier: tierBefore,
-    tierCorrectCount: tierCorrectCountBefore,
+    tierCorrectCount: tccBefore,
     reviewStage: reviewStageBefore,
-    hasPenalty: hasPenaltyBefore,
+    consecutiveEasyOrGood: consecBefore,
     isCorrect,
+    grade,
   }, now);
 
-  // Override 30-минутного nextReviewAt для ошибок на passive/active:
-  // вместо +30мин ставим now (запись доступна сразу), но cooldown-service
-  // исключает слово на COOLDOWN_ON_ERROR fetchNext. Review-rollback оставляем
-  // как есть (там reviewWrongCooldownDays — отдельная семантика).
-  let effectiveNextReviewAt = transition.nextReviewAt;
-  if (!isCorrect && (tierBefore === 'passive' || tierBefore === 'active')) {
-    effectiveNextReviewAt = now;
-  }
-
-  // L3 → L4 переход требует атомарности: UPDATE word.tier='production' и
-  // создание meaning-записей через transitionWordToProduction должны быть
-  // в одной транзакции. Иначе при падении между ними word.tier='production'
-  // остаётся без meanings → слот production навсегда пуст для слова, юзер
-  // его никогда больше не увидит. На остальные случаи транзакция не вредит
-  // (один UPDATE/INSERT — атомарен сам по себе).
-  const willEnterProduction = tierBefore === 'active' && transition.tier === 'production' && transition.wasAdvanced;
-
-  let enteredProduction = false;
-  await db.transaction(async (tx) => {
-    // Persist word-level row.
-    if (existing) {
-      await tx
-        .update(userWordProgressWord)
-        .set({
-          learningTier: transition.tier,
-          tierCorrectCount: transition.tierCorrectCount,
-          reviewStage: transition.reviewStage,
-          nextReviewAt: effectiveNextReviewAt,
-          hasPenalty: transition.hasPenalty,
-          masteredAt: transition.becameLearned ? now : existing.masteredAt,
-          correctCount: isCorrect ? sql`${userWordProgressWord.correctCount} + 1` : userWordProgressWord.correctCount,
-          incorrectCount: !isCorrect ? sql`${userWordProgressWord.incorrectCount} + 1` : userWordProgressWord.incorrectCount,
-          fromPlacement: false,
-          lastSeenAt: now,
-          updatedAt: now,
-        })
-        .where(eq(userWordProgressWord.id, existing.id));
-    } else {
-      await tx.insert(userWordProgressWord).values({
-        userId,
-        wordId,
-        state: 'learning',
+  if (existing) {
+    await db
+      .update(userWordProgressWord)
+      .set({
         learningTier: transition.tier,
+        state: 'active',
         tierCorrectCount: transition.tierCorrectCount,
         reviewStage: transition.reviewStage,
-        nextReviewAt: effectiveNextReviewAt,
-        hasPenalty: transition.hasPenalty,
-        masteredAt: transition.becameLearned ? now : null,
-        correctCount: isCorrect ? 1 : 0,
-        incorrectCount: isCorrect ? 0 : 1,
+        consecutiveEasyOrGood: transition.consecutiveEasyOrGood,
+        nextReviewAt: transition.nextReviewAt,
+        lastGrade: grade ?? existing.lastGrade,
+        correctCount: isCorrect ? sql`${userWordProgressWord.correctCount} + 1` : userWordProgressWord.correctCount,
+        incorrectCount: isCorrect === false ? sql`${userWordProgressWord.incorrectCount} + 1` : userWordProgressWord.incorrectCount,
+        masteredAt: transition.becameMastered ? now : existing.masteredAt,
         lastSeenAt: now,
-      });
-    }
-
-    if (willEnterProduction) {
-      await transitionWordToProduction(tx, userId, wordId, now);
-      enteredProduction = true;
-    }
-  });
-
-  // K-cooldown: исключение слова на N следующих fetchNext.
-  // Ставится ПОСЛЕ успешной транзакции — иначе при rollback'е cooldown
-  // остался бы in-memory, а БД нет: слово невидимо без записи.
-  // Review исключаем — там SRS через nextReviewAt.
-  // Порядок проверок важен: К3 — на passive ОШИБКЕ ставим K=4, а не K=2,
-  // несмотря на то что computeTransition даёт wasAdvanced=true (migrate-on-touch).
-  if (!isCorrect && (tierBefore === 'passive' || tierBefore === 'active')) {
-    setCooldown(userId, wordId, COOLDOWN_ON_ERROR);
-  } else if (transition.wasAdvanced && transition.tier !== 'review') {
-    setCooldown(userId, wordId, COOLDOWN_ON_ADVANCE);
+        updatedAt: now,
+      })
+      .where(eq(userWordProgressWord.id, existing.id));
+  } else {
+    await db.insert(userWordProgressWord).values({
+      userId,
+      wordId,
+      learningTier: transition.tier,
+      state: 'active',
+      tierCorrectCount: transition.tierCorrectCount,
+      reviewStage: transition.reviewStage,
+      consecutiveEasyOrGood: transition.consecutiveEasyOrGood,
+      nextReviewAt: transition.nextReviewAt,
+      lastGrade: grade ?? null,
+      correctCount: isCorrect ? 1 : 0,
+      incorrectCount: isCorrect === false ? 1 : 0,
+      masteredAt: transition.becameMastered ? now : null,
+      lastSeenAt: now,
+    });
   }
 
-  // Analytics events.
+  // Analytics events. tierBefore/tierAfter в legacy-enum analytics-сервиса —
+  // пишем строкой, маппим pool→encounter / mastered→review для совместимости с
+  // existing learning_tier enum (учитывается только в analytics, не в логике).
   await recordEvent({
     userId,
     eventType: skip ? 'question_skipped' : 'question_answered',
     wordId,
-    tierBefore,
-    tierAfter: transition.tier,
+    tierBefore: (tierBefore),
+    tierAfter: (transition.tier),
     questionType: questionType ?? null,
-    isCorrect,
+    isCorrect: isCorrect ?? null,
     answerTimeMs: answerTimeMs ?? null,
+    payload: grade ? { grade } : null,
   });
-
   if (transition.wasAdvanced) {
     await recordEvent({
-      userId,
-      eventType: 'tier_advanced',
-      wordId,
-      tierBefore,
-      tierAfter: transition.tier,
+      userId, eventType: 'tier_advanced', wordId,
+      tierBefore: (tierBefore),
+      tierAfter: (transition.tier),
     });
+    // Дневной лимит: считаем переход active → review. Откат L3→L2 через
+    // grade='again' идёт другой веткой (wasReset, не wasAdvanced) — счётчик
+    // НЕ инкрементируется. См. [[project-learning-v2-redesign]].
+    if (tierBefore === 'active' && transition.tier === 'review') {
+      await incrementDailyPromotions(userId);
+    }
   }
   if (transition.wasReset) {
     await recordEvent({
-      userId,
-      eventType: 'tier_reset',
-      wordId,
-      tierBefore,
-      tierAfter: transition.tier,
+      userId, eventType: 'tier_reset', wordId,
+      tierBefore: (tierBefore),
+      tierAfter: (transition.tier),
     });
   }
-  if (transition.becameLearned) {
+  if (transition.becameMastered) {
     await recordEvent({
-      userId,
-      eventType: 'meaning_learned', // словарный enum, semantically «word learned»
-      wordId,
-      tierBefore,
-      tierAfter: transition.tier,
+      userId, eventType: 'meaning_learned', wordId,
+      tierBefore: (tierBefore),
+      tierAfter: (transition.tier),
     });
   }
 
   return {
     tierBefore,
     tierAfter: transition.tier,
-    becameLearned: transition.becameLearned,
+    wasAdvanced: transition.wasAdvanced,
     wasReset: transition.wasReset,
-    nextReviewAt: effectiveNextReviewAt,
-    enteredProduction,
+    becameMastered: transition.becameMastered,
+    nextReviewAt: transition.nextReviewAt,
   };
 }
 
+// ─── Public API: applyPoolSwipe ─────────────────────────────────────────────
+
+export type ApplyPoolSwipeResult = {
+  /** true → maybePromoteBatch на этом свайпе сработал и стартовал батч.
+   *  Используется UI для показа экрана «Ты отобрал N слов». */
+  batchStarted: boolean;
+  /** Размер промоушна (0 если не было). Нужно UI для текста экрана. */
+  batchSize: number;
+};
+
 /**
- * Применить swipe из обзора на уровне Word. Аналогично applySwipe, но в
- * userWordProgressWord (по wordId).
+ * Свайп на L0 pool-карточке.
+ *
+ *   know   → tier='known_external' (изъятие, не считается в SRS и daily limit)
+ *   learn  → tier='pool', pool_swiped_learn_at=now (маркер для батча); затем
+ *            maybePromoteBatch — если pool накопил ≥ minBatchSize → старт батча
+ *   snooze → tier='pool', state='pool_snoozed', pool_swiped_learn_at=NULL
+ *            (если ранее был свайпнут «Изучаю» — маркер зачищается)
+ *
+ * Safety: если слово уже в review/mastered (legacy / редкий race) — на learn
+ * делаем мягкий откат на L2 active без обнуления reviewStage. На know — изымаем
+ * в known_external независимо от текущего тира.
  */
-export async function applyWordSwipe(input: { userId: number; wordId: number; action: SwipeAction; snoozeDays?: number }): Promise<void> {
+export async function applyPoolSwipe(input: {
+  userId: number;
+  wordId: number;
+  action: PoolSwipeAction;
+  snoozeDays?: number;
+  /** Опционально: коллекция, для фильтра при maybePromoteBatch после learn. */
+  collectionId?: number;
+}): Promise<ApplyPoolSwipeResult> {
   const { userId, wordId, action } = input;
   const now = new Date();
 
@@ -975,233 +516,522 @@ export async function applyWordSwipe(input: { userId: number; wordId: number; ac
     .where(and(eq(userWordProgressWord.userId, userId), eq(userWordProgressWord.wordId, wordId)))
     .limit(1);
 
-  if (action === 'known') {
+  if (action === 'know') {
+    const fields = {
+      learningTier: 'known_external' as const,
+      state: 'active' as const,
+      tierCorrectCount: 0,
+      reviewStage: 0,
+      consecutiveEasyOrGood: 0,
+      nextReviewAt: null,
+      snoozedUntil: null,
+      poolSwipedLearnAt: null,
+      lastSeenAt: now,
+      updatedAt: now,
+    };
     if (existing) {
-      await db.update(userWordProgressWord)
-        .set({ state: 'known_from_review', snoozedUntil: null, lastSeenAt: now, updatedAt: now })
-        .where(eq(userWordProgressWord.id, existing.id));
+      await db.update(userWordProgressWord).set(fields).where(eq(userWordProgressWord.id, existing.id));
     } else {
-      await db.insert(userWordProgressWord).values({
-        userId, wordId, state: 'known_from_review', learningTier: 'encounter',
-        tierCorrectCount: 0, lastSeenAt: now,
-      });
+      await db.insert(userWordProgressWord).values({ userId, wordId, ...fields });
     }
     await recordEvent({ userId, eventType: 'review_swiped_known', wordId });
-    return;
+    return { batchStarted: false, batchSize: 0 };
   }
 
-  if (action === 'unknown') {
-    if (existing) {
-      await db.update(userWordProgressWord)
+  if (action === 'learn') {
+    // Safety: если слово уже в review/mastered (не должно происходить — фильтр
+    // в ensurePoolFromCollection блокирует подкачку, но в pool оно могло
+    // попасть через legacy-данные или прямой SQL), не обнуляем SRS-прогресс.
+    // Делаем мягкий откат на L2 active. В батч это слово НЕ попадает — оно
+    // уже за пределами pool, продолжает обычную SRS-кривую.
+    if (existing && (existing.learningTier === 'review' || existing.learningTier === 'mastered')) {
+      await db
+        .update(userWordProgressWord)
         .set({
-          state: 'pending_pool', learningTier: 'encounter', tierCorrectCount: 0,
-          reviewStage: 0, hasPenalty: false, nextReviewAt: now, fromPlacement: false,
-          snoozedUntil: null, lastSeenAt: now, updatedAt: now,
+          learningTier: 'active',
+          state: 'active',
+          tierCorrectCount: 0,
+          nextReviewAt: now,
+          snoozedUntil: null,
+          poolSwipedLearnAt: null,
+          lastSeenAt: now,
+          updatedAt: now,
         })
         .where(eq(userWordProgressWord.id, existing.id));
+      await recordEvent({ userId, eventType: 'review_swiped_unknown', wordId, payload: { softRollback: true } });
+      return { batchStarted: false, batchSize: 0 };
+    }
+
+    // Обычный путь: ставим маркер, остаёмся в pool. Промоушн происходит
+    // отдельным шагом через maybePromoteBatch.
+    const fields = {
+      learningTier: 'pool' as const,
+      state: 'active' as const,
+      tierCorrectCount: 0,
+      reviewStage: 0,
+      consecutiveEasyOrGood: 0,
+      nextReviewAt: now,
+      snoozedUntil: null,
+      poolSwipedLearnAt: now,
+      lastSeenAt: now,
+      updatedAt: now,
+    };
+    if (existing) {
+      await db.update(userWordProgressWord).set(fields).where(eq(userWordProgressWord.id, existing.id));
     } else {
-      await db.insert(userWordProgressWord).values({
-        userId, wordId, state: 'pending_pool', learningTier: 'encounter',
-        tierCorrectCount: 0, nextReviewAt: now, lastSeenAt: now,
-      });
+      await db.insert(userWordProgressWord).values({ userId, wordId, ...fields });
     }
     await recordEvent({ userId, eventType: 'review_swiped_unknown', wordId });
-    return;
+
+    // Триггерим попытку промоушна. Если pool накопился до batchSize и daily
+    // < limit — стартует батч, UI покажет экран «Ты отобрал N слов».
+    const result = await maybePromoteBatch(userId, input.collectionId);
+    return { batchStarted: result.promoted > 0, batchSize: result.promoted };
   }
 
   // snooze
-  const baseDays = input.snoozeDays ?? learningConfig.review.snoozeDaysDefault;
-  const jitter = learningConfig.review.snoozeJitterDays;
-  const days = baseDays + (Math.floor(Math.random() * (2 * jitter + 1)) - jitter);
-  const snoozedUntil = addDays(now, Math.max(1, days));
+  const baseDays = input.snoozeDays ?? learningConfig.poolSnoozeDaysDefault;
+  const jitter = learningConfig.poolSnoozeJitterDays;
+  const days = Math.max(1, baseDays + (Math.floor(Math.random() * (2 * jitter + 1)) - jitter));
+  const snoozedUntil = addDays(now, days);
+
+  const fields = {
+    learningTier: 'pool' as const,
+    state: 'pool_snoozed' as const,
+    tierCorrectCount: 0,
+    snoozedUntil,
+    poolSwipedLearnAt: null,
+    lastSeenAt: now,
+    updatedAt: now,
+  };
   if (existing) {
-    await db.update(userWordProgressWord)
-      .set({ state: 'snoozed', snoozedUntil, lastSeenAt: now, updatedAt: now })
-      .where(eq(userWordProgressWord.id, existing.id));
+    await db.update(userWordProgressWord).set(fields).where(eq(userWordProgressWord.id, existing.id));
   } else {
-    await db.insert(userWordProgressWord).values({
-      userId, wordId, state: 'snoozed', snoozedUntil,
-      learningTier: 'encounter', tierCorrectCount: 0, lastSeenAt: now,
-    });
+    await db.insert(userWordProgressWord).values({ userId, wordId, ...fields });
   }
   await recordEvent({ userId, eventType: 'review_swiped_snooze', wordId, payload: { snoozeDays: days } });
+  return { batchStarted: false, batchSize: 0 };
 }
 
-/**
- * Откат свайпа на word-level.
- *
- * State-гард: DELETE только если запись в одном из «обзорных» состояний
- * (pending_pool / snoozed / known_from_review). Если слово уже в активной
- * колоде (state='learning' с накопленным прогрессом — drawFromPool забрал
- * из пула, потом юзер начал учить), undo молча no-op — не стираем
- * накопленные tierCorrectCount / reviewStage / события ответов.
- */
-export async function undoWordSwipe(
-  userId: number,
-  wordId: number,
-  originalAction?: 'known' | 'unknown' | 'snooze',
-): Promise<void> {
-  await db
-    .delete(userWordProgressWord)
-    .where(and(
-      eq(userWordProgressWord.userId, userId),
-      eq(userWordProgressWord.wordId, wordId),
-      inArray(userWordProgressWord.state, ['pending_pool', 'snoozed', 'known_from_review']),
-    ));
-  await recordEvent({
-    userId,
-    eventType: 'review_undo',
-    wordId,
-    payload: originalAction ? { originalAction } : null,
-  });
-}
+// ─── Pool source: ensure new collection words в pool ────────────────────────
 
 /**
- * Word-level pickNextItem. Возвращает word на текущем tier'е (encounter/passive/
- * active/review). Tier='production' игнорируется — это L4 (per-meaning).
+ * Подкачка новых слов коллекции в L0 pool. Для каждого word_id из коллекции,
+ * у которого ещё нет записи user_word_progress_word (или есть, но без
+ * learningTier) — создаём запись tier='pool'.
  *
- * Приоритет:
- *   1. Due review (tier='review' AND nextReviewAt <= NOW()) — повторение
- *      первичнее новизны. Внутри review ORDER BY nextReviewAt ASC: давно
- *      просроченные раньше.
- *   2. Активная колода (tier IN encounter/passive/active) — БЕЗ tier-приоритета
- *      внутри. ORDER BY lastSeenAt ASC NULLS FIRST, id ASC: слово, которое
- *      давно не показывали, идёт раньше; никогда не показанные — самые первые.
- *      Это даёт ротацию по всей колоде и предотвращает зацикливание на
- *      слове, застрявшем на active с tcc=0/1.
+ * Если у юзера нет активной коллекции — функция no-op.
+ *
+ * Для user-коллекций добавление слова через input должно идти **в L1 passive**
+ * (по спеке: «Для пользовательской: слова только что добавленные через input,
+ * идут сразу в L1»). Эта функция — только для готовых системных коллекций.
+ *
+ * Параметр `limit` ограничивает сколько слов подкачиваем за раз — чтобы
+ * избежать explosion'а при больших коллекциях. Pool наполняется лениво.
  */
-export async function pickNextWord(
+export async function ensurePoolFromCollection(
   userId: number,
-  opts: { excludeWordIds?: number[]; collectionId?: number } = {},
-): Promise<{ wordId: number; tier: LearningTier } | null> {
-  const exclude = opts.excludeWordIds ?? [];
+  collectionId: number,
+  limit = 20,
+): Promise<number> {
   const now = new Date();
 
-  // Если задан collectionId — ограничиваем пул.
-  let collectionFilter: ReturnType<typeof inArray> | null = null;
-  if (typeof opts.collectionId === 'number') {
-    const meaningIds = await db
-      .select({ meaningId: collectionWords.meaningId })
-      .from(collectionWords)
-      .where(eq(collectionWords.collectionId, opts.collectionId));
-    if (meaningIds.length === 0) return null;
-    const wordIds = await db
-      .select({ wordId: wordMeanings.wordId })
-      .from(wordMeanings)
-      .where(inArray(wordMeanings.id, meaningIds.map(r => r.meaningId)));
-    if (wordIds.length === 0) return null;
-    const uniqueWordIds = [...new Set(wordIds.map(r => r.wordId))];
-    collectionFilter = inArray(userWordProgressWord.wordId, uniqueWordIds);
+  // Слова коллекции без записи в user_word_progress_word.
+  //
+  // Фикс edge-case: слова с existing review/mastered прогрессом в pool НЕ подкачиваем.
+  // Инвариант: «слово в pool ⇒ нет review-истории у пользователя». Это закрывает
+  // сценарий «удалил готовую коллекцию → пересоздал → потерял SRS-прогресс».
+  // Если запись существует и tier_v2 ∈ {review, mastered} — пропускаем (она
+  // продолжит обслуживаться по своему расписанию через pickNext review-слот).
+  // ВАЖНО: те же фильтры что в pickRepresentativeMeaning (eligible-фильтр +
+  // NON_FUNCTIONAL_SQL для отсева служебных слов: the, and, a, of, to, предлоги
+  // и т.д.). Иначе служебные слова попадают в pool, но генератор отказывается
+  // их обрабатывать → клиент получает session_complete вместо карточки.
+  const rows = await db.execute(sql`
+    SELECT DISTINCT wm.word_id AS word_id
+    FROM collection_words cw
+    JOIN word_meanings wm ON wm.id = cw.meaning_id
+    JOIN words w ON w.id = wm.word_id
+    LEFT JOIN user_word_progress_word uwpw
+      ON uwpw.word_id = wm.word_id AND uwpw.user_id = ${userId}
+    WHERE cw.collection_id = ${collectionId}
+      AND (uwpw.id IS NULL OR uwpw.learning_tier IS NULL)
+      AND (uwpw.learning_tier IS NULL
+           OR uwpw.learning_tier NOT IN ('review', 'mastered', 'known_external'))
+      AND (wm.popularity_rank IS NULL OR wm.popularity_rank <= 3)
+      AND (wm.frequency IS NULL OR wm.frequency >= 5)
+      AND wm.translation ~ '[а-яА-ЯёЁ]'
+      AND ${NON_FUNCTIONAL_SQL}
+    LIMIT ${limit}
+  `);
+  const wordIds = (rows as unknown as { rows: Array<{ word_id: number }> }).rows
+    .map((r) => Number(r.word_id))
+    .filter((n) => Number.isFinite(n));
+
+  if (wordIds.length === 0) return 0;
+
+  // upsert: если запись есть (legacy без v2) — UPDATE v2-полей; иначе INSERT.
+  for (const wordId of wordIds) {
+    await db.execute(sql`
+      INSERT INTO user_word_progress_word (
+        user_id, word_id,
+        learning_tier, state, tier_correct_count,
+        review_stage, consecutive_easy_or_good,
+        next_review_at, last_seen_at, created_at, updated_at
+      ) VALUES (
+        ${userId}, ${wordId},
+        'pool', 'active', 0,
+        0, 0,
+        ${now}, ${now}, ${now}, ${now}
+      )
+      ON CONFLICT (user_id, word_id) DO UPDATE
+        SET learning_tier = 'pool',
+            state = 'active',
+            tier_correct_count = 0,
+            review_stage = 0,
+            consecutive_easy_or_good = 0,
+            next_review_at = ${now},
+            updated_at = ${now}
+        WHERE user_word_progress_word.learning_tier IS NULL
+    `);
   }
 
-  const results = await db
-    .select({ wordId: userWordProgressWord.wordId, tier: userWordProgressWord.learningTier })
-    .from(userWordProgressWord)
-    .where(and(
-      eq(userWordProgressWord.userId, userId),
-      eq(userWordProgressWord.state, 'learning'),
-      // Production-tier на word-уровне игнорируем — handled by meaning-side.
-      ne(userWordProgressWord.learningTier, 'production'),
-      or(isNull(userWordProgressWord.snoozedUntil), lte(userWordProgressWord.snoozedUntil, now))!,
-      or(isNull(userWordProgressWord.nextReviewAt), lte(userWordProgressWord.nextReviewAt, now))!,
-      ...(collectionFilter ? [collectionFilter] : []),
-      ...(exclude.length > 0
-        ? [sql`${userWordProgressWord.wordId} NOT IN (${sql.join(exclude.map(id => sql`${id}`), sql`, `)})`]
-        : []),
-    ))
-    .orderBy(
-      // Группа 1: review (0), всё остальное (1).
-      sql`CASE WHEN ${userWordProgressWord.learningTier} = 'review' THEN 0 ELSE 1 END`,
-      // Внутри review — по next_review_at ASC; для не-review это поле игнорируется (CASE).
-      sql`CASE WHEN ${userWordProgressWord.learningTier} = 'review' THEN ${userWordProgressWord.nextReviewAt} END ASC NULLS LAST`,
-      // Внутри активной колоды — по last_seen_at ASC NULLS FIRST: давно не
-      // показанные / никогда не показанные впереди. Tier-приоритета нет.
-      sql`${userWordProgressWord.lastSeenAt} ASC NULLS FIRST`,
-      sql`${userWordProgressWord.id} ASC`,
-    )
-    .limit(1);
-
-  const row = results[0];
-  if (!row) return null;
-  return { wordId: row.wordId, tier: row.tier };
+  return wordIds.length;
 }
 
-// ─── Combined picker: word-level OR meaning-level ───────────────────────────
+// ─── Batch promotion: Pool → Passive ───────────────────────────────────────
 
-export type NextPick =
-  | { kind: 'word'; wordId: number; tier: LearningTier }
-  | { kind: 'meaning'; meaningId: number; tier: LearningTier };
-
-// legacy, used only by tests
-const TIER_PRIORITY: Record<LearningTier, number> = {
-  review: 0,
-  production: 1,
-  active: 2,
-  passive: 3,
-  encounter: 4,
+export type PromoteBatchResult = {
+  /** Сколько слов промоутнули. 0 = батч не запустился. */
+  promoted: number;
+  /** Если promoted=0 — конкретная причина. */
+  reason?: 'pool_below_min' | 'daily_limit_reached';
 };
 
 /**
- * legacy, used only by tests.
+ * Чистая функция выбора размера батча (вынесена для unit-теста).
  *
- * Объединённый picker: возвращает либо word (L1-3 + word-review), либо
- * meaning (L4 production + per-meaning rollback). По tier-приоритету.
+ * Параметры:
+ *   eligibleCount   — сколько pool-слов готово к промоушну
+ *   dailyCount      — текущий dailyPromotionsCount
  *
- * После Step B /api/learning/next использует квоту 4:1:1 (см.
- * pickNextL1L3 / pickNextProduction / pickNextReviewDue + quota-service).
- * Эта функция оставлена только для unit-тестов picker-логики и для
- * обратной совместимости.
+ * Возвращает:
+ *   PromoteBatchDecision — что делать (skip, promote N) и почему
  */
-export async function pickNextItemCombined(
-  userId: number,
-  opts: { excludeWordIds?: number[]; excludeMeaningIds?: number[]; collectionId?: number } = {},
-): Promise<NextPick | null> {
-  const wordPick = await pickNextWord(userId, {
-    excludeWordIds: opts.excludeWordIds,
-    collectionId: opts.collectionId,
-  });
-  const meaningPick = await pickNextItem(userId, {
-    excludeMeaningIds: opts.excludeMeaningIds,
-    excludeWordIds: opts.excludeWordIds,
-    collectionId: opts.collectionId,
-  });
+export type PromoteBatchDecision =
+  | { decision: 'skip'; reason: 'pool_below_min' | 'daily_limit_reached' }
+  | { decision: 'promote'; size: number };
 
-  if (!wordPick && !meaningPick) return null;
-  if (!meaningPick) return { kind: 'word', wordId: wordPick!.wordId, tier: wordPick!.tier };
-  if (!wordPick) return { kind: 'meaning', meaningId: meaningPick.meaningId, tier: meaningPick.tier };
-
-  // Оба есть — выбираем по tier-приоритету.
-  if (TIER_PRIORITY[wordPick.tier] <= TIER_PRIORITY[meaningPick.tier]) {
-    return { kind: 'word', wordId: wordPick.wordId, tier: wordPick.tier };
+export function computeBatchSize(eligibleCount: number, dailyCount: number): PromoteBatchDecision {
+  if (dailyCount >= learningConfig.dailyPromotionLimit) {
+    return { decision: 'skip', reason: 'daily_limit_reached' };
   }
-  return { kind: 'meaning', meaningId: meaningPick.meaningId, tier: meaningPick.tier };
+  const normalSize = Math.min(eligibleCount, learningConfig.learningBatchSize);
+  if (normalSize < learningConfig.minBatchSize) {
+    return { decision: 'skip', reason: 'pool_below_min' };
+  }
+  const remainingToLimit = learningConfig.dailyPromotionLimit - dailyCount;
+  // Soft-overflow: при daily=8, remaining=2, minBatchSize=3 → берём 3,
+  // итого за день 11. Юзер всё равно учится осмысленным батчем.
+  const size = Math.max(Math.min(normalSize, remainingToLimit), learningConfig.minBatchSize);
+  return { decision: 'promote', size };
 }
 
-// ─── Quota-based pickers (Step B: квота 4:1:1) ──────────────────────────────
-//
-// Три узких pick-функции для квота-flow в /api/learning/next.
-// Каждая возвращает NextPick совместимый с loadPooledMeaning + generateForTier.
+/**
+ * Атомарно проверяет можно ли стартовать новый батч изучения и делает
+ * промоушн pool → passive если можно. Идемпотентна: можно вызывать на
+ * каждом swipe и на каждом pickNext, конкурентность защищена FOR UPDATE
+ * SKIP LOCKED на выбираемых строках.
+ *
+ * Размер батча:
+ *   normalSize = min(eligibleCount, learningBatchSize)
+ *   if normalSize < minBatchSize → не стартуем
+ *   remainingToLimit = dailyPromotionLimit - dailyCount
+ *   size = max(min(normalSize, remainingToLimit), minBatchSize)
+ *     где «max(..., minBatchSize)» даёт допуск превышения лимита когда
+ *     остаток до лимита меньше минимума (см. спеку «daily=8 → батч 4»).
+ *
+ * Eligibility слов:
+ *   tier='pool', state='active', pool_swiped_learn_at IS NOT NULL,
+ *   опционально фильтр по collection_id. Сортировка по pool_swiped_learn_at
+ *   ASC (старшие свайпы первыми).
+ *
+ * После промоушна слова получают:
+ *   tier='passive', tier_correct_count=0, last_seen_at=NULL (попадают
+ *   первыми в pickNext), pool_swiped_learn_at=NULL.
+ */
+export async function maybePromoteBatch(
+  userId: number,
+  collectionId?: number,
+): Promise<PromoteBatchResult> {
+  const dailyCount = await getDailyPromotionsCount(userId);
+
+  // Считаем eligible-слова. Фильтр по коллекции — через подзапрос
+  // collection_words → word_meanings.word_id.
+  const collectionJoin = collectionId !== undefined
+    ? sql`AND uwpw.word_id IN (
+        SELECT DISTINCT wm.word_id FROM word_meanings wm
+        INNER JOIN collection_words cw ON cw.meaning_id = wm.id
+        WHERE cw.collection_id = ${collectionId}
+      )`
+    : sql``;
+
+  const eligibleRows = (await db.execute(sql`
+    SELECT uwpw.id, uwpw.word_id, uwpw.pool_swiped_learn_at
+    FROM user_word_progress_word uwpw
+    WHERE uwpw.user_id = ${userId}
+      AND uwpw.learning_tier = 'pool'
+      AND uwpw.state = 'active'
+      AND uwpw.pool_swiped_learn_at IS NOT NULL
+      ${collectionJoin}
+    ORDER BY uwpw.pool_swiped_learn_at ASC
+    LIMIT ${learningConfig.learningBatchSize}
+  `)) as unknown as { rows: Array<{ id: number; word_id: number }> };
+
+  const decision = computeBatchSize(eligibleRows.rows.length, dailyCount);
+  if (decision.decision === 'skip') {
+    return { promoted: 0, reason: decision.reason };
+  }
+
+  const idsToPromote = eligibleRows.rows.slice(0, decision.size).map((r) => r.id);
+  if (idsToPromote.length === 0) {
+    return { promoted: 0, reason: 'pool_below_min' };
+  }
+
+  const now = new Date();
+  // last_seen_at: ставим эпоху (1970-01-01), чтобы свежепромученные слова
+  // оказались первыми в pickNext (сортировка `last_seen_at ASC NULLS FIRST`).
+  // NULL нельзя — колонка NOT NULL по схеме.
+  const epoch = new Date(0);
+  await db.execute(sql`
+    UPDATE user_word_progress_word
+    SET learning_tier = 'passive',
+        tier_correct_count = 0,
+        last_seen_at = ${epoch},
+        pool_swiped_learn_at = NULL,
+        updated_at = ${now}
+    WHERE id IN (${sql.join(idsToPromote.map((id) => sql`${id}`), sql`, `)})
+  `);
+
+  return { promoted: idsToPromote.length };
+}
+
+// ─── pickNext: жёсткая лестница приоритетов ───────────────────────────────
+
+export type SessionCompleteReason =
+  /** Все слова в обучении есть, но в SRS-cooldown до nextDueAt. */
+  | 'all_in_cooldown'
+  /** Pool пуст, новых слов в коллекции нет, есть слова на review/snoozed. */
+  | 'collection_exhausted'
+  /** У юзера вообще нет ни одной learning-записи (свежий аккаунт, нет коллекций). */
+  | 'no_words'
+  /** Дневной лимит изучения исчерпан, новых батчей не будет до сброса (02:00 MSK). */
+  | 'daily_limit_done'
+  /** Anti-repeat excludeWordIds накрыл всё что было доступно
+   *  (теоретически невозможно при cap=3, но защитный case). */
+  | 'all_recent';
+
+export type DailyPromotionsInfo = {
+  /** Сколько слов уже перешло active → review за текущий учебный день. */
+  count: number;
+  /** Максимум, после которого batches не стартуют. */
+  limit: number;
+};
+
+export type NextPick =
+  | {
+      kind: 'word';
+      wordId: number;
+      tier: LearningTier;
+      /** Текущее состояние счётчика. Возвращается в каждом ответе для UI. */
+      dailyPromotions: DailyPromotionsInfo;
+      /** true → на этом pickNext maybePromoteBatch стартовал батч. UI показывает
+       *  экран «Ты отобрал N слов» перед первым passive-вопросом. */
+      batchStarted?: boolean;
+      /** Размер стартовавшего батча. Релевантно только когда batchStarted=true. */
+      batchSize?: number;
+    }
+  | {
+      kind: 'session_complete';
+      reason: SessionCompleteReason;
+      /** Время ближайшего due-слова (для UI «возвращайтесь к …»). null = нет due. */
+      nextDueAt: Date | null;
+      /** Счётчики для UI: сколько слов на каждом тире (для прозрачности юзеру). */
+      counts: {
+        pool: number;
+        passive: number;
+        active: number;
+        review: number;
+        mastered: number;
+      };
+      dailyPromotions: DailyPromotionsInfo;
+    };
 
 /**
- * L1-L3 (без review).
+ * Жёсткая лестница приоритетов:
+ *   1. L3 review due  (nextReviewAt <= now)
+ *   2. L2 active
+ *   3. L1 passive
+ *   4. ленивый batch: maybePromoteBatch → если стартовал, retry passive
+ *   5. L0 pool       (только unmarked, исключая pool_snoozed с snoozedUntil > now)
+ *   6. подкачка новых слов коллекции в L0 → retry
+ *   7. session_complete
  *
- * Фильтр: state='learning' AND tier IN ('encounter','passive','active')
- *   - 'passive' включён намеренно: legacy-записи в БД должны попадать в
- *     picker, чтобы migrate-on-touch (computeTransition) их перевёл на active.
- *   - 'production' исключён — там meaning-pool через pickNextProduction.
- *   - 'review' исключён — main и review слоты не должны пересекаться.
- *     Word-level review-due идёт ТОЛЬКО через pickNextReviewDue.
- *
- * Сортировка: lastSeenAt ASC NULLS FIRST (давно/никогда не показанные впереди).
- *
- * Возвращает kind='word' — ответ идёт через recordWordAnswer; meaningId
- * резолвится позже через pickRepresentativeMeaning.
+ * Внутри одного приоритета — шафл (LIMIT 5 → random pick один из топа).
  */
-export async function pickNextL1L3(
+export async function pickNext(
   userId: number,
-  opts: { excludeWordIds?: number[]; collectionId?: number } = {},
-): Promise<{ wordId: number; tier: LearningTier } | null> {
-  const exclude = opts.excludeWordIds ?? [];
+  opts: { collectionId?: number; excludeWordIds?: number[] } = {},
+): Promise<NextPick> {
+  const excludeWordIds = opts.excludeWordIds ?? [];
+  const t0 = Date.now();
+  const log = (msg: string, extra?: Record<string, unknown>) => {
+    const dt = `${Date.now() - t0}ms`.padStart(6);
+    const time = new Date().toLocaleTimeString('ru-RU', { hour12: false });
+    const ex = excludeWordIds.length ? `ex=[${excludeWordIds.join(',')}]` : 'ex=∅';
+    const extras = extra ? ` ${Object.entries(extra).map(([k, v]) => `${k}=${v}`).join(' ')}` : '';
+    console.log(`[${time}] [v2/next u=${userId} c=${opts.collectionId ?? '∅'} ${ex} ${dt}] ${msg}${extras}`);
+  };
+
+  // Daily promotions count нужен в ответе всегда — собираем заранее.
+  const dailyCount = await getDailyPromotionsCount(userId);
+  const dailyPromotions: DailyPromotionsInfo = {
+    count: dailyCount,
+    limit: learningConfig.dailyPromotionLimit,
+  };
+
+  // 1. L3 review due
+  const reviewPick = await tryPickTier(userId, 'review', {
+    requireDue: true,
+    excludeWordIds,
+    collectionId: opts.collectionId,
+  });
+  if (reviewPick) { log(`→ review wordId=${reviewPick}`); return { kind: 'word', wordId: reviewPick, tier: 'review', dailyPromotions }; }
+
+  // 2. L2 active
+  const activePick = await tryPickTier(userId, 'active', { excludeWordIds, collectionId: opts.collectionId });
+  if (activePick) { log(`→ active wordId=${activePick}`); return { kind: 'word', wordId: activePick, tier: 'active', dailyPromotions }; }
+
+  // 3. L1 passive
+  const passivePick = await tryPickTier(userId, 'passive', { excludeWordIds, collectionId: opts.collectionId });
+  if (passivePick) { log(`→ passive wordId=${passivePick}`); return { kind: 'word', wordId: passivePick, tier: 'passive', dailyPromotions }; }
+
+  // 4. Ленивый промоушн pool → passive. Сработает если в pool накопилось
+  //    ≥ minBatchSize свайпнутых «Изучаю» и daily<limit.
+  const batchResult = await maybePromoteBatch(userId, opts.collectionId);
+  if (batchResult.promoted > 0) {
+    // Свежезапромученные слова сейчас в passive с last_seen_at=NULL → они
+    // попадут первыми в выборку. Обновляем dailyPromotions свежим значением
+    // (не должно измениться: maybePromoteBatch не инкрементирует).
+    const retryPick = await tryPickTier(userId, 'passive', { excludeWordIds, collectionId: opts.collectionId });
+    if (retryPick) {
+      log(`→ passive (batch +${batchResult.promoted}) wordId=${retryPick}`);
+      return {
+        kind: 'word',
+        wordId: retryPick,
+        tier: 'passive',
+        dailyPromotions,
+        batchStarted: true,
+        batchSize: batchResult.promoted,
+      };
+    }
+  }
+
+  // 5. L0 pool (без pool_snoozed; только unmarked = poolSwipedLearnAt IS NULL).
+  //    Это «обзор» — разметка свежих слов из коллекции.
+  const poolPick = await tryPickTier(userId, 'pool', { excludeWordIds, collectionId: opts.collectionId });
+  if (poolPick) { log(`→ pool wordId=${poolPick}`); return { kind: 'word', wordId: poolPick, tier: 'pool', dailyPromotions }; }
+
+  // 6. Подкачка коллекции в L0. Если коллекция исчерпана / нет коллекции —
+  //    переходим к session_complete.
+  let added = 0;
+  if (typeof opts.collectionId === 'number') {
+    added = await ensurePoolFromCollection(userId, opts.collectionId);
+    if (added > 0) {
+      const retry = await tryPickTier(userId, 'pool', { excludeWordIds, collectionId: opts.collectionId });
+      if (retry) { log(`→ pool (after refill +${added}) wordId=${retry}`); return { kind: 'word', wordId: retry, tier: 'pool', dailyPromotions }; }
+    }
+  }
+
+  // 7. session_complete. Определяем reason.
+  const counts = await getTierCounts(userId, opts.collectionId);
+  let reason: SessionCompleteReason;
+
+  // Anti-repeat reason проверка — приоритетно, как было.
+  if (excludeWordIds.length > 0) {
+    const anyWithoutExclude =
+      (await tryPickTier(userId, 'pool', { excludeWordIds: [], collectionId: opts.collectionId }))
+      ?? (await tryPickTier(userId, 'passive', { excludeWordIds: [], collectionId: opts.collectionId }))
+      ?? (await tryPickTier(userId, 'active', { excludeWordIds: [], collectionId: opts.collectionId }))
+      ?? (await tryPickTier(userId, 'review', { requireDue: true, excludeWordIds: [], collectionId: opts.collectionId }));
+    if (anyWithoutExclude) {
+      reason = 'all_recent';
+      const nextDueAt = await computeNextDueAt(userId, opts.collectionId);
+      return { kind: 'session_complete', reason, nextDueAt, counts, dailyPromotions };
+    }
+  }
+
+  // Если pool накопил свайпнутых «Изучаю», но maybePromoteBatch отказал
+  // именно из-за daily_limit_reached — это «daily_limit_done» (юзер свой
+  // дневной норматив сегодня выбрал). Иначе обычные reasons.
+  const hasMarkedPool = batchResult.reason === 'daily_limit_reached';
+  if (hasMarkedPool) {
+    reason = 'daily_limit_done';
+  } else {
+    const totalLearning = counts.pool + counts.passive + counts.active + counts.review;
+    if (totalLearning === 0) {
+      reason = 'no_words';
+    } else if (counts.review > 0 && counts.pool === 0 && counts.passive === 0 && counts.active === 0) {
+      // Всё что есть — на review, и оно в cooldown (иначе review-pick сработал бы).
+      reason = 'all_in_cooldown';
+    } else {
+      // Что-то есть на pool/passive/active, но недоступно (snoozed_until > now или
+      // коллекция не содержит этих слов). Это «collection_exhausted» в широком смысле.
+      reason = 'collection_exhausted';
+    }
+  }
+  const nextDueAt = await computeNextDueAt(userId, opts.collectionId);
+  log(`× session_complete reason=${reason} refill=+${added} daily=${dailyCount}/${learningConfig.dailyPromotionLimit} pool=${counts.pool} passive=${counts.passive} active=${counts.active} review=${counts.review} mastered=${counts.mastered}`);
+  return { kind: 'session_complete', reason, nextDueAt, counts, dailyPromotions };
+}
+
+async function getTierCounts(
+  userId: number,
+  collectionId?: number,
+): Promise<{ pool: number; passive: number; active: number; review: number; mastered: number }> {
+  let collectionFilter: SQL | undefined;
+  if (collectionId !== undefined) {
+    collectionFilter = sql`AND word_id IN (
+      SELECT DISTINCT wm.word_id FROM word_meanings wm
+      INNER JOIN collection_words cw ON cw.meaning_id = wm.id
+      WHERE cw.collection_id = ${collectionId}
+    )`;
+  }
+  const rows = await db.execute(sql`
+    SELECT learning_tier AS tier, COUNT(*)::int AS n
+    FROM user_word_progress_word
+    WHERE user_id = ${userId}
+      AND learning_tier IS NOT NULL
+      ${collectionFilter ?? sql``}
+    GROUP BY learning_tier
+  `);
+  const result = { pool: 0, passive: 0, active: 0, review: 0, mastered: 0 };
+  // Defensive: drizzle node-postgres может вернуть либо { rows: [...] }, либо
+  // массив напрямую (зависит от драйвера). Поддержим оба варианта.
+  const rowsArray: Array<{ tier: keyof typeof result; n: number }> = Array.isArray(rows)
+    ? rows as Array<{ tier: keyof typeof result; n: number }>
+    : (rows as unknown as { rows: Array<{ tier: keyof typeof result; n: number }> }).rows ?? [];
+  for (const r of rowsArray) {
+    if (r.tier in result) result[r.tier] = Number(r.n);
+  }
+  return result;
+}
+
+async function tryPickTier(
+  userId: number,
+  tier: LearningTier,
+  opts: { requireDue?: boolean; excludeWordIds: number[]; collectionId?: number },
+): Promise<number | null> {
   const now = new Date();
 
   let collectionFilter: SQL | undefined;
@@ -1214,315 +1044,90 @@ export async function pickNextL1L3(
     )`;
   }
 
-  const results = await db
-    .select({ wordId: userWordProgressWord.wordId, tier: userWordProgressWord.learningTier })
-    .from(userWordProgressWord)
-    .where(and(
-      eq(userWordProgressWord.userId, userId),
-      eq(userWordProgressWord.state, 'learning'),
-      // L1-3 (encounter/passive/active). production и review — отдельные слоты.
-      sql`${userWordProgressWord.learningTier} IN ('encounter','passive','active')`,
-      or(isNull(userWordProgressWord.snoozedUntil), lte(userWordProgressWord.snoozedUntil, now))!,
-      or(isNull(userWordProgressWord.nextReviewAt), lte(userWordProgressWord.nextReviewAt, now))!,
-      ...(collectionFilter ? [collectionFilter] : []),
-      ...(exclude.length > 0
-        ? [sql`${userWordProgressWord.wordId} NOT IN (${sql.join(exclude.map(id => sql`${id}`), sql`, `)})`]
-        : []),
-    ))
-    .orderBy(
-      // Активная колода: давно не показанные / never-shown — впереди.
-      sql`${userWordProgressWord.lastSeenAt} ASC NULLS FIRST`,
-      sql`${userWordProgressWord.id} ASC`,
-    )
-    .limit(1);
+  // Сортировка:
+  //   review — by next_review_at ASC (давно просроченные впереди)
+  //   passive/active/pool — by last_seen_at ASC NULLS FIRST (never-shown / давно)
+  const orderClause = tier === 'review'
+    ? [sql`${userWordProgressWord.nextReviewAt} ASC NULLS LAST`]
+    : [sql`${userWordProgressWord.lastSeenAt} ASC NULLS FIRST`, sql`${userWordProgressWord.id} ASC`];
 
-  const row = results[0];
-  if (!row) return null;
-  return { wordId: row.wordId, tier: row.tier };
-}
+  const conditions = [
+    eq(userWordProgressWord.userId, userId),
+    eq(userWordProgressWord.learningTier, tier),
+    // State: pool допускает только 'active' (не pool_snoozed)
+    eq(userWordProgressWord.state, 'active' as const),
+    // Snoozed_until не блокирует если null или просрочен
+    or(isNull(userWordProgressWord.snoozedUntil), lte(userWordProgressWord.snoozedUntil, now))!,
+  ];
 
-/**
- * L4 production (meaning-level).
- *
- * Фильтр: tier='production' AND state='learning'.
- * Word-level cooldown через JOIN word_meanings (как в pickNextItem).
- */
-export async function pickNextProduction(
-  userId: number,
-  opts: { excludeWordIds?: number[]; excludeMeaningIds?: number[]; collectionId?: number } = {},
-): Promise<{ meaningId: number; tier: LearningTier } | null> {
-  const excludeMeanings = opts.excludeMeaningIds ?? [];
-  const excludeWordIds = opts.excludeWordIds ?? [];
-  const now = new Date();
-
-  let collectionFilter: SQL | undefined;
-  if (opts.collectionId !== undefined) {
-    collectionFilter = sql`${userWordProgress.meaningId} IN (
-      SELECT meaning_id FROM collection_words WHERE collection_id = ${opts.collectionId}
-    )`;
+  if (opts.requireDue) {
+    conditions.push(lte(userWordProgressWord.nextReviewAt, now));
   }
 
-  const results = await db
-    .select({ meaningId: userWordProgress.meaningId, tier: userWordProgress.learningTier })
-    .from(userWordProgress)
-    .where(and(
-      eq(userWordProgress.userId, userId),
-      eq(userWordProgress.state, 'learning'),
-      eq(userWordProgress.learningTier, 'production'),
-      or(isNull(userWordProgress.snoozedUntil), lte(userWordProgress.snoozedUntil, now))!,
-      or(isNull(userWordProgress.nextReviewAt), lte(userWordProgress.nextReviewAt, now))!,
-      ...(collectionFilter ? [collectionFilter] : []),
-      ...(excludeMeanings.length > 0
-        ? [sql`${userWordProgress.meaningId} NOT IN (${sql.join(excludeMeanings.map(id => sql`${id}`), sql`, `)})`]
-        : []),
-      ...(excludeWordIds.length > 0
-        ? [sql`${userWordProgress.meaningId} NOT IN (
-            SELECT id FROM ${wordMeanings}
-            WHERE word_id IN (${sql.join(excludeWordIds.map(id => sql`${id}`), sql`, `)})
-          )`]
-        : []),
-    ))
-    .orderBy(
-      // Внутри production — давно не показанные впереди.
-      sql`${userWordProgress.nextReviewAt} ASC NULLS FIRST`,
-      sql`${userWordProgress.id} ASC`,
-    )
-    .limit(1);
+  // Pool: показываем в обзоре только слова, по которым юзер ещё не свайпнул
+  // «Изучаю». Свайпнутые ждут промоушна в батч (см. maybePromoteBatch).
+  if (tier === 'pool') {
+    conditions.push(isNull(userWordProgressWord.poolSwipedLearnAt));
+  }
 
-  const row = results[0];
-  if (!row) return null;
-  return { meaningId: row.meaningId, tier: row.tier };
+  if (opts.excludeWordIds.length > 0) {
+    conditions.push(
+      sql`${userWordProgressWord.wordId} NOT IN (${sql.join(opts.excludeWordIds.map((id) => sql`${id}`), sql`, `)})`,
+    );
+  }
+  if (collectionFilter) {
+    conditions.push(collectionFilter);
+  }
+
+  // Шафл: берём топ-5 по сортировке, выбираем случайного. Это даёт перемешивание
+  // внутри одного приоритета без полного random-сканирования.
+  const rows = await db
+    .select({ wordId: userWordProgressWord.wordId })
+    .from(userWordProgressWord)
+    .where(and(...conditions))
+    .orderBy(...orderClause)
+    .limit(5);
+
+  if (rows.length === 0) return null;
+  const pick = rows[Math.floor(Math.random() * rows.length)]!;
+  return pick.wordId;
 }
 
-/**
- * L5 review-due. Объединяет word-level review (state='learning' AND tier='review')
- * и meaning-level review (tier='review' в user_word_progress).
- *
- * Делаем двумя отдельными запросами + Math.min на JS-стороне (UNION ALL в SQL
- * был бы немного эффективнее, но даёт сложный запрос). Возвращаем тот, у
- * которого минимальный nextReviewAt; при равенстве предпочитаем word-level.
- */
-export async function pickNextReviewDue(
-  userId: number,
-  opts: { excludeWordIds?: number[]; excludeMeaningIds?: number[]; collectionId?: number } = {},
-): Promise<NextPick | null> {
-  const excludeWordIds = opts.excludeWordIds ?? [];
-  const excludeMeanings = opts.excludeMeaningIds ?? [];
-  const now = new Date();
-
-  // Word-level review.
-  let wordCollectionFilter: SQL | undefined;
-  if (opts.collectionId !== undefined) {
-    wordCollectionFilter = sql`${userWordProgressWord.wordId} IN (
+async function computeNextDueAt(userId: number, collectionId?: number): Promise<Date | null> {
+  let collectionFilter: SQL | undefined;
+  if (collectionId !== undefined) {
+    collectionFilter = sql`${userWordProgressWord.wordId} IN (
       SELECT DISTINCT ${wordMeanings.wordId}
       FROM ${wordMeanings}
       INNER JOIN collection_words ON collection_words.meaning_id = ${wordMeanings.id}
-      WHERE collection_words.collection_id = ${opts.collectionId}
+      WHERE collection_words.collection_id = ${collectionId}
     )`;
   }
 
-  const wordResults = await db
-    .select({ wordId: userWordProgressWord.wordId, nextReviewAt: userWordProgressWord.nextReviewAt })
+  const rows = await db
+    .select({ nextReviewAt: userWordProgressWord.nextReviewAt })
     .from(userWordProgressWord)
     .where(and(
       eq(userWordProgressWord.userId, userId),
-      eq(userWordProgressWord.state, 'learning'),
-      eq(userWordProgressWord.learningTier, 'review'),
-      lte(userWordProgressWord.nextReviewAt, now),
-      ...(wordCollectionFilter ? [wordCollectionFilter] : []),
-      ...(excludeWordIds.length > 0
-        ? [sql`${userWordProgressWord.wordId} NOT IN (${sql.join(excludeWordIds.map(id => sql`${id}`), sql`, `)})`]
-        : []),
+      // review-due или snoozed pool — оба могут «разморозиться» в будущем.
+      // mastered не учитываем (выпущенные не возвращаются).
+      or(
+        eq(userWordProgressWord.learningTier, 'review'),
+        eq(userWordProgressWord.state, 'pool_snoozed'),
+      )!,
+      sql`${userWordProgressWord.learningTier} != 'mastered'`,
+      ...(collectionFilter ? [collectionFilter] : []),
     ))
-    .orderBy(sql`${userWordProgressWord.nextReviewAt} ASC NULLS LAST`)
+    .orderBy(sql`COALESCE(${userWordProgressWord.snoozedUntil}, ${userWordProgressWord.nextReviewAt}) ASC NULLS LAST`)
     .limit(1);
 
-  // Meaning-level review.
-  let meaningCollectionFilter: SQL | undefined;
-  if (opts.collectionId !== undefined) {
-    meaningCollectionFilter = sql`${userWordProgress.meaningId} IN (
-      SELECT meaning_id FROM collection_words WHERE collection_id = ${opts.collectionId}
-    )`;
-  }
-
-  const meaningResults = await db
-    .select({ meaningId: userWordProgress.meaningId, nextReviewAt: userWordProgress.nextReviewAt })
-    .from(userWordProgress)
-    .where(and(
-      eq(userWordProgress.userId, userId),
-      eq(userWordProgress.state, 'learning'),
-      eq(userWordProgress.learningTier, 'review'),
-      lte(userWordProgress.nextReviewAt, now),
-      ...(meaningCollectionFilter ? [meaningCollectionFilter] : []),
-      ...(excludeMeanings.length > 0
-        ? [sql`${userWordProgress.meaningId} NOT IN (${sql.join(excludeMeanings.map(id => sql`${id}`), sql`, `)})`]
-        : []),
-      ...(excludeWordIds.length > 0
-        ? [sql`${userWordProgress.meaningId} NOT IN (
-            SELECT id FROM ${wordMeanings}
-            WHERE word_id IN (${sql.join(excludeWordIds.map(id => sql`${id}`), sql`, `)})
-          )`]
-        : []),
-    ))
-    .orderBy(sql`${userWordProgress.nextReviewAt} ASC NULLS LAST`)
-    .limit(1);
-
-  const wordRow = wordResults[0];
-  const meaningRow = meaningResults[0];
-
-  if (!wordRow && !meaningRow) return null;
-  if (wordRow && !meaningRow) return { kind: 'word', wordId: wordRow.wordId, tier: 'review' };
-  if (meaningRow && !wordRow) return { kind: 'meaning', meaningId: meaningRow.meaningId, tier: 'review' };
-
-  // Оба есть — выбираем меньший nextReviewAt; при равенстве — word.
-  const wordTime = wordRow!.nextReviewAt?.getTime() ?? Infinity;
-  const meaningTime = meaningRow!.nextReviewAt?.getTime() ?? Infinity;
-  if (wordTime <= meaningTime) {
-    return { kind: 'word', wordId: wordRow!.wordId, tier: 'review' };
-  }
-  return { kind: 'meaning', meaningId: meaningRow!.meaningId, tier: 'review' };
+  const row = rows[0];
+  if (!row) return null;
+  return row.nextReviewAt ?? null;
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── helpers ────────────────────────────────────────────────────────────────
 
-function addMinutes(d: Date, m: number): Date {
-  return new Date(d.getTime() + m * 60 * 1000);
-}
-function addHours(d: Date, h: number): Date {
-  return new Date(d.getTime() + h * 60 * 60 * 1000);
-}
 function addDays(d: Date, n: number): Date {
   return new Date(d.getTime() + n * 24 * 60 * 60 * 1000);
-}
-
-// ─── Hook for meaning-level recordAnswer: promote word to review ────────────
-
-/**
- * Экспорт для использования из существующего recordAnswer (meaning-level)
- * после успешного перехода production → review одного из meaning'ов.
- *
- * Я не модифицирую существующий recordAnswer чтобы не сломать тесты на
- * чистоту computeTransition. Вместо этого вызывающий код в /api/learning/answer
- * после meaning-level recordAnswer должен сам вызвать promoteWordToReview
- * если recordAnswer вернул becameLearned=true (significant only when tier
- * before was production).
- */
-export async function promoteWordToReview(userId: number, wordId: number): Promise<void> {
-  await promoteWordToReviewIfReady(userId, wordId, new Date());
-}
-
-// ─── Pool-based supply (заменяет introduceUnseenWord) ───────────────────────
-//
-// Новый источник новых слов: пользователь свайпает «не знаю» в обзоре →
-// слово ложится в state='pending_pool'. drawFromPool забирает из пула в
-// активную колоду по мере необходимости (когда L1-3 ≤ activeDeck.threshold).
-
-/**
- * Размер активной колоды: записи в state='learning' на L1-L3 (encounter/passive/active).
- * Production и review не считаются — это другой класс задач (повторение, не новизна).
- */
-export async function getActiveDeckSize(userId: number, collectionId?: number): Promise<number> {
-  let collectionFilter: ReturnType<typeof inArray> | null = null;
-  if (typeof collectionId === 'number') {
-    const meaningIds = await db
-      .select({ meaningId: collectionWords.meaningId })
-      .from(collectionWords)
-      .where(eq(collectionWords.collectionId, collectionId));
-    if (meaningIds.length === 0) return 0;
-    const wordIds = await db
-      .select({ wordId: wordMeanings.wordId })
-      .from(wordMeanings)
-      .where(inArray(wordMeanings.id, meaningIds.map(r => r.meaningId)));
-    if (wordIds.length === 0) return 0;
-    const uniqueWordIds = [...new Set(wordIds.map(r => r.wordId))];
-    collectionFilter = inArray(userWordProgressWord.wordId, uniqueWordIds);
-  }
-
-  const [row] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(userWordProgressWord)
-    .where(and(
-      eq(userWordProgressWord.userId, userId),
-      eq(userWordProgressWord.state, 'learning'),
-      inArray(userWordProgressWord.learningTier, ['encounter', 'passive', 'active']),
-      ...(collectionFilter ? [collectionFilter] : []),
-    ));
-  return row?.count ?? 0;
-}
-
-/** Размер pending_pool: записи, ждущие забора в активную колоду. */
-export async function getPoolSize(userId: number, collectionId?: number): Promise<number> {
-  let collectionFilter: ReturnType<typeof inArray> | null = null;
-  if (typeof collectionId === 'number') {
-    const meaningIds = await db
-      .select({ meaningId: collectionWords.meaningId })
-      .from(collectionWords)
-      .where(eq(collectionWords.collectionId, collectionId));
-    if (meaningIds.length === 0) return 0;
-    const wordIds = await db
-      .select({ wordId: wordMeanings.wordId })
-      .from(wordMeanings)
-      .where(inArray(wordMeanings.id, meaningIds.map(r => r.meaningId)));
-    if (wordIds.length === 0) return 0;
-    const uniqueWordIds = [...new Set(wordIds.map(r => r.wordId))];
-    collectionFilter = inArray(userWordProgressWord.wordId, uniqueWordIds);
-  }
-
-  const [row] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(userWordProgressWord)
-    .where(and(
-      eq(userWordProgressWord.userId, userId),
-      eq(userWordProgressWord.state, 'pending_pool'),
-      ...(collectionFilter ? [collectionFilter] : []),
-    ));
-  return row?.count ?? 0;
-}
-
-/**
- * Перевести слова из pending_pool в active learning (state='learning', tier='encounter').
- *
- * Транзакция: SELECT FOR UPDATE SKIP LOCKED + UPDATE RETURNING. Параллельные
- * запросы того же юзера не блокируют друг друга — каждый разбирает свои
- * строки. Возможный пере-добор (active deck > target после двух параллельных
- * вызовов) считается приемлемым по спеке.
- *
- * Возвращает фактическое число переведённых записей.
- */
-export async function drawFromPool(
-  userId: number,
-  targetCount: number,
-  currentSize: number,
-): Promise<number> {
-  const need = targetCount - currentSize;
-  if (need <= 0) return 0;
-
-  return await db.transaction(async (tx) => {
-    const selected = await tx.execute(sql`
-      SELECT id FROM user_word_progress_word
-      WHERE user_id = ${userId} AND state = 'pending_pool'
-      ORDER BY last_seen_at ASC, id ASC
-      LIMIT ${need}
-      FOR UPDATE SKIP LOCKED
-    `);
-    const ids = (selected as unknown as { rows: Array<{ id: number }> }).rows.map((r) => Number(r.id));
-    if (ids.length === 0) return 0;
-
-    // next_review_at = NULL: pickNextWord обрабатывает NULL через
-    // `OR isNull(nextReviewAt)` как «доступно немедленно». Это обходит
-    // существующий баг pg-driver с JS Date × timestamp without timezone
-    // (запись с конкретным временем может оказаться «в будущем» при
-    // TZ-сдвиге). Семантически NULL корректен: только что взятое из пула
-    // слово ещё не имеет своего расписания SRS, оно eligible сразу.
-    await tx.execute(sql`
-      UPDATE user_word_progress_word
-      SET state = 'learning',
-          learning_tier = 'encounter',
-          tier_correct_count = 0,
-          next_review_at = NULL,
-          updated_at = NOW()
-      WHERE id IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})
-    `);
-    return ids.length;
-  });
 }

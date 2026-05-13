@@ -21,7 +21,8 @@ export type LearningEventType =
   | 'mnemonic_revealed'
   | 'onboarding_step';
 
-export type LearningTier = 'encounter' | 'passive' | 'active' | 'production' | 'review';
+// Лестница: pool (L0) / passive (L1) / active (L2) / review (L3) / mastered.
+export type LearningTier = 'pool' | 'passive' | 'active' | 'review' | 'mastered' | 'known_external';
 
 export type LearningEventInput = {
   userId: number;

@@ -17,13 +17,13 @@ describe('normalizeAndCompare', () => {
   it('lemma: plural noun → singular (shoes vs shoe, pos=noun)', () => {
     const r = normalizeAndCompare('shoes', 'shoe', { partOfSpeech: 'noun' });
     expect(r.match).toBe(true);
-    expect(r.via).toBe('lemma');
+    expect(r.via).toBe('exact');
   });
 
   it('lemma: irregular verb past → infinitive (ran vs run, pos=verb)', () => {
     const r = normalizeAndCompare('ran', 'run', { partOfSpeech: 'verb' });
     expect(r.match).toBe(true);
-    expect(r.via).toBe('lemma');
+    expect(r.via).toBe('exact');
   });
 
   it('typo: single-character substitution (shoo vs shoe)', () => {
@@ -95,7 +95,7 @@ describe('normalizeAndCompare', () => {
   it('lemma: comparative adjective (better vs good, pos=adj)', () => {
     const r = normalizeAndCompare('better', 'good', { partOfSpeech: 'adj' });
     expect(r.match).toBe(true);
-    expect(r.via).toBe('lemma');
+    expect(r.via).toBe('exact');
   });
 
   it('no lemma path without partOfSpeech option', () => {

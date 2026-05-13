@@ -108,34 +108,68 @@ export function HighlightedSentence({
   );
 }
 
-// ─── Forms list (под словом) ───────────────────────────────────────────────
+// ─── Inline-строка под транскрипцией ───────────────────────────────────────
 //
-// Компактный список всех форм слова с лейблами. Используется на L1/L2/L3
-// под основным словом, чтобы пользователь видел все формы сразу.
+// Все формы через запятую, 12px, без лейблов. Дубли (когда past=participle,
+// например worked/worked) скрываются — сравниваем по lower-case text.
+// По тапу открывается дровер с расшифровкой.
 
-type WordFormsListProps = {
+type WordFormsInlineProps = {
   forms: WordFormsInfo;
-  /** Пропускаем форму, совпадающую с base (чтобы не дублировать слово). */
-  hideBase?: boolean;
+  onClick?: () => void;
 };
 
-export function WordFormsList({ forms, hideBase = false }: WordFormsListProps) {
-  const items = useMemo(() => {
-    if (!hideBase) return forms.forms;
-    const baseLower = forms.base.toLowerCase();
-    return forms.forms.filter((f) => f.text.toLowerCase() !== baseLower);
-  }, [forms, hideBase]);
+export function WordFormsInline({ forms, onClick }: WordFormsInlineProps) {
+  const texts = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const f of forms.forms) {
+      const key = f.text.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(f.text);
+    }
+    return out;
+  }, [forms]);
 
-  if (items.length === 0) return null;
+  if (texts.length === 0) return null;
+
+  const content = texts.join(', ');
+
+  if (!onClick) {
+    return <p className="text-[12px] leading-tight text-[var(--gray-11)]">{content}</p>;
+  }
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-[var(--gray-11)]">
-      {items.map((f, i) => (
-        <span key={i} className="whitespace-nowrap">
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-left text-[12px] leading-tight text-[var(--gray-11)] active:text-[var(--gray-12)]"
+    >
+      {content}
+    </button>
+  );
+}
+
+// ─── Подробный список (внутри дровера) ─────────────────────────────────────
+//
+// Каждая строка: форма слева, лейбл справа. 12px. Без POS-заголовка.
+
+type WordFormsDetailsProps = {
+  forms: WordFormsInfo;
+};
+
+export function WordFormsDetails({ forms }: WordFormsDetailsProps) {
+  if (forms.forms.length === 0) return null;
+
+  return (
+    <ul className="flex flex-col gap-2 py-2">
+      {forms.forms.map((f, i) => (
+        <li key={i} className="text-[12px] leading-tight">
           <span className="font-medium text-[var(--gray-12)]">{f.text}</span>
-          <span className="text-[var(--gray-10)]"> · {f.label}</span>
-        </span>
+          <span className="text-[var(--gray-10)]"> — {f.label}</span>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }

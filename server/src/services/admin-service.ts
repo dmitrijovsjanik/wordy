@@ -10,7 +10,7 @@ import {
   users,
   quizSessions,
   duels,
-  userWordProgress,
+  userWordProgressWord,
   userLeagueProgress,
   streakActivityDays,
   userCustomWordProgress,
@@ -213,8 +213,8 @@ export async function getEconomyStats() {
 export async function getSrsStats() {
   const [totalLearnedRow] = await db
     .select({ value: count() })
-    .from(userWordProgress)
-    .where(isNotNull(userWordProgress.masteredAt));
+    .from(userWordProgressWord)
+    .where(isNotNull(userWordProgressWord.masteredAt));
 
   const avgLearnedResult = await db.execute(sql`
     SELECT coalesce(avg(cnt), 0)::numeric(10,1) AS value
@@ -228,12 +228,12 @@ export async function getSrsStats() {
 
   const stageDistribution = await db
     .select({
-      stage: userWordProgress.srsStage,
+      stage: userWordProgressWord.learningTier,
       count: sql<number>`count(*)::int`,
     })
-    .from(userWordProgress)
-    .groupBy(userWordProgress.srsStage)
-    .orderBy(userWordProgress.srsStage);
+    .from(userWordProgressWord)
+    .groupBy(userWordProgressWord.learningTier)
+    .orderBy(userWordProgressWord.learningTier);
 
   const accuracyResult = await db.execute(sql`
     SELECT
@@ -247,8 +247,8 @@ export async function getSrsStats() {
 
   const [penaltyRow] = await db
     .select({ value: count() })
-    .from(userWordProgress)
-    .where(eq(userWordProgress.hasPenalty, true));
+    .from(userWordProgressWord)
+    .where(eq(userWordProgressWord.hasPenalty, true));
 
   const [customWordsRow] = await db
     .select({ value: count() })
@@ -375,27 +375,27 @@ export async function getUserDetail(userId: number) {
 
   const [wordsLearned] = await db
     .select({ value: count() })
-    .from(userWordProgress)
-    .where(and(eq(userWordProgress.userId, userId), isNotNull(userWordProgress.masteredAt)));
+    .from(userWordProgressWord)
+    .where(and(eq(userWordProgressWord.userId, userId), isNotNull(userWordProgressWord.masteredAt)));
 
   const [wordsInProgress] = await db
     .select({ value: count() })
-    .from(userWordProgress)
+    .from(userWordProgressWord)
     .where(and(
-      eq(userWordProgress.userId, userId),
-      sql`${userWordProgress.srsStage} > 0`,
-      sql`${userWordProgress.masteredAt} IS NULL`,
+      eq(userWordProgressWord.userId, userId),
+      sql`${userWordProgressWord.learningTier} > 0`,
+      sql`${userWordProgressWord.masteredAt} IS NULL`,
     ));
 
   const userStages = await db
     .select({
-      stage: userWordProgress.srsStage,
+      stage: userWordProgressWord.learningTier,
       count: sql<number>`count(*)::int`,
     })
-    .from(userWordProgress)
-    .where(eq(userWordProgress.userId, userId))
-    .groupBy(userWordProgress.srsStage)
-    .orderBy(userWordProgress.srsStage);
+    .from(userWordProgressWord)
+    .where(eq(userWordProgressWord.userId, userId))
+    .groupBy(userWordProgressWord.learningTier)
+    .orderBy(userWordProgressWord.learningTier);
 
   const duelResult = await db.execute(sql`
     SELECT

@@ -1,143 +1,99 @@
 /**
  * Конфигурация лестницы освоения слова.
  *
- * Все пороги перехода, интервалы и список разрешённых упражнений на каждом
- * уровне живут здесь. Менять параметры — только в этом файле, без
- * передеплоя кода.
+ *   L0 pool     — слово ждёт первой разметки в обзоре (Знаю / Изучаю / Отложить)
+ *   L1 passive  — узнавание: «Не помню / 👁 / Помню». N правильных подряд → L2
+ *   L2 active   — свободный ввод ru→en. N правильных подряд → L3
+ *   L3 review   — SRS с сеткой [1,3,7,14,30,90,180,365] + кнопки Снова/Трудно/Хорошо/Легко
+ *   mastered    — выпущен из обучения (после двух подряд good/easy на финальном stage)
  *
- * Лестница: encounter → passive → active → production → review.
- * Production отложен в MVP (см. план фазы 7) — `enabled: false`.
- *
- * См. фазу 2 плана переработки.
+ * SM-2 без EF в первой итерации: только сетка + модификаторы кнопок.
+ * Поле ef_factor в БД остаётся (default 2.50, не используется в формуле).
  */
 
 import type { LearningTier } from '../services/analytics-service.js';
 
-// Список упражнений, которые мы разрешаем показывать на каждом уровне.
-// Названия соответствуют question.type на клиенте и `getGeneratorTypeFromQuestion`.
+// Типы упражнений, разрешённые на каждом тире.
 export type ExerciseType =
-  | 'multiple-choice'
-  | 'spelling'
-  | 'match-pairs'
-  | 'listening'
-  | 'cloze'
-  | 'cloze-input'
-  | 'free-recall'
-  | 'dictation'
-  | 'encounter-card'
-  | 'passive-recall-card';
+  | 'pool-card'
+  | 'passive-recall-card'
+  | 'free-recall';
 
 export type TierConfig = {
-  /** Сколько раз нужно «правильно» подряд, чтобы перейти на следующий tier.
-   *  Для encounter — это число показов. */
+  /** Сколько правильных подряд для перехода на следующий tier.
+   *  На L0 не используется (свайп). На L3 не используется (SM-2 через grade). */
   correctToAdvance: number;
-  /** Какие типы упражнений показываем на этом tier. Пустой = encounter без проверки. */
+  /** Какие упражнения разрешены на тире. */
   allowedExerciseTypes: readonly ExerciseType[];
-  /** Включён ли tier для генерации в pickNextItem. */
-  enabled: boolean;
 };
 
 export const learningConfig = {
   tiers: {
-    encounter: {
-      // Encounter — карточка-знакомство. 1 показ = переход на passive.
-      correctToAdvance: 1,
-      allowedExerciseTypes: ['encounter-card'] as const,
-      enabled: true,
+    pool: {
+      // L0 — свайп-карточка. Кнопки «Знаю / Изучаю / Отложить».
+      correctToAdvance: 0,
+      allowedExerciseTypes: ['pool-card'] as const,
     },
     passive: {
-      // Passive recall — флешкарта с флипом и самооценкой через свайп.
-      // Пользователь видит слово+пример, переворачивает карточку, видит перевод
-      // и сам выбирает «знал» (свайп вправо) / «не знал» (свайп влево).
-      // Multiple-choice/match-pairs/listening здесь больше не используются —
-      // это узнавание с подсказкой через варианты, а не настоящий passive recall.
-      correctToAdvance: 2,
+      // L1 — узнавание. 1 «Помню» → L2 (по текущей пилотной настройке).
+      correctToAdvance: 1,
       allowedExerciseTypes: ['passive-recall-card'] as const,
-      enabled: true,
     },
     active: {
-      // Active recall — свободный ввод ru→en (free-recall).
-      // 1 правильный → переход на production. Стимул на active — список ВСЕХ
-      // переводов слова (через includeMeanings=true), так что одно показывание
-      // покрывает все meanings слова на этом уровне.
-      correctToAdvance: 1,
+      // L2 — свободный ввод ru→en. 2 правильных подряд → L3.
+      correctToAdvance: 2,
       allowedExerciseTypes: ['free-recall'] as const,
-      enabled: true,
-    },
-    production: {
-      // Production — контекстный recall: предложение с пропуском, без вариантов.
-      // Per-meaning: одно cloze-предложение для каждого meaning слова. Каждый
-      // meaning требует 1 правильного ответа → review. Когда ВСЕ eligible
-      // meanings слова прошли production → word-level переход на review.
-      // Если для meaning'а нет подходящего примера — fallback на free-recall.
-      correctToAdvance: 1,
-      allowedExerciseTypes: ['cloze-input'] as const,
-      enabled: true,
     },
     review: {
-      // Review — после освоения. Только free-recall ru→en, чтобы интервальное
-      // повторение шло в том же формате, что и active. multiple-choice/cloze
-      // убраны (квизы запрещены на главной).
+      // L3 — SRS, ввод + 4 кнопки grade. correctToAdvance не используется.
       correctToAdvance: 0,
       allowedExerciseTypes: ['free-recall'] as const,
-      enabled: true,
     },
-  },
+    mastered: {
+      // Выпущен из обучения. Не показывается в pickNext.
+      correctToAdvance: 0,
+      allowedExerciseTypes: [] as const,
+    },
+    known_external: {
+      // Свайпнуто «Знаю» в обзоре. Изъято из учебного потока.
+      // В UI коллекции отображается как mastered (полный ринг). Не идёт
+      // в SRS и не считается в daily_promotions_count.
+      correctToAdvance: 0,
+      allowedExerciseTypes: [] as const,
+    },
+  } satisfies Record<LearningTier, TierConfig>,
 
-  intervals: {
-    /** Encounter → Passive: 0 = слово сразу доступно как passive в той же сессии.
-     *  Обоснование: при cooldown'е >0 в первой сессии видны только encounter-карточки,
-     *  потому что каждое новое слово блокируется до следующего дня. */
-    encounterToPassiveHours: 0,
-    /** Кулдаун после ошибки на passive/active (фаза изучения, без отката). */
-    learningCooldownMinutes: 30,
-    /** Интервалы между повторами правильных ответов в фазе изучения.
-     *  [0] — лок при переходе на следующий tier (passive→active, active→production).
-     *  [1] — лок после 1-го правильного на tier'е (когда нужно ещё одно для advance).
-     *
-     *  Оба = 0: нет spaced repetition внутри learning-фазы. Слово остаётся
-     *  доступным в той же сессии, чтобы пользователь мог пройти весь путь
-     *  encounter → passive → active → production → review за один заход.
-     *  Anti-repeat (excludeMeaningIds в pickNextItem) предотвращает показ
-     *  одного и того же слова подряд. SRS включается только в review-фазе
-     *  через reviewIntervalsDays (3д, 7д, 21д, ...). */
-    learningIntervalsHours: [0, 0] as const,
-    /** Интервалы review-фазы по `reviewStage` (0..N).
-     *  При выходе из active в review reviewStage=0 → первый показ через 3 дня. */
-    reviewIntervalsDays: [3, 7, 21, 60, 180] as const,
-    /** Куда откатывает review при ошибке на review-повторе. */
-    reviewWrongRollbackTier: 'active' as LearningTier,
-    /** Кулдаун после ошибки в review до показа на новом tier'е. */
-    reviewWrongCooldownDays: 1,
-  },
+  // SM-2 сетка интервалов в днях. Индекс = reviewStage.
+  reviewGrid: [1, 3, 7, 14, 30, 90, 180, 365] as const,
 
-  review: {
-    /** Дефолтное число дней для «отложить» в обзоре. */
-    snoozeDaysDefault: 7,
-    /** Jitter ±N дней при snooze, чтобы отложенные слова не возвращались
-     *  одной волной. Подтверждено в плане фазы 4. */
-    snoozeJitterDays: 2,
-    /** Сколько слов брать в feed обзора за один запрос. */
-    feedQueueSize: 30,
-  },
+  // Модификаторы кнопок grade на L3.
+  reviewGradeModifiers: {
+    again: null,    // откат на L2, не интервал
+    hard: 1.2,
+    good: 1.0,
+    easy: 1.5,
+  } as const,
 
-  activeDeck: {
-    /** Целевой размер активной колоды (state='learning' AND tier IN encounter/passive/active).
-     *  При просадке ≤ threshold drawFromPool добирает до этого числа из pending_pool. */
-    target: 7,
-    /** Порог, при котором запускается добор из pending_pool. */
-    threshold: 3,
-    /** Размер pending_pool, при котором встроенный обзор завершается и
-     *  пользователь возвращается к карточке изучения. */
-    poolMinForResume: 4,
-  },
+  // Сколько подряд good/easy на финальном stage нужно для выпуска в mastered.
+  reviewMasteredAfter: 2,
 
-  errors: {
-    /** Слово попадает в «проблемные», если за окно было ≥N ошибок. */
-    thresholdCount: 3,
-    /** Окно агрегации в днях. Покрывает типичные перерывы в обучении (≤2 мес). */
-    windowDays: 60,
-  },
+  // L0 «Отложить»: на сколько дней слово уходит в pool_snoozed.
+  poolSnoozeDaysDefault: 7,
+  poolSnoozeJitterDays: 2,
+
+  // Anti-repeat: сколько последних wordId клиент шлёт в excludeWordIds.
+  recentWordIdsWindow: 3,
+
+  // ─── Дневной лимит изучения ──────────────────────────────────────────────
+  /** Сколько слов за день максимум переходит active → review.
+   *  Soft limit: новые батчи не стартуют когда дошли, но текущий батч
+   *  доучивается полностью. Сбрасывается в 02:00 MSK. */
+  dailyPromotionLimit: 10,
+  /** Стандартный размер батча, на который Pool промоутится в Passive. */
+  learningBatchSize: 10,
+  /** Минимальный размер батча: даёт меньше слов когда коллекция почти
+   *  исчерпана или дневной лимит близок. Меньше — батч не стартует. */
+  minBatchSize: 3,
 } as const;
 
 export type LearningConfig = typeof learningConfig;

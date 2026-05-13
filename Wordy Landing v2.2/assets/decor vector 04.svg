@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="76" height="76" fill="none" viewBox="0 0 76 76">
+  <g clip-path="url(#a)">
+    <mask id="b" width="76" height="76" x="0" y="0" maskUnits="userSpaceOnUse" style="mask-type:alpha">
+      <path fill="#fff" d="M41.04 0h-6.08v30.66L13.28 8.98l-4.3 4.3 21.68 21.68H0v6.08h30.66L8.98 62.72l4.3 4.3 21.68-21.68V76h6.08V45.34l21.68 21.68 4.3-4.3-21.681-21.68H76v-6.08H45.34l21.68-21.68-4.3-4.3-21.68 21.68V0Z"/>
+    </mask>
+    <g mask="url(#b)">
+      <path fill="#fff" d="M76 0H0v76h76V0Z"/>
+      <path fill="url(#c)" fill-opacity=".75" d="M76 0H0v76h76V0Z"/>
+    </g>
+  </g>
+  <defs>
+    <linearGradient id="c" x1="76" x2="0" y1="0" y2="76" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF1F00"/>
+      <stop offset="1" stop-color="#FFD600"/>
+    </linearGradient>
+    <clipPath id="a">
+      <path fill="#fff" d="M0 0h76v76H0z"/>
+    </clipPath>
+  </defs>
+</svg>

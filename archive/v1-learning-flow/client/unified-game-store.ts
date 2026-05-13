@@ -453,12 +453,18 @@ export const useUnifiedGameStore = create<UnifiedGameState>()((set, get) => ({
       if (res.livesRestoredAt !== undefined) livesUpdate.livesRestoredAt = res.livesRestoredAt ?? null;
       if (res.livesExhausted) livesUpdate.livesExhausted = true;
 
-      // Encounter и passive-recall не показывают feedback-панель — у них своя
-      // логика перехода (encounter: моментальный fetchNext в submitEncounter;
-      // passive-recall: 500ms ✓/✗ overlay + fetchNext в submitPassiveRecall).
+      // Encounter, passive-recall и free-recall (новый дизайн L3) не показывают
+      // feedback-панель — у них своя логика перехода:
+      //   - encounter: моментальный fetchNext в submitEncounter
+      //   - passive-recall: 500ms ✓/✗ overlay + fetchNext в submitPassiveRecall
+      //   - free-recall: юзер сам жмёт «дальше» в карточке после просмотра ответа
+      //                  (см. quiz_tier_exercise_mapping в memory — L3 на reveal).
       // Чтобы карточка не «дёргалась» (исчезновение бейджа, дизейбл кнопки) —
       // не трогаем feedback и currentTier для них.
-      const skipFeedbackUpdate = currentQuestion.type === 'encounter' || currentQuestion.type === 'passive-recall';
+      const skipFeedbackUpdate =
+        currentQuestion.type === 'encounter' ||
+        currentQuestion.type === 'passive-recall' ||
+        currentQuestion.type === 'free-recall';
 
       set({
         ...(skipFeedbackUpdate ? {} : {

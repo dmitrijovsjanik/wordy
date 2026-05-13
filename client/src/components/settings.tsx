@@ -4,7 +4,6 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { VolumeHighIcon, Tick01Icon } from '@hugeicons/core-free-icons';
 import { useUserStore } from '@/stores/user-store';
 import { useBackButton } from '@/hooks/use-back-button';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import {
@@ -13,10 +12,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
-import { Switch } from '@/components/ui/switch';
 import { BackButton } from '@/components/ui/back-button';
 import { PremiumDrawer } from '@/components/ui/premium-drawer';
-import { useThemeStore } from '@/stores/theme-store';
 import { speakText, stopAudio } from '@/lib/tts';
 import { PILOT_FEATURES } from '@/lib/pilot-config';
 import { TTS_VOICES } from '@/config/tts-voices';
@@ -185,46 +182,21 @@ function VoiceSection() {
 export function Settings() {
   const navigate = useNavigate();
   const user = useUserStore((s) => s.user);
-  const toggleRepeatMastered = useUserStore((s) => s.toggleRepeatMastered);
-  const theme = useThemeStore((s) => s.theme);
-  const setTheme = useThemeStore((s) => s.setTheme);
 
-  useBackButton(useCallback(() => navigate('/profile'), [navigate]));
+  useBackButton(useCallback(() => navigate('/'), [navigate]));
 
   if (!user) return null;
 
   return (
     <div className="flex flex-col px-4 pt-4 pb-4">
       <div className="mb-4">
-        <BackButton to="/profile" />
+        <BackButton to="/" />
       </div>
 
       <h1 className="mb-4 text-xl font-bold">Настройки</h1>
 
-      {/* Theme */}
-      <Card>
-        <span className="text-sm text-[var(--gray-11)]">Тема</span>
-        <div className="mt-3 flex gap-2">
-          {([
-            { value: 'light' as const, label: 'Светлая' },
-            { value: 'dark' as const, label: 'Тёмная' },
-            { value: 'system' as const, label: 'Система' },
-          ]).map((item) => (
-            <Button
-              key={item.value}
-              variant={theme === item.value ? 'default' : 'secondary'}
-              size="compact"
-              onClick={() => setTheme(item.value)}
-              className="flex-1"
-            >
-              {item.label}
-            </Button>
-          ))}
-        </div>
-      </Card>
-
       {/* Language */}
-      <Card className="mt-4">
+      <Card>
         <span className="text-sm text-[var(--gray-11)]">Язык</span>
         <div className="mt-3 flex flex-col gap-2">
           <LanguageDropdown
@@ -236,21 +208,6 @@ export function Settings() {
             label="Изучаю"
             value={user.learningLanguage}
             excludeCode={user.nativeLanguage}
-          />
-        </div>
-      </Card>
-
-      {/* Quiz Settings */}
-      <Card className="mt-4">
-        <span className="text-sm text-[var(--gray-11)]">Квиз</span>
-        <div className="mt-3 flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-sm font-medium">Повторять выученные слова</span>
-            <span className="text-xs text-[var(--gray-11)]">Выученные слова будут возвращаться раз в 3 месяца</span>
-          </div>
-          <Switch
-            checked={user.repeatMastered}
-            onCheckedChange={() => toggleRepeatMastered()}
           />
         </div>
       </Card>

@@ -1,22 +1,11 @@
 import type {
   AuthResponse,
-  QuizStartResponse,
-  QuizAnswerRequest,
-  QuizAnswerResponse,
-  QuizResultResponse,
-  DuelCreateResponse,
-  Duel,
-  DuelFinishResponse,
   User,
   UserStats,
   CollectionGroup,
   LibraryCollection,
   CollectionDetail,
   AllWordsResponse,
-  QuizQuestion,
-  InfiniteAnswerResponse,
-  MatchPairsAnswerResponse,
-  GrammarAnswerResponse,
   DictionaryLookupResult,
   LeagueStatusResponse,
   LeaderboardEntry,
@@ -27,9 +16,10 @@ import type {
   StreakCalendarResponse,
   CefrProgressResponse,
   LearningNextResponse,
+  LearningAnswerRequest,
   LearningAnswerResponse,
+  LearningSwipeRequest,
   LearningSwipeResponse,
-  ReviewFeedResponse,
 } from '@/types/api';
 
 const TOKEN_KEY = 'wordy_token';
@@ -99,136 +89,33 @@ export function linkAccount(platform: 'telegram' | 'vk', initData: string) {
   return fetchApi<{ success: boolean; message: string }>('POST', '/api/auth/link', { platform, initData });
 }
 
-// Quiz
-export function quizStart() {
-  return fetchApi<QuizStartResponse>('POST', '/api/quiz/start');
-}
+// Quiz API удалён (legacy /api/quiz/*). Архив: archive/v1-learning-flow/.
 
-export function quizAnswer(data: QuizAnswerRequest) {
-  return fetchApi<QuizAnswerResponse>('POST', '/api/quiz/answer', data);
-}
+// ─── Learning API (лестница: pool/passive/active/review/mastered) ──────────
 
-export function quizFinish(sessionId: number) {
-  return fetchApi<QuizResultResponse>('POST', '/api/quiz/finish', { sessionId });
-}
-
-// ─── Learning API (новая лестница, фаза 3) ─────────────────────────────────
+const LEARNING_BASE = '/api/learning';
 
 export function learningNext(opts: {
-  collectionId?: number | string;
-  recentGenerators?: string[];
-  /** Anti-repeat по meaning_id — последние N показанных. */
-  excludeMeaningIds?: number[];
-  /** Anti-repeat по word_id — последние N показанных (для word-level пула). */
+  collectionId?: number;
+  /** Anti-repeat: последние N показанных wordId. Клиент шлёт окно 3, сервер cap'ает до 10. */
   excludeWordIds?: number[];
 } = {}) {
   const params = new URLSearchParams();
-  if (opts.recentGenerators?.length) params.set('generators', opts.recentGenerators.join(','));
   if (opts.collectionId !== undefined) params.set('collectionId', String(opts.collectionId));
-  if (opts.excludeMeaningIds?.length) params.set('excludeMeaningIds', opts.excludeMeaningIds.join(','));
   if (opts.excludeWordIds?.length) params.set('excludeWordIds', opts.excludeWordIds.join(','));
   const qs = params.toString();
-  return fetchApi<LearningNextResponse>('GET', `/api/learning/next${qs ? '?' + qs : ''}`);
+  return fetchApi<LearningNextResponse>('GET', `${LEARNING_BASE}/next${qs ? '?' + qs : ''}`);
 }
 
-export function learningAnswer(input: {
-  /** Если задан — сервер маршрутизирует на word-level recordAnswer (L1-3, review).
-   *  Иначе — на meaning-level (L4, rollback). Backward compat: старый клиент
-   *  отправлял только meaningId, продолжает работать. */
-  wordId?: number | null;
-  meaningId?: number;
-  isCorrect: boolean;
-  questionType?: string;
-  answerTimeMs?: number;
-  streak?: number;
-  skip?: boolean;
-  userAnswer?: string;
-  acceptableAnswers?: string[];
-  partOfSpeech?: 'noun' | 'verb' | 'adj' | 'adv' | 'phrase';
-}) {
-  return fetchApi<LearningAnswerResponse>('POST', '/api/learning/answer', input);
+export function learningAnswer(input: LearningAnswerRequest) {
+  return fetchApi<LearningAnswerResponse>('POST', `${LEARNING_BASE}/answer`, input);
 }
 
-export function learningSwipe(input: {
-  /** Word-level ID. Новый flow. */
-  wordId?: number;
-  wordIds?: number[];
-  /** Backward compat: meaning-level. Сервер резолвит wordId через JOIN. */
-  meaningId?: number;
-  meaningIds?: number[];
-  action: 'known' | 'unknown' | 'snooze';
-  snoozeDays?: number;
-}) {
-  return fetchApi<LearningSwipeResponse>('POST', '/api/learning/swipe', input);
+export function learningSwipe(input: LearningSwipeRequest) {
+  return fetchApi<LearningSwipeResponse>('POST', `${LEARNING_BASE}/swipe`, input);
 }
 
-export function learningUndoSwipe(
-  input: { wordId?: number; meaningId?: number },
-  originalAction?: 'known' | 'unknown' | 'snooze',
-) {
-  return fetchApi<{ ok: boolean }>('POST', '/api/learning/undo-swipe', { ...input, originalAction });
-}
-
-export function learningMnemonicRevealed(meaningId: number) {
-  return fetchApi<{ ok: boolean }>('POST', '/api/learning/mnemonic-revealed', { meaningId });
-}
-
-// ─── Проблемные слова (≥3 ошибок за 60 дней через learning_events) ─────────
-
-export type ProblemMeaning = {
-  meaningId: number;
-  word: string;
-  translation: string;
-  errorCount: number;
-  tier: 'encounter' | 'passive' | 'active' | 'production' | 'review';
-};
-
-export function learningProblems() {
-  return fetchApi<{ count: number; meanings: ProblemMeaning[] }>('GET', '/api/learning/problems');
-}
-
-export function learningProblemsCount() {
-  return fetchApi<{ count: number }>('GET', '/api/learning/problems/count');
-}
-
-export function learningProblemsNext(opts: { recentGenerators?: string[]; excludeMeaningIds?: number[] } = {}) {
-  const params = new URLSearchParams();
-  if (opts.recentGenerators?.length) params.set('generators', opts.recentGenerators.join(','));
-  if (opts.excludeMeaningIds?.length) params.set('exclude', opts.excludeMeaningIds.join(','));
-  const qs = params.toString();
-  return fetchApi<LearningNextResponse>('GET', `/api/learning/problems/next${qs ? '?' + qs : ''}`);
-}
-
-// ─── Review Feed ───────────────────────────────────────────────────────────
-
-export function reviewFeedNext(opts: { limit?: number; excludeWordIds?: number[] } = {}) {
-  const params = new URLSearchParams();
-  if (opts.limit) params.set('limit', String(opts.limit));
-  if (opts.excludeWordIds?.length) params.set('exclude', opts.excludeWordIds.join(','));
-  const qs = params.toString();
-  return fetchApi<ReviewFeedResponse>('GET', `/api/review-feed/next${qs ? '?' + qs : ''}`);
-}
-
-// Duels
-export function duelCreate() {
-  return fetchApi<DuelCreateResponse>('POST', '/api/duels/create');
-}
-
-export function duelJoin(id: number) {
-  return fetchApi<Duel>('POST', `/api/duels/${id}/join`);
-}
-
-export function duelGet(id: number) {
-  return fetchApi<Duel>('GET', `/api/duels/${id}`);
-}
-
-export function duelStart(id: number) {
-  return fetchApi<QuizStartResponse>('POST', `/api/duels/${id}/start`);
-}
-
-export function duelFinish(id: number) {
-  return fetchApi<DuelFinishResponse>('POST', `/api/duels/${id}/finish`);
-}
+// Duels API удалён (legacy /api/duels/*). Архив: archive/v1-learning-flow/.
 
 // User
 export function getMe() {
@@ -383,83 +270,12 @@ export function removeCollectionWord(collectionId: number, wordId: number, type:
   return fetchApi<{ success: boolean; deleted: number }>('DELETE', `/api/collections/${collectionId}/words/${wordId}?type=${type}`);
 }
 
-// Infinite Quiz
-export function quizNext(
-  excludeIds: number[] = [],
-  collectionId?: number,
-  generatorMode?: string,
-  recentGenerators: string[] = [],
-  recentCorrect?: number,
-  recentTotal?: number,
-  questionIndex?: number,
-) {
-  const params = new URLSearchParams();
-  if (excludeIds.length > 0) params.set('exclude', excludeIds.join(','));
-  if (collectionId) params.set('collectionId', String(collectionId));
+// Legacy infinite-quiz/grammar/match-pairs/hint endpoints удалены.
+// Архив: archive/v1-learning-flow/.
 
-  // Adaptive difficulty params
-  if (recentCorrect !== undefined) params.set('recentCorrect', String(recentCorrect));
-  if (recentTotal !== undefined) params.set('recentTotal', String(recentTotal));
-
-  // Question index for grammar injection
-  if (questionIndex !== undefined) params.set('questionIndex', String(questionIndex));
-
-  // Определяем параметры генерации
-  if (generatorMode === 'spelling' || generatorMode === 'match-pairs') {
-    params.set('type', generatorMode);
-  } else if (generatorMode && generatorMode !== 'auto') {
-    // en-ru или ru-en — устанавливаем направление
-    params.set('lang', generatorMode);
-  }
-
-  // История генераторов для авто-ротации (только в auto режиме)
-  if (recentGenerators.length > 0 && (!generatorMode || generatorMode === 'auto')) {
-    params.set('generators', recentGenerators.join(','));
-  }
-
-  const query = params.toString() ? `?${params.toString()}` : '';
-  return fetchApi<{ question: QuizQuestion | null }>('GET', `/api/quiz/next${query}`);
-}
-
-export function quizAnswerInfinite(meaningId: number, selectedMeaningId: number | null, streak: number, doubleXpClaimed = false, skip = false) {
-  return fetchApi<InfiniteAnswerResponse>('POST', '/api/quiz/answer-infinite', {
-    meaningId,
-    selectedMeaningId,
-    streak,
-    doubleXpClaimed,
-    skip,
-  });
-}
-
-export function quizAnswerGrammar(
-  grammarType: string,
-  answer: string,
-  streak: number,
-  params: { exerciseIndex?: number; blankIndex?: number; collocationIndex?: number; questionIndex?: number },
-  skip = false,
-) {
-  return fetchApi<GrammarAnswerResponse>('POST', '/api/quiz/answer-grammar', {
-    grammarType,
-    answer,
-    streak,
-    ...params,
-    skip,
-  });
-}
-
-export function quizAnswerMatchPairs(results: Array<{ meaningId: number; isCorrect: boolean }>, streak: number, doubleXpClaimed = false) {
-  return fetchApi<MatchPairsAnswerResponse>('POST', '/api/quiz/answer-match-pairs', {
-    results,
-    streak,
-    doubleXpClaimed,
-  });
-}
-
-export function getQuizHint(meaningId: number, level: number) {
-  return fetchApi<{ hint: string | null; hasMore: boolean }>('GET', `/api/quiz/hint?meaningId=${meaningId}&level=${level}`);
-}
-
-// Leagues
+// Leagues — endpoints оставлены, потому что league-виджеты в dashboard/profile
+// всё ещё используют их (но скрыты PILOT_FEATURES.leagues = false). Удалить
+// можно когда виджеты выпилим.
 export function getLeagueStatus() {
   return fetchApi<LeagueStatusResponse>('GET', '/api/leagues/me');
 }
@@ -522,72 +338,4 @@ export function getCefrProgress() {
   return fetchApi<CefrProgressResponse>('GET', '/api/users/me/cefr-progress');
 }
 
-// Grammar — Articles Quiz
-import type {
-  ArticleNextResponse,
-  ArticleAnswerRequest,
-  ArticleAnswerResponse,
-  TenseNextResponse,
-  TenseAnswerRequest,
-  TenseAnswerResponse,
-  CollocationNextResponse,
-  CollocationAnswerRequest,
-  CollocationAnswerResponse,
-} from '@/types/grammar';
-
-export function getNextArticleExercise(difficulty?: number) {
-  const params = difficulty ? `?difficulty=${difficulty}` : '';
-  return fetchApi<ArticleNextResponse>('GET', `/api/grammar/articles/next${params}`);
-}
-
-export function submitArticleAnswer(data: ArticleAnswerRequest) {
-  return fetchApi<ArticleAnswerResponse>('POST', '/api/grammar/articles/answer', data);
-}
-
-// Grammar — Tenses Quiz
-export function getNextTenseExercise(difficulty?: number) {
-  const params = difficulty ? `?difficulty=${difficulty}` : '';
-  return fetchApi<TenseNextResponse>('GET', `/api/grammar/tenses/next${params}`);
-}
-
-export function submitTenseAnswer(data: TenseAnswerRequest) {
-  return fetchApi<TenseAnswerResponse>('POST', '/api/grammar/tenses/answer', data);
-}
-
-// Grammar — Collocations Quiz
-export function getNextCollocationExercise(difficulty?: number) {
-  const params = difficulty ? `?difficulty=${difficulty}` : '';
-  return fetchApi<CollocationNextResponse>('GET', `/api/grammar/collocations/next${params}`);
-}
-
-export function submitCollocationAnswer(data: CollocationAnswerRequest) {
-  return fetchApi<CollocationAnswerResponse>('POST', '/api/grammar/collocations/answer', data);
-}
-
-// Grammar — False Friends Quiz
-export function getNextFalseFriend() {
-  return fetchApi<{ question: import('@/types/grammar').FalseFriendQuestion; questionIndex: number }>(
-    'GET',
-    '/api/grammar/false-friends/next',
-  );
-}
-
-export function submitFalseFriendAnswer(questionIndex: number, answer: string) {
-  return fetchApi<import('@/types/grammar').FalseFriendAnswerResult>(
-    'POST',
-    '/api/grammar/false-friends/answer',
-    { questionIndex, answer },
-  );
-}
-
-// Reading
-import type { ReadingNextResponse, ReadingAnswerRequest, ReadingAnswerResponse } from '@/types/reading';
-
-export function getNextReadingPassage(level?: string) {
-  const params = level ? `?level=${level}` : '';
-  return fetchApi<ReadingNextResponse>('GET', `/api/reading/next${params}`);
-}
-
-export function submitReadingAnswer(data: ReadingAnswerRequest) {
-  return fetchApi<ReadingAnswerResponse>('POST', '/api/reading/answer', data);
-}
+// Grammar и Reading endpoints удалены. Архив: archive/v1-learning-flow/.

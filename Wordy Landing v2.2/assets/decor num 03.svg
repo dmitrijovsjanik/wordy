@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" fill="none" viewBox="0 0 96 96">
+  <mask id="a" width="88" height="96" x="4" y="0" maskUnits="userSpaceOnUse" style="mask-type:alpha">
+    <path fill="#fff" d="M4.8 0v33.6h12v28.8h-12V96h60c14.58 0 26.4-11.82 26.4-26.4 0-8.929-4.432-16.822-11.217-21.6C86.768 43.222 91.2 35.329 91.2 26.4 91.2 11.82 79.38 0 64.8 0h-60Z"/>
+  </mask>
+  <g mask="url(#a)">
+    <path fill="#fff" d="M96 0H0v96h96V0Z"/>
+    <path fill="#07FFE1" d="M96 0H0v96h96V0Z"/>
+    <path fill="url(#b)" d="M96 0H0v96h96V0Z"/>
+    <g filter="url(#c)">
+      <path fill="#FFD749" d="M85.056 37.105c12.104-8.126 15.088-24.883 6.666-37.43C83.3-12.87 66.66-16.452 54.556-8.326 42.452-.2 39.468 16.556 47.89 29.102c8.422 12.546 25.062 16.129 37.166 8.003Z"/>
+      <path fill="#06F" d="M44.16 123.36c22.798 0 41.28-9.133 41.28-20.4s-18.482-20.4-41.28-20.4c-22.798 0-41.28 9.133-41.28 20.4s18.482 20.4 41.28 20.4Z"/>
+    </g>
+  </g>
+  <defs>
+    <linearGradient id="b" x1="18.24" x2="57.12" y1="6.96" y2="87.12" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFE500"/>
+      <stop offset="1" stop-color="#07FFE1"/>
+    </linearGradient>
+    <filter id="c" width="373.628" height="416.039" x="-137.12" y="-152.679" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+      <feGaussianBlur result="effect1_foregroundBlur_12_820" stdDeviation="70"/>
+    </filter>
+  </defs>
+</svg>

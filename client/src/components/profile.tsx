@@ -17,7 +17,6 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import {
   Tick01Icon,
   ZapIcon,
-  Settings02Icon,
   UserGroupIcon,
   ArrowRight01Icon,
   StarIcon,
@@ -53,8 +52,8 @@ export function Profile() {
 
   useEffect(() => {
     getMyStats().then(setStats).catch(() => {});
-    fetchRequests();
-    fetchStatus();
+    if (PILOT_FEATURES.friends) fetchRequests();
+    if (PILOT_FEATURES.leagues) fetchStatus();
   }, [fetchRequests, fetchStatus]);
 
   if (!user) return null;
@@ -67,16 +66,8 @@ export function Profile() {
 
   return (
     <div className="flex flex-col px-4 pt-4 pb-4">
-      {/* Header: Back + Settings */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center">
         <BackButton to="/" variant="ghost" />
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => navigate('/settings')}
-        >
-          <HugeiconsIcon strokeWidth={2} icon={Settings02Icon} size={20} className="text-[var(--gray-11)]" />
-        </Button>
       </div>
 
       {/* Avatar + Name */}

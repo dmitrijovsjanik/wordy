@@ -53,6 +53,7 @@ export async function generatePassiveRecallFromMeaning(
     meaningId: meaning.id,
     wordId: meaning.wordId,
     word: meaning.word.text,
+    transcription: meaning.word.transcription,
     translation: meaning.translation,
     example,
     mnemonic,
