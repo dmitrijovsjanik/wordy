@@ -8,6 +8,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 3100,
+        TZ: 'UTC',
       },
       instances: 1,
       exec_mode: 'fork',
